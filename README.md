@@ -1,2 +1,2 @@
-# glam-browser
-Gene-Level Association of Microbiomes - Browser
+# Gene-Level Association of Microbiomes (GLAM) - Browser
+
