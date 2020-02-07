@@ -124,13 +124,28 @@ ui <- dashboardPage(
     fluidRow(
       box(
         width = 12,
-        title="CAGs in Dataset",
+        title = "CAGs in Dataset - Table",
+        collapsible = TRUE,
+        div(
+          DT::DTOutput("cag_summary_DT")
+        )
+      )
+    ),
+    fluidRow(
+      box(
+        width = 12,
+        title = "CAGs in Dataset - Plots",
         collapsible = TRUE,
         column(
-          fluidRow(DT::DTOutput("cag_summary_DT")),
-          width = 6
+          fluidRow(plotOutput("cag_size_hist_plot")),
+          width = 4
         ),
         column(
+          fluidRow(plotOutput("cag_prevalence_hist_plot")),
+          width = 4
+        ),
+        column(
+          width = 4,
           fluidRow(
             column(
               width = 4,
@@ -152,8 +167,7 @@ ui <- dashboardPage(
               downloadButton("cag_summary_csv", label="CSV"),
               style="text-align:right"
             )
-          ),
-          width = 6
+          )
         )
       )
     )
@@ -434,8 +448,24 @@ server <- function(input, output) {
       selected = "Number of Genes"
     )
   })
+
+  # Plot the size distribution of CAGs as a histogram
+  output$cag_size_hist_plot <- renderPlot(
+    plot_cag_hist(
+      cag_summary_df(),
+      "size"
+    )
+  )
   
-  # Render the CAG summary as a scatter plot
+  # Plot the prevalence distribution of CAGs as a histogram
+  output$cag_prevalence_hist_plot <- renderPlot(
+    plot_cag_hist(
+      cag_summary_df(),
+      "prevalence"
+    )
+  )
+  
+  # Render the CAG summary as a flexible scatter plot
   output$cag_summary_plot <- renderPlot(
     plot_cag_summary(
       cag_summary_df(), 
@@ -449,16 +479,16 @@ server <- function(input, output) {
   output$cag_summary_pdf <- downloadHandler(
     filename = paste(input$dataset, "CAG.summary.pdf", sep="."),
     content = function(file) {
-      ggsave(
-        file, 
-        plot = plot_cag_summary(
-          cag_summary_df(), 
-          input$cag_summary_x_select, 
-          input$cag_summary_y_select, 
-          input$cag_summary_hue_select
-        ), 
-        device="pdf"
-      )
+      pdf(file)
+      print(plot_cag_hist(cag_summary_df(), "size"))
+      print(plot_cag_hist(cag_summary_df(), "prevalence"))
+      print(plot_cag_summary(
+        cag_summary_df(), 
+        input$cag_summary_x_select, 
+        input$cag_summary_y_select, 
+        input$cag_summary_hue_select
+      )) 
+      dev.off()
     }
   )
   

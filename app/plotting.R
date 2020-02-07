@@ -157,6 +157,41 @@ plot_dataset_pca <- function(cag_abund_df, manifest_df, dataset_summary_plot_typ
   
 }
 
+# Function to make a plot summarizing CAGs on the basis of size or prevalence
+plot_cag_hist <- function(cag_summary_df, plot_type){
+  if(plot_type == "size"){
+    p <- ggplot(
+      data = cag_summary_df,
+      aes(
+        x = `Number of Genes`
+      )
+    ) + ggtitle(
+      "CAG Size"
+    )
+  } else {
+    stopifnot(plot_type == "prevalence")
+    p <- ggplot(
+      data = cag_summary_df,
+      aes(
+        x = Prevalence
+      )
+    ) + ggtitle(
+      "CAG Prevalence"
+    )
+  }
+  return(
+    p + geom_histogram(
+    ) + xlab(
+      paste("CAG", plot_type)
+    ) + ylab(
+      "Number of CAGs"
+    ) + theme_minimal(
+    ) + theme(
+      plot.title = element_text(hjust = 0.5)
+    )
+  )
+}
+
 # Function to make a plot based on various summary metrics for each CAG
 plot_cag_summary <- function(cag_summary_df, x_val, y_val, hue_val){
   

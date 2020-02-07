@@ -159,5 +159,10 @@ make_cag_summary <- function(
         )
       )
   }
+  summary_df <- summary_df %>%
+    rename(`Estimated Coefficient` = estimate) %>%
+    rename(`Standard Error` = std_error) %>%
+    rename(`p value` = p_value) %>%
+    rename(`p value (-log10)` = neg_log_pvalue)
   return(summary_df)
 }
