@@ -43,6 +43,13 @@ read_hdf_corncob_results <- function(dataset_prefix, data_folder){
   
   df$parameter <- sapply(df$parameter, function(n){str_replace(n, "mu.", "")})
   
+  df <- df[!is.nan(df$value),]
+  
+  df$value <- sapply(
+    df$value,
+    function(v){if(v < 10){return(signif(v, digits=3))}else{return(round(v, 1))}}
+  )
+  
   df <- df %>% pivot_wider(names_from = type, values_from = value)
   
   return(df)

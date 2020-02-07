@@ -361,9 +361,15 @@ server <- function(input, output) {
   ###################
   
   # Render the corncob results as a DataTable
-  output$corncob_results_DT <- DT::renderDT({
-    corncob_results_filtered_df()
-  }, rownames = FALSE)
+  output$corncob_results_DT <- DT::renderDT(
+    {
+      corncob_results_filtered_df() %>% 
+        rename(Estimate = estimate) %>% 
+        rename(`p value` = p_value) %>% 
+        rename(`Standard Error` = std_error)
+    }, 
+    rownames = FALSE
+  )
   
   # Render the corncob results as a scatter plot
   output$corncob_results_plot <- renderPlot(
