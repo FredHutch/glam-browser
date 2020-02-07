@@ -44,35 +44,57 @@ ui <- dashboardPage(
         title="Dataset Summary",
         collapsible = TRUE,
         column(
-          DT::DTOutput("dataset_summary_DT"),
-          width = 6
+          width = 4,
+          DT::DTOutput("dataset_summary_DT")
         ),
         column(
-          fluidRow(
-            column(
-              width = 6,
-              # Dropdown menu to select the type of dataset summary plot to display
-              selectInput(
-                "dataset_summary_plot_type",
-                "Display:",
-                c("Samples", "CAGs")
+          width = 8,
+          div(
+            style = "padding-right: 20px",
+            fluidRow(
+              tabsetPanel(
+                type = "tabs",
+                tabPanel(
+                  "Total Reads",
+                  plotOutput("total_reads_plot")
+                ),
+                tabPanel(
+                  "Aligned Reads",
+                  plotOutput("aligned_reads_plot")
+                ),
+                tabPanel(
+                  "Prop. Aligned (Hist)",
+                  plotOutput("proportion_aligned_plot")
+                ),
+                tabPanel(
+                  "Prop. Aligned (Scatter)",
+                  plotOutput("aligned_scatter_plot")
+                ),
+                tabPanel(
+                  "PCA - Samples",
+                  fluidRow(
+                    uiOutput("color_pca_by")
+                  ),
+                  fluidRow(
+                    plotOutput("pca_samples_plot")
+                  )
+                ),
+                tabPanel(
+                  "PCA - CAGs",
+                  plotOutput("pca_cags_plot")
+                )
               )
             ),
-            column(
-              width = 6,
-              # Dropdown menu to pick what to color the plot by
-              uiOutput("color_pca_by")
+            fluidRow(
+              fluidRow(
+                div(
+                  downloadButton("dataset_summary_pdf", label="PDF"),
+                  downloadButton("dataset_summary_csv", label="CSV"),
+                  style="text-align:right"
+                )
+              )
             )
-          ),
-          fluidRow(plotOutput("dataset_summary_plot")),
-          fluidRow(
-            div(
-              downloadButton("dataset_summary_pdf", label="PDF"),
-              downloadButton("dataset_summary_csv", label="CSV"),
-              style="text-align:right"
-            )
-          ),
-          width = 6
+          )
         )
       )
     ),
@@ -174,13 +196,18 @@ server <- function(input, output) {
   # Reactive element reading in the manifest for this dataset
   manifest_df <- reactive({read_hdf_manifest(input$dataset, data_folder)})
   
+  # Reactive element with the list of parameters
+  unique_parameters <- reactive({
+    l <- unique(corncob_results_df()$parameter)
+    return(rev(l))
+  })
+  
   # If the source HDF5 has corncob results, display the parameter list in the sidebar
   output$parameter_select <- renderUI({
     selectInput(
       "parameter",
       "Parameter:",
-      corncob_results_df()[,"parameter"] %>% 
-        distinct() %>% map_df(rev)
+      unique_parameters()
     )
   })
   
@@ -219,6 +246,11 @@ server <- function(input, output) {
     summary_df <- t(summary_df)
     colnames(summary_df) <- c("Value")
     return(summary_df)
+  })
+  
+  # Reactive element with the number of reads for this dataset
+  readcounts_df <- reactive({
+    read_hdf_readcounts(input$dataset, data_folder)
   })
   
   # Reactive element with the CAG abundances for the whole dataset
@@ -275,37 +307,43 @@ server <- function(input, output) {
   # Render the dataset summary as a DataTable
   output$dataset_summary_DT <- DT::renderDT({
     dataset_summary_df()
-  })
+  }, options = list(dom="t"))
   
-  # Render the dataset summary
-  output$dataset_summary_plot <- renderPlot(
+  # Render the plots in the dataset summary tabset
+  output$total_reads_plot <- renderPlot(plot_readcounts(readcounts_df(), "total"))
+  output$aligned_reads_plot <- renderPlot(plot_readcounts(readcounts_df(), "aligned"))
+  output$proportion_aligned_plot <- renderPlot(plot_readcounts(readcounts_df(), "proportion"))
+  output$aligned_scatter_plot <- renderPlot(plot_readcounts(readcounts_df(), "scatter"))
+  output$pca_samples_plot <- renderPlot(
     plot_dataset_pca(
-      cag_abund_df(), 
-      manifest_df(),
-      input$dataset_summary_plot_type, 
-      input$color_pca_by
+      cag_abund_df(), manifest_df(), "Samples", input$color_pca_by
+    )
+  )
+  output$pca_cags_plot <- renderPlot(
+    plot_dataset_pca(
+      cag_abund_df(), manifest_df(), "CAGs", input$color_pca_by
     )
   )
   
   # Make the dataset summary PDF available for download
   output$dataset_summary_pdf <- downloadHandler(
     filename = paste(
-      input$dataset, 
-      input$dataset_summary_plot_type, 
-      "PCA.pdf",
+      input$dataset,
+      "summary.pdf",
       sep="."
     ),
     content = function(file) {
-      ggsave(
-        file, 
-        plot = plot_dataset_pca(
-          cag_abund_df(), 
-          manifest_df(),
-          input$dataset_summary_plot_type, 
-          input$color_pca_by
-        ), 
-        device="pdf"
-      )
+      pdf(file)
+      print(plot_readcounts(readcounts_df(), "total"))
+      print(plot_readcounts(readcounts_df(), "aligned"))
+      print(plot_readcounts(readcounts_df(), "proportion"))
+      print(plot_readcounts(readcounts_df(), "scatter"))
+      for(color_by in colnames(manifest_df())){
+        print(plot_dataset_pca(cag_abund_df(), manifest_df(), "Samples", color_by))
+      }
+      print(plot_dataset_pca(cag_abund_df(), manifest_df(), "CAGs", input$color_pca_by))
+      
+      dev.off()
     }
   )
   
@@ -313,7 +351,7 @@ server <- function(input, output) {
   output$dataset_summary_csv <- downloadHandler(
     filename = paste(input$dataset, "summary.csv", sep="."),
     content = function(file) {
-      write_csv(dataset_summary_df(), path = file)
+      write_csv(readcounts_df(), path = file)
     },
     contentType = "text/csv"
   )

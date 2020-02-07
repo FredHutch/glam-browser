@@ -41,7 +41,7 @@ read_hdf_corncob_results <- function(dataset_prefix, data_folder){
     "/stats/cag/corncob"
   ) %>% filter(grepl("mu.", parameter))
   
-  df["parameter"] <- sapply(df["parameter"], function(n){str_replace(n, "mu.", "")})
+  df$parameter <- sapply(df$parameter, function(n){str_replace(n, "mu.", "")})
   
   df <- df %>% pivot_wider(names_from = type, values_from = value)
   
@@ -97,6 +97,23 @@ read_hdf_manifest <- function(dataset_prefix, data_folder){
       select(-R2) %>% 
       select(-I1) %>% 
       select(-I2)
+  )
+}
+
+# Function to read the readcounts table for this study
+read_hdf_readcounts <- function(dataset_prefix, data_folder){
+  df <- pandas$read_hdf(
+    file.path(
+      data_folder, 
+      paste(dataset_prefix, ".hdf5", sep="")
+    ),
+    "/summary/readcount"
+  ) %>% 
+    as_tibble
+  return(df %>%
+     add_column(
+       prop_aligned = df$aligned_reads / df$n_reads
+     )
   )
 }
 

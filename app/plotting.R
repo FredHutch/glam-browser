@@ -2,20 +2,24 @@
 # features included by the user in the corncob results
 plot_corncob_results <- function(corncob_results_df, parameter){
   
+  plot_df <- corncob_results_df
+  
   # If the parameter is NULL, return an empty plot
-  if(!is.null(parameter) && "p_value" %in% colnames(corncob_results_df)){
+  if(!is.null(parameter) && "p_value" %in% colnames(plot_df)){
+    # Filter to this parameter
+    plot_df <- plot_df[plot_df$parameter == parameter,]
+
     # Add the -log10 p-value
-    corncob_results_df <- corncob_results_df %>%
+    plot_df <- plot_df %>%
       add_column(
         neg_log_pvalue = sapply(
-          pull(corncob_results_df, p_value),
+          pull(plot_df, p_value),
           function(v){-log10(v)}
         )
       )
 
     p <- ggplot(
-      data = corncob_results_df %>% 
-        filter(parameter == parameter),
+      data = plot_df,
       aes(
         x = estimate,
         y = neg_log_pvalue
@@ -40,11 +44,54 @@ plot_corncob_results <- function(corncob_results_df, parameter){
       plot.title = element_text(hjust = 0.5)
     )
     
-    p
+    return(p)
   } else {
     return(ggplot() + geom_blank())
   }
   
+}
+
+# Function to plot readcounts
+plot_readcounts <- function(readcounts_df, plot_type){
+  if(plot_type == "total"){
+    p <- ggplot(
+      data = readcounts_df, aes(x = n_reads)
+    ) + geom_histogram() + xlab(
+      "Number of Total Reads"
+    )
+  }else{
+    if(plot_type == "aligned"){
+      p <- ggplot(
+        data = readcounts_df, aes(x = aligned_reads)
+      ) + geom_histogram() + xlab(
+        "Number of Aligned Reads"
+      )
+    } else {
+      if(plot_type == "proportion"){
+        p <- ggplot(
+          data = readcounts_df, aes(x = prop_aligned)
+        ) + geom_histogram() + xlab(
+          "Proportion of Aligned Reads"
+        ) + xlim(
+          0, 1
+        )
+      } else {
+        stopifnot(plot_type == "scatter")
+        p <- ggplot(
+          data = readcounts_df, aes(x = n_reads, y=aligned_reads)
+        ) + geom_point() + xlab(
+          "Number of Total Reads"
+        ) + ylab(
+          "Number of Aligned Reads"
+        )
+      }
+    }
+  }
+  return(
+    p + ylab(
+      "Number of Samples"
+    ) + theme_minimal()
+  )
 }
 
 # Function to plot PCA for CAGs or samples
