@@ -56,7 +56,7 @@ read_hdf_corncob_results <- function(dataset_prefix, data_folder){
 }
 
 # Function to read the abundance for all CAGs
-read_cag_abundances <- function(dataset_prefix, data_folder){
+read_hdf_cag_abundances <- function(dataset_prefix, data_folder){
 
   return(
     pandas$read_hdf(
@@ -73,8 +73,8 @@ read_cag_abundances <- function(dataset_prefix, data_folder){
 }
 
 
-# Function to read the annotations for every unique gene
-read_gene_annotations <- function(dataset_prefix, data_folder){
+# Function to read the annotations for every unique gene within a CAG
+read_hdf_gene_annotations <- function(dataset_prefix, data_folder, cag_id){
   
   return(
     pandas$read_hdf(
@@ -82,7 +82,8 @@ read_gene_annotations <- function(dataset_prefix, data_folder){
         data_folder, 
         paste(dataset_prefix, ".hdf5", sep="")
       ),
-      "/annot/gene/all"
+      "/annot/gene/all",
+      where = paste("CAG ==", str(cag_id))
     ) %>% 
       as_tibble
   )
@@ -124,45 +125,39 @@ read_hdf_readcounts <- function(dataset_prefix, data_folder){
   )
 }
 
-# Function to assemble a summary of all CAGs
-make_cag_summary <- function(
-  gene_annotations_df,
-  cag_abund_df,
-  corncob_results_df
-){
-  summary_df <- data.frame(
-    table(gene_annotations_df$CAG)
+# Read in the CAG summary table
+read_hdf_cag_summary <- function(dataset_prefix, data_folder){
+  summary_df <- pandas$read_hdf(
+    file.path(
+      data_folder, 
+      paste(dataset_prefix, ".hdf5", sep="")
+    ),
+    "/annot/cag/all"
   ) %>% 
-    as_tibble %>%
-    rename(
-      "CAG" = Var1,
-      "Number of Genes" = Freq
-    ) %>% 
-    mutate_if(is.factor, ~ as.numeric(as.character(.x)))
-  
-  summary_df["Prevalence"] <- apply(
-    cag_abund_df,
-    1,
-    function(v){mean(v > 0)}
-  )
-  summary_df["Mean Abund"] <- apply(cag_abund_df, 1, mean)
-  summary_df["Max Abund"] <- apply(cag_abund_df, 1, max)
-  summary_df["Min Abund"] <- apply(cag_abund_df, 1, min)
-  
-  if("CAG" %in% colnames(corncob_results_df)){
-    summary_df <- summary_df %>%
-      full_join(corncob_results_df, by = "CAG") %>%
-      add_column(
-        neg_log_pvalue = sapply(
-          pull(corncob_results_df, p_value),
-          function(v){-log10(v)}
-        )
-      )
-  }
-  summary_df <- summary_df %>%
-    rename(`Estimated Coefficient` = estimate) %>%
-    rename(`Standard Error` = std_error) %>%
-    rename(`p value` = p_value) %>%
-    rename(`p value (-log10)` = neg_log_pvalue)
+    as_tibble
   return(summary_df)
+}
+
+# Read in the PCA results
+read_hdf_pca <- function(dataset_prefix, data_folder){
+  return(pandas$read_hdf(
+    file.path(
+      data_folder, 
+      paste(dataset_prefix, ".hdf5", sep="")
+    ),
+    "/ordination/pca"
+  ) %>% 
+    as_tibble)
+}
+
+# Read in the t-SNE results
+read_hdf_tsne <- function(dataset_prefix, data_folder){
+  return(pandas$read_hdf(
+    file.path(
+      data_folder, 
+      paste(dataset_prefix, ".hdf5", sep="")
+    ),
+    "/ordination/tsne"
+  ) %>% 
+    as_tibble)
 }

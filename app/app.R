@@ -55,33 +55,16 @@ ui <- dashboardPage(
               tabsetPanel(
                 type = "tabs",
                 tabPanel(
-                  "Total Reads",
-                  plotOutput("total_reads_plot")
+                  "Size",
+                  plotOutput("cag_size_histogram")
                 ),
                 tabPanel(
-                  "Aligned Reads",
-                  plotOutput("aligned_reads_plot")
+                  "Prevalence",
+                  plotOutput("cag_prevalence_histogram")
                 ),
                 tabPanel(
-                  "Prop. Aligned (Hist)",
-                  plotOutput("proportion_aligned_plot")
-                ),
-                tabPanel(
-                  "Prop. Aligned (Scatter)",
-                  plotOutput("aligned_scatter_plot")
-                ),
-                tabPanel(
-                  "PCA - Samples",
-                  fluidRow(
-                    uiOutput("color_pca_by")
-                  ),
-                  fluidRow(
-                    plotOutput("pca_samples_plot")
-                  )
-                ),
-                tabPanel(
-                  "PCA - CAGs",
-                  plotOutput("pca_cags_plot")
+                  "Combined",
+                  plotOutput("cag_size_prevalence_distribution")
                 )
               )
             ),
@@ -101,12 +84,49 @@ ui <- dashboardPage(
     fluidRow(
       box(
         width = 12,
-        title="Statistical Analysis Results",
+        title="Sample Ordination",
+        collapsible = TRUE,
+        column(
+          width = 4,
+          uiOutput("color_ordination_by")
+        ),
+        column(
+          width = 8,
+          div(
+            style = "padding-right: 20px",
+            fluidRow(
+              tabsetPanel(
+                type = "tabs",
+                tabPanel(
+                  "PCA",
+                  plotOutput("ordination_pca_scatter")
+                ),
+                tabPanel(
+                  "t-SNE",
+                  plotOutput("ordination_tsne_scatter")
+                )
+              )
+            ),
+            fluidRow(
+              fluidRow(
+                div(
+                  downloadButton("ordination_pdf", label="PDF"),
+                  style="text-align:right"
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    fluidRow(
+      box(
+        width = 12,
+        title="Statistical Analysis",
         collapsible = TRUE,
         column(
           fluidRow(uiOutput("parameter_select")),
-          fluidRow(DT::DTOutput("corncob_results_DT")),
-          width = 6
+          width = 4
         ),
         column(
           fluidRow(plotOutput("corncob_results_plot")),
@@ -117,58 +137,23 @@ ui <- dashboardPage(
               style="text-align:right"
             )
           ),
-          width = 6
+          width = 8
         )
       )
     ),
     fluidRow(
       box(
         width = 12,
-        title = "CAGs in Dataset - Table",
+        title = "CAGs Summary Table",
         collapsible = TRUE,
-        div(
+        fluidRow(div(
+          style = "padding-right: 20px; padding-left: 20px",
           DT::DTOutput("cag_summary_DT")
-        )
-      )
-    ),
-    fluidRow(
-      box(
-        width = 12,
-        title = "CAGs in Dataset - Plots",
-        collapsible = TRUE,
-        column(
-          fluidRow(plotOutput("cag_size_hist_plot")),
-          width = 4
-        ),
-        column(
-          fluidRow(plotOutput("cag_prevalence_hist_plot")),
-          width = 4
-        ),
-        column(
-          width = 4,
-          fluidRow(
-            column(
-              width = 4,
-              uiOutput("cag_summary_x_select")
-            ),
-            column(
-              width = 4,
-              uiOutput("cag_summary_y_select")
-            ),
-            column(
-              width = 4,
-              uiOutput("cag_summary_hue_select")
-            )
-          ),
-          fluidRow(plotOutput("cag_summary_plot")),
-          fluidRow(
-            div(
-              downloadButton("cag_summary_pdf", label="PDF"),
-              downloadButton("cag_summary_csv", label="CSV"),
-              style="text-align:right"
-            )
-          )
-        )
+        )),
+        fluidRow(div(
+          downloadButton("cag_summary_csv", label="CSV"),
+          style="text-align:right; padding-right: 20px; padding-top: 10px"
+        ))
       )
     )
   )
@@ -190,21 +175,21 @@ server <- function(input, output) {
   
   # Watch for when the user changes the dataset
   observeEvent(input$dataset, {
-    
+
     # If the new dataset contains corncob results, show the corncob menu and display
     if(read_hdf_has_corncob(input$dataset, data_folder)){
-      
+
       show("parameter_select")
       show_panel("corncob_results")
 
     } else {
-      
+
       # Otherwise, hide those elements
       hide("parameter_select")
       hide_panel("corncob_results")
 
     }
-    
+
   })
   
   # Reactive element reading in the manifest for this dataset
@@ -213,7 +198,8 @@ server <- function(input, output) {
   # Reactive element with the list of parameters
   unique_parameters <- reactive({
     l <- unique(corncob_results_df()$parameter)
-    return(rev(l))
+    l <- l[l != "(Intercept)"]
+    return(l)
   })
   
   # If the source HDF5 has corncob results, display the parameter list in the sidebar
@@ -225,10 +211,10 @@ server <- function(input, output) {
     )
   })
   
-  # If the source HDF5 has corncob results, display the parameter list in the sidebar
-  output$color_pca_by <- renderUI({
+  # Display the list of options for coloring samples in the ordination plot
+  output$color_ordination_by <- renderUI({
     selectInput(
-      "color_pca_by",
+      "color_ordination_by",
       "Color By:",
       manifest_df() %>%
         colnames
@@ -250,11 +236,11 @@ server <- function(input, output) {
     summary_df <- data.frame(Dataset=input$dataset)
     
     # Add the number of samples and CAGs
-    summary_df["Number of Samples"] <- ncol(cag_abund_df())
-    summary_df["Number of CAGs"] <- nrow(cag_abund_df())
+    summary_df["Number of Samples"] <- nrow(manifest_df())
+    summary_df["Number of CAGs"] <- nrow(cag_summary_df())
     
     # Add the number of genes
-    summary_df["Number of Genes"] <- nrow(gene_annotations_df())
+    summary_df["Number of Genes"] <- sum(cag_summary_df()["size"])
     
     # Format the table for plotting
     summary_df <- t(summary_df)
@@ -267,16 +253,16 @@ server <- function(input, output) {
     read_hdf_readcounts(input$dataset, data_folder)
   })
   
-  # Reactive element with the CAG abundances for the whole dataset
-  cag_abund_df <- reactive({
-    read_cag_abundances(input$dataset, data_folder)
+  # Reactive element with the PCA results
+  pca_df <- reactive({
+    read_hdf_pca(input$dataset, data_folder)
   })
   
-  # Reactive element with the annotations for every gene in this dataset
-  gene_annotations_df <- reactive({
-    read_gene_annotations(input$dataset, data_folder)
+  # Reactive element with the t-SNE results
+  tsne_df <- reactive({
+    read_hdf_tsne(input$dataset, data_folder)
   })
-  
+
   # Reactive element with the table of corncob results
   corncob_results_df <- reactive({
     if(has_corncob_results()){
@@ -307,11 +293,30 @@ server <- function(input, output) {
   
   # Summary of all CAGs in this dataset
   cag_summary_df <- reactive({
-    make_cag_summary(
-      gene_annotations_df(),
-      cag_abund_df(),
-      corncob_results_filtered_df()
-    )
+    read_hdf_cag_summary(input$dataset, data_folder)
+  })
+  
+  # Extended CAG summary table containing corncob result metrics
+  cag_extended_summary_df <- reactive({
+    if(has_corncob_results() && is.null(input$parameter) == FALSE){
+      cag_summary_df() %>%
+        full_join(corncob_results_filtered_df()) %>%
+        rename(
+          `Mean Abundance` = mean_abundance,
+          Prevalence = prevalence,
+          `Number of Genes` = size,
+          `Estimated Coefficient` = estimate,
+          `Std. Error` = std_error,
+          `p-value` = p_value
+        )
+    } else {
+      cag_summary_df() %>%
+        rename(
+          `Mean Abundance` = mean_abundance,
+          Prevalence = prevalence,
+          `Number of Genes` = size
+        )
+    }
   })
   
   ###################
@@ -324,21 +329,10 @@ server <- function(input, output) {
   }, options = list(dom="t"))
   
   # Render the plots in the dataset summary tabset
-  output$total_reads_plot <- renderPlot(plot_readcounts(readcounts_df(), "total"))
-  output$aligned_reads_plot <- renderPlot(plot_readcounts(readcounts_df(), "aligned"))
-  output$proportion_aligned_plot <- renderPlot(plot_readcounts(readcounts_df(), "proportion"))
-  output$aligned_scatter_plot <- renderPlot(plot_readcounts(readcounts_df(), "scatter"))
-  output$pca_samples_plot <- renderPlot(
-    plot_dataset_pca(
-      cag_abund_df(), manifest_df(), "Samples", input$color_pca_by
-    )
-  )
-  output$pca_cags_plot <- renderPlot(
-    plot_dataset_pca(
-      cag_abund_df(), manifest_df(), "CAGs", input$color_pca_by
-    )
-  )
-  
+  output$cag_size_histogram <- renderPlot(plot_cag_hist(cag_summary_df(), "size"))
+  output$cag_prevalence_histogram <- renderPlot(plot_cag_hist(cag_summary_df(), "prevalence"))
+  output$cag_size_prevalence_distribution <- renderPlot(plot_cag_size_prevalence_distribution(cag_summary_df()))
+
   # Make the dataset summary PDF available for download
   output$dataset_summary_pdf <- downloadHandler(
     filename = paste(
@@ -348,19 +342,13 @@ server <- function(input, output) {
     ),
     content = function(file) {
       pdf(file)
-      print(plot_readcounts(readcounts_df(), "total"))
-      print(plot_readcounts(readcounts_df(), "aligned"))
-      print(plot_readcounts(readcounts_df(), "proportion"))
-      print(plot_readcounts(readcounts_df(), "scatter"))
-      for(color_by in colnames(manifest_df())){
-        print(plot_dataset_pca(cag_abund_df(), manifest_df(), "Samples", color_by))
-      }
-      print(plot_dataset_pca(cag_abund_df(), manifest_df(), "CAGs", input$color_pca_by))
-      
+      print(plot_cag_hist(cag_summary_df(), "size"))
+      print(plot_cag_hist(cag_summary_df(), "prevalence"))
+      print(plot_cag_size_prevalence_distribution(cag_summary_df()))
       dev.off()
     }
   )
-  
+
   # Make the dataset summary CSV available for download
   output$dataset_summary_csv <- downloadHandler(
     filename = paste(input$dataset, "summary.csv", sep="."),
@@ -369,39 +357,61 @@ server <- function(input, output) {
     },
     contentType = "text/csv"
   )
-    
+  
+  ##############
+  # ORDINATION #
+  ##############
+  
+  output$ordination_pca_scatter <- renderPlot(plot_ordination_scatter(
+    pca_df(), manifest_df(), input$color_ordination_by, "PCA"
+  ))
+  output$ordination_tsne_scatter <- renderPlot(plot_ordination_scatter(
+    tsne_df(), manifest_df(), input$color_ordination_by, "t-SNE"
+  ))
+  output$ordination_pdf <- downloadHandler(
+    filename = paste(
+      input$dataset,
+      "ordination.pdf",
+      sep="."
+    ),
+    content = function(file) {
+      pdf(file)
+      for(color_by in colnames(manifest_df())){
+        print(plot_ordination_scatter(
+          pca_df(), manifest_df(), color_by, "PCA"
+        ))
+      }
+      for(color_by in colnames(manifest_df())){
+        print(plot_ordination_scatter(
+          tsne_df(), manifest_df(), color_by, "t-SNE"
+        ))
+      }
+      dev.off()
+    }
+  )
+
   ###################
   # CORNCOB RESULTS #
   ###################
-  
-  # Render the corncob results as a DataTable
-  output$corncob_results_DT <- DT::renderDT(
-    {
-      corncob_results_filtered_df() %>% 
-        rename(Estimate = estimate) %>% 
-        rename(`p value` = p_value) %>% 
-        rename(`Standard Error` = std_error)
-    }, 
-    rownames = FALSE
-  )
-  
+
+
   # Render the corncob results as a scatter plot
   output$corncob_results_plot <- renderPlot(
     plot_corncob_results(corncob_results_df(), input$parameter)
   )
-  
+
   # Make the corncob results PDF available for download
   output$corncob_results_pdf <- downloadHandler(
     filename = paste(input$dataset, "corncob.pdf", sep="."),
     content = function(file) {
-      ggsave(
-        file, 
-        plot = plot_corncob_results(corncob_results_df(), input$parameter), 
-        device="pdf"
-      )
+      pdf(file)
+      for(parameter_name in unique_parameters()){
+        print(plot_corncob_results(corncob_results_df(), parameter_name))
+      }
+      dev.off()
     }
   )
-  
+
   # Make the corncob results CSV available for download
   output$corncob_results_csv <- downloadHandler(
     filename = paste(input$dataset, "corncob.csv", sep="."),
@@ -410,93 +420,21 @@ server <- function(input, output) {
     },
     contentType = "text/csv"
   )
-  
+
   ###############
   # CAG SUMMARY #
   ###############
-  
+
   # Render the CAG summary as a DataTable
   output$cag_summary_DT <- DT::renderDT({
-    cag_summary_df()
+    cag_extended_summary_df()
   }, rownames = FALSE)
-  
-  # Provide menus to let the user select what kind of plot to make
-  output$cag_summary_x_select <- renderUI({
-    selectInput(
-      "cag_summary_x_select",
-      "Horizontal Axis:",
-      cag_summary_df() %>%
-        colnames,
-      selected = "Max Abund"
-    )
-  })
-  output$cag_summary_y_select <- renderUI({
-    selectInput(
-      "cag_summary_y_select",
-      "Vertical Axis:",
-      cag_summary_df() %>%
-        colnames,
-      selected = "Prevalence"
-    )
-  })
-  output$cag_summary_hue_select <- renderUI({
-    selectInput(
-      "cag_summary_hue_select",
-      "Color:",
-      cag_summary_df() %>%
-        colnames,
-      selected = "Number of Genes"
-    )
-  })
-
-  # Plot the size distribution of CAGs as a histogram
-  output$cag_size_hist_plot <- renderPlot(
-    plot_cag_hist(
-      cag_summary_df(),
-      "size"
-    )
-  )
-  
-  # Plot the prevalence distribution of CAGs as a histogram
-  output$cag_prevalence_hist_plot <- renderPlot(
-    plot_cag_hist(
-      cag_summary_df(),
-      "prevalence"
-    )
-  )
-  
-  # Render the CAG summary as a flexible scatter plot
-  output$cag_summary_plot <- renderPlot(
-    plot_cag_summary(
-      cag_summary_df(), 
-      input$cag_summary_x_select, 
-      input$cag_summary_y_select, 
-      input$cag_summary_hue_select
-    )
-  )
-  
-  # Make the CAG summary PDF available for download
-  output$cag_summary_pdf <- downloadHandler(
-    filename = paste(input$dataset, "CAG.summary.pdf", sep="."),
-    content = function(file) {
-      pdf(file)
-      print(plot_cag_hist(cag_summary_df(), "size"))
-      print(plot_cag_hist(cag_summary_df(), "prevalence"))
-      print(plot_cag_summary(
-        cag_summary_df(), 
-        input$cag_summary_x_select, 
-        input$cag_summary_y_select, 
-        input$cag_summary_hue_select
-      )) 
-      dev.off()
-    }
-  )
   
   # Make the CAG summary CSV available for download
   output$cag_summary_csv <- downloadHandler(
     filename = paste(input$dataset, "CAG.summary.csv", sep="."),
     content = function(file) {
-      write_csv(cag_summary_df(), path = file)
+      write_csv(cag_extended_summary_df(), path = file)
     },
     contentType = "text/csv"
   )
