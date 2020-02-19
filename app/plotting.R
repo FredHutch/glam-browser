@@ -60,49 +60,6 @@ plot_cag_size_prevalence_distribution <- function(cag_summary_df){
   return(p)
 }
 
-# 
-# # Function to plot readcounts
-# plot_readcounts <- function(readcounts_df, plot_type){
-#   if(plot_type == "total"){
-#     p <- ggplot(
-#       data = readcounts_df, aes(x = n_reads)
-#     ) + geom_histogram() + xlab(
-#       "Number of Total Reads"
-#     )
-#   }else{
-#     if(plot_type == "aligned"){
-#       p <- ggplot(
-#         data = readcounts_df, aes(x = aligned_reads)
-#       ) + geom_histogram() + xlab(
-#         "Number of Aligned Reads"
-#       )
-#     } else {
-#       if(plot_type == "proportion"){
-#         p <- ggplot(
-#           data = readcounts_df, aes(x = prop_aligned)
-#         ) + geom_histogram() + xlab(
-#           "Proportion of Aligned Reads"
-#         ) + xlim(
-#           0, 1
-#         )
-#       } else {
-#         stopifnot(plot_type == "scatter")
-#         p <- ggplot(
-#           data = readcounts_df, aes(x = n_reads, y=aligned_reads)
-#         ) + geom_point() + xlab(
-#           "Number of Total Reads"
-#         ) + ylab(
-#           "Number of Aligned Reads"
-#         )
-#       }
-#     }
-#   }
-#   return(
-#     p + ylab(
-#       "Number of Samples"
-#     ) + theme_minimal()
-#   )
-# }
 
 # Function to plot PCA for samples
 plot_ordination_scatter <- function(ordination_df, manifest_df, color_ordination_by, title_text){
@@ -192,4 +149,73 @@ plot_corncob_results <- function(corncob_results_df, parameter){
     return(ggplot() + geom_blank())
   }
   
+}
+
+plot_cag_abundance <- function(
+  cag_abundance_df,
+  x,
+  hue,
+  col,
+  geom
+){
+  if(nrow(cag_abundance_df) == 0){
+    return(ggplot() + geom_blank())
+  } else {
+    
+    if(col != "None"){
+      cag_abundance_df <- cag_abundance_df %>% rename(
+        col_variable = col
+      )
+    }
+      
+    if(hue == "None"){
+      p <- ggplot(
+        data = cag_abundance_df,
+        aes_string(
+          x = x,
+          y = "abundance"
+        )
+      )
+    } else {
+      p <- ggplot(
+        data = cag_abundance_df,
+        aes_string(
+          x = x,
+          y = "abundance",
+          fill = hue
+        )
+      )
+    }
+    if(col != "None"){
+      p <- p + facet_wrap(
+        vars(col_variable), nrow = 1
+      )
+    }
+    p <- p + xlab(
+      x
+    ) + ylab(
+      "Relative Abundance"
+    )
+    if(geom == "point"){
+      p <- p + geom_point()
+    }
+    if(geom == "boxplot"){
+      p <- p + geom_boxplot()
+    }
+    if(geom == "jitter"){
+      p <- p + geom_jitter()
+    }
+    if(geom == "line"){
+      p <- p + geom_line()
+    }
+    if(geom == "bar"){
+      p <- p + geom_bar()
+    }
+    return(
+      p + theme_minimal(
+      ) + theme(
+        plot.title = element_text(hjust = 0.5)
+      )
+    )
+  }
 }

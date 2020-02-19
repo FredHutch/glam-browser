@@ -21,6 +21,7 @@ source("plotting.R")
 
 # Source the code needed to read from HDF
 source("read_hdf.R")
+source_python("read_hdf.py")
 
 data_folder = "../data/"
 
@@ -155,6 +156,45 @@ ui <- dashboardPage(
           style="text-align:right; padding-right: 20px; padding-top: 10px"
         ))
       )
+    ),
+    fluidRow(
+      box(
+        width = 12,
+        title = "Selected CAG Details",
+        collapsible = TRUE,
+        fluidRow(div(
+          style = "padding-right: 20px; padding-left: 20px",
+          DT::DTOutput("cag_details_DT")
+        )),
+        fluidRow(div(
+          downloadButton("cag_details_csv", label="CSV"),
+          style="text-align:right; padding-right: 20px; padding-top: 10px"
+        ))
+      )
+    ),
+    fluidRow(
+      box(
+        width = 12,
+        title = "Selected CAG Abundance",
+        collapsible = TRUE,
+        column(
+          width = 4,
+          uiOutput("cag_abundance_x"),
+          uiOutput("cag_abundance_hue"),
+          uiOutput("cag_abundance_col"),
+          uiOutput("cag_abundance_geom")
+        ),
+        column(
+          width = 8,
+          fluidRow(div(
+            plotOutput("cag_abundance_plot")
+          )),
+          fluidRow(div(
+            downloadButton("cag_abundance_pdf", label="PDF"),
+            style="text-align:right; padding-right: 20px; padding-top: 10px"
+          ))
+        )
+      )
     )
   )
 )
@@ -200,6 +240,18 @@ server <- function(input, output) {
     l <- unique(corncob_results_df()$parameter)
     l <- l[l != "(Intercept)"]
     return(l)
+  })
+  
+  cag_abundance_hue_parameters <- reactive({
+    l <- unique_parameters()
+    l <- l[l != input$cag_abundance_x]
+    l <- l[l != input$cag_abundance_col]
+  })
+  
+  cag_abundance_col_parameters <- reactive({
+    l <- unique_parameters()
+    l <- l[l != input$cag_abundance_x]
+    l <- l[l != input$cag_abundance_hue]
   })
   
   # If the source HDF5 has corncob results, display the parameter list in the sidebar
@@ -301,6 +353,9 @@ server <- function(input, output) {
     if(has_corncob_results() && is.null(input$parameter) == FALSE){
       cag_summary_df() %>%
         full_join(corncob_results_filtered_df()) %>%
+        arrange(
+          p_value
+        ) %>%
         rename(
           `Mean Abundance` = mean_abundance,
           Prevalence = prevalence,
@@ -317,6 +372,47 @@ server <- function(input, output) {
           `Number of Genes` = size
         )
     }
+  })
+  
+  # Summary table for the single selected CAG
+  cag_details_df <- reactive({
+    if(is.null(input$cag_summary_DT_rows_selected)){
+      return(data.frame())
+    } else {
+      # Get the ID for the CAG which has been selected
+      cag_id <- cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
+      return(
+        read_cag_details(
+          file.path(
+            data_folder, 
+            paste(input$dataset, ".hdf5", sep="")
+          ), 
+          cag_id
+        )
+      )
+    }
+  })
+  
+  # Relative abundance table for the single selected CAG
+  cag_abundance_df <- reactive({
+    if(is.null(input$cag_summary_DT_rows_selected)){
+      return(data.frame())
+    } else {
+      # Get the ID for the CAG which has been selected
+      cag_id <- cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
+      return(
+        read_cag_abundance(
+          file.path(
+            data_folder, 
+            paste(input$dataset, ".hdf5", sep="")
+          ), 
+          cag_id
+        ) %>% 
+          as_tibble
+        ) %>% full_join(
+          manifest_df()
+        )
+      }
   })
   
   ###################
@@ -426,9 +522,15 @@ server <- function(input, output) {
   ###############
 
   # Render the CAG summary as a DataTable
-  output$cag_summary_DT <- DT::renderDT({
-    cag_extended_summary_df()
-  }, rownames = FALSE)
+  output$cag_summary_DT <- DT::renderDT(
+    {cag_extended_summary_df()}, 
+    rownames = FALSE,
+    server = TRUE,
+    selection = list(
+      mode = 'single',
+      selected = 1
+    )
+  )
   
   # Make the CAG summary CSV available for download
   output$cag_summary_csv <- downloadHandler(
@@ -437,6 +539,69 @@ server <- function(input, output) {
       write_csv(cag_extended_summary_df(), path = file)
     },
     contentType = "text/csv"
+  )
+  
+  ###############
+  # CAG DETAILS #
+  ###############
+  
+  # Render the details for a single CAG as a DataTable
+  output$cag_details_DT <- DT::renderDT(
+    {cag_details_df()},
+    rownames = FALSE,
+    server = TRUE,
+    selection = 'none'
+  )
+  
+  # Make the details for a single CAG available for download as a CSV
+  output$cag_details_csv <- downloadHandler(
+    filename = paste(input$dataset, "CAG.details.csv", sep="."),
+    content = function(file) {
+      write_csv(cag_details_df(), path = file)
+    },
+    contentType = "text/csv"
+  )
+  
+  #################
+  # CAG ABUNDANCE #
+  #################
+  
+  output$cag_abundance_x <- renderUI({
+    selectInput(
+      "cag_abundance_x",
+      "Horizontal x-axis:",
+      unique_parameters()
+    )
+  })
+  output$cag_abundance_hue <- renderUI({
+    selectInput(
+      "cag_abundance_hue",
+      "Hue:",
+      c("None", cag_abundance_hue_parameters())
+    )
+  })
+  output$cag_abundance_col <- renderUI({
+    selectInput(
+      "cag_abundance_col",
+      "Column:",
+      c("None", cag_abundance_col_parameters())
+    )
+  })
+  output$cag_abundance_geom <- renderUI({
+    selectInput(
+      "cag_abundance_geom",
+      "Plot Type:",
+      c("point", "boxplot", "jitter", "line", "bar")
+    )
+  })
+  output$cag_abundance_plot <- renderPlot(
+    plot_cag_abundance(
+      cag_abundance_df(),
+      input$cag_abundance_x,
+      input$cag_abundance_hue,
+      input$cag_abundance_col,
+      input$cag_abundance_geom
+    )
   )
 }
 

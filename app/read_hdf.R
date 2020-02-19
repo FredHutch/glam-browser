@@ -74,8 +74,7 @@ read_hdf_cag_abundances <- function(dataset_prefix, data_folder){
 
 
 # Function to read the annotations for every unique gene within a CAG
-read_hdf_gene_annotations <- function(dataset_prefix, data_folder, cag_id){
-  
+read_hdf_cag_details <- function(dataset_prefix, data_folder, cag_id){
   return(
     pandas$read_hdf(
       file.path(
@@ -83,7 +82,7 @@ read_hdf_gene_annotations <- function(dataset_prefix, data_folder, cag_id){
         paste(dataset_prefix, ".hdf5", sep="")
       ),
       "/annot/gene/all",
-      where = paste("CAG ==", str(cag_id))
+      where = paste("CAG ==", as.character(cag_id))
     ) %>% 
       as_tibble
   )
