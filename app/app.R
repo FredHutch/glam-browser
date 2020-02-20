@@ -284,20 +284,8 @@ server <- function(input, output) {
   
   # Reactive element with a table summarizing the overall dataset
   dataset_summary_df <- reactive({
-    # Set up the table
-    summary_df <- data.frame(Dataset=input$dataset)
-    
-    # Add the number of samples and CAGs
-    summary_df["Number of Samples"] <- nrow(manifest_df())
-    summary_df["Number of CAGs"] <- nrow(cag_summary_df())
-    
-    # Add the number of genes
-    summary_df["Number of Genes"] <- sum(cag_summary_df()["size"])
-    
-    # Format the table for plotting
-    summary_df <- t(summary_df)
-    colnames(summary_df) <- c("Value")
-    return(summary_df)
+    # Read the summary table directly from the HDF5
+    return(read_hdf_summary(input$dataset, data_folder))
   })
   
   # Reactive element with the number of reads for this dataset

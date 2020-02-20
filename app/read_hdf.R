@@ -2,6 +2,18 @@
 use_python("/Users/sminot/miniconda3/bin/python3", required = TRUE)
 pandas <- import("pandas")
 
+# Function to the summary of the entire expeirment
+read_hdf_summary <- function(dataset_prefix, data_folder){
+  df <- pandas$read_hdf(
+    file.path(
+      data_folder, 
+      paste(dataset_prefix, ".hdf5", sep="")
+    ),
+    "/summary/experiment"
+  )
+  return(df)
+}
+
 # Walk through the specified directory and find all files ending with HDF5
 find_datasets <- function(directory){
     # Find all of the files in the folder
