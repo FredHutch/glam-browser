@@ -112,6 +112,9 @@ plot_corncob_results <- function(corncob_results_df, parameter){
     # Filter to this parameter
     plot_df <- plot_df[plot_df$parameter == parameter,]
     
+    # Filter to p-values < 0.99
+    plot_df <- plot_df %>% filter(p_value < 0.99)
+    
     # Add the -log10 p-value
     plot_df <- plot_df %>%
       add_column(
