@@ -152,16 +152,16 @@ read_hdf_cag_summary <- function(dataset_prefix, data_folder){
     ),
     "/annot/cag/all"
   ) %>% 
-    as_tibble
-  # Add the log10 size
-  summary_df$size_log10 <- sapply(
-    summary_df$size,
-    log10
-  )
-  summary_df$mean_abundance_log10 <- sapply(
-    summary_df$mean_abundance,
-    log10
-  )
+    as_tibble %>%
+    mutate(
+      size_log10 = size %>% log10 %>% signif(4),
+      mean_abundance_log10 = mean_abundance %>% log10 %>% signif(4),
+      prevalence = prevalence %>% signif(4)
+    ) %>%
+    mutate( # Format some columns as scientific notation
+      mean_abundance = mean_abundance %>% signif(4)
+    )
+
   return(summary_df)
 }
 

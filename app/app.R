@@ -368,6 +368,12 @@ server <- function(input, output) {
         arrange(
           p_value
         ) %>%
+        drop_na(p_value) %>% # Drop CAGs with no p-values computed
+        mutate( # Truncate significant digits
+          estimate = estimate %>% signif(4),
+          p_value = p_value %>% signif(4),
+          std_error = std_error %>% signif(4)
+        ) %>%
         rename(
           `Mean Abundance` = mean_abundance,
           `Mean Abundance (log10)` = mean_abundance_log10,
