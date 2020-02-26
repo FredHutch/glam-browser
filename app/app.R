@@ -60,12 +60,12 @@ ui <- dashboardPage(
                   plotOutput("cag_size_histogram")
                 ),
                 tabPanel(
-                  "Prevalence",
-                  plotOutput("cag_prevalence_histogram")
+                  "Abundance",
+                  plotOutput("cag_abundance_histogram")
                 ),
                 tabPanel(
                   "Combined",
-                  plotOutput("cag_size_prevalence_distribution")
+                  plotOutput("cag_size_abundance_distribution")
                 )
               )
             ),
@@ -243,13 +243,13 @@ server <- function(input, output) {
   })
   
   cag_abundance_hue_parameters <- reactive({
-    l <- unique_parameters()
+    l <- manifest_df() %>% colnames
     l <- l[l != input$cag_abundance_x]
     l <- l[l != input$cag_abundance_col]
   })
   
   cag_abundance_col_parameters <- reactive({
-    l <- unique_parameters()
+    l <- manifest_df() %>% colnames
     l <- l[l != input$cag_abundance_x]
     l <- l[l != input$cag_abundance_hue]
   })
@@ -286,7 +286,11 @@ server <- function(input, output) {
   dataset_summary_df <- reactive({
     # Read the summary table directly from the HDF5
     withProgress(message = "Reading dataset summary", {
-      return(read_hdf_summary(input$dataset, data_folder))
+      return(
+        read_hdf_summary(input$dataset, data_folder) %>%
+          remove_rownames %>%
+          column_to_rownames("variable")
+      )
     })
   })
   
@@ -366,8 +370,10 @@ server <- function(input, output) {
         ) %>%
         rename(
           `Mean Abundance` = mean_abundance,
+          `Mean Abundance (log10)` = mean_abundance_log10,
           Prevalence = prevalence,
           `Number of Genes` = size,
+          `Number of Genes (log10)` = size_log10,
           `Estimated Coefficient` = estimate,
           `Std. Error` = std_error,
           `p-value` = p_value
@@ -376,8 +382,10 @@ server <- function(input, output) {
       cag_summary_df() %>%
         rename(
           `Mean Abundance` = mean_abundance,
+          `Mean Abundance (log10)` = mean_abundance_log10,
           Prevalence = prevalence,
-          `Number of Genes` = size
+          `Number of Genes` = size,
+          `Number of Genes (log10)` = size_log10
         )
     }
   })
@@ -434,8 +442,8 @@ server <- function(input, output) {
   
   # Render the plots in the dataset summary tabset
   output$cag_size_histogram <- renderPlot(plot_cag_hist(cag_summary_df(), "size"))
-  output$cag_prevalence_histogram <- renderPlot(plot_cag_hist(cag_summary_df(), "prevalence"))
-  output$cag_size_prevalence_distribution <- renderPlot(plot_cag_size_prevalence_distribution(cag_summary_df()))
+  output$cag_abundance_histogram <- renderPlot(plot_cag_hist(cag_summary_df(), "abundance"))
+  output$cag_size_abundance_distribution <- renderPlot(plot_cag_size_abundance_distribution(cag_summary_df()))
 
   # Make the dataset summary PDF available for download
   output$dataset_summary_pdf <- downloadHandler(
@@ -447,8 +455,8 @@ server <- function(input, output) {
     content = function(file) {
       pdf(file)
       print(plot_cag_hist(cag_summary_df(), "size"))
-      print(plot_cag_hist(cag_summary_df(), "prevalence"))
-      print(plot_cag_size_prevalence_distribution(cag_summary_df()))
+      print(plot_cag_hist(cag_summary_df(), "abundance"))
+      print(plot_cag_size_abundance_distribution(cag_summary_df()))
       dev.off()
     }
   )
@@ -578,7 +586,8 @@ server <- function(input, output) {
     selectInput(
       "cag_abundance_x",
       "Horizontal x-axis:",
-      unique_parameters()
+      manifest_df() %>%
+        colnames
     )
   })
   output$cag_abundance_hue <- renderUI({

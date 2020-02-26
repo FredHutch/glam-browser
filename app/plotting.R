@@ -1,35 +1,35 @@
 
-# Function to make a plot summarizing CAGs on the basis of size or prevalence
+# Function to make a plot summarizing CAGs on the basis of size or abundance
 plot_cag_hist <- function(cag_summary_df, plot_type){
 
   if(plot_type == "size"){
     p <- ggplot(
-      data = cag_summary_df,
+      data = cag_summary_df %>%
+        filter(size >= 5),
       aes(
-        x = size
+        x = size_log10
       )
     ) + ggtitle(
       "CAG Size"
     ) + xlab(
-      "Number of Genes"
+      "Number of Genes (log10)"
     )
   } else {
-    stopifnot(plot_type == "prevalence")
+    stopifnot(plot_type == "abundance")
     p <- ggplot(
-      data = cag_summary_df,
+      data = cag_summary_df %>%
+        filter(size >= 5),
       aes(
-        x = prevalence
+        x = mean_abundance_log10
       )
     ) + ggtitle(
-      "CAG Prevalence"
+      "CAG Abundance"
     ) + xlab(
-      "Proportion of Samples"
+      "Mean Abundance (log10)"
     )
   }
   return(
     p + geom_histogram(
-    ) + xlab(
-      paste("CAG", plot_type)
     ) + ylab(
       "Number of CAGs per bin"
     ) + theme_minimal(
@@ -39,19 +39,20 @@ plot_cag_hist <- function(cag_summary_df, plot_type){
   )
 }
 
-plot_cag_size_prevalence_distribution <- function(cag_summary_df){
+plot_cag_size_abundance_distribution <- function(cag_summary_df){
   p <- ggplot(
-    data = cag_summary_df,
+    data = cag_summary_df %>%
+      filter(size >= 5),
     aes(
-      x = size,
-      y = prevalence
+      x = size_log10,
+      y = mean_abundance_log10
     )
   ) + ggtitle(
-    "CAG Size and Prevalence"
+    "CAG Size and Abundance"
   ) + xlab(
-    "Number of Genes"
+    "Number of Genes (log10)"
   ) + ylab(
-    "Proportion of Samples"
+    "Mean Abundance (log10)"
   ) + geom_hex(
   ) + theme_minimal(
   ) + theme(
