@@ -30,6 +30,7 @@ plot_cag_hist <- function(cag_summary_df, plot_type){
   }
   return(
     p + geom_histogram(
+      bins = 60
     ) + ylab(
       "Number of CAGs per bin"
     ) + theme_minimal(
@@ -54,6 +55,7 @@ plot_cag_size_abundance_distribution <- function(cag_summary_df){
   ) + ylab(
     "Mean Abundance (log10)"
   ) + geom_hex(
+    bins = c(100, 30)
   ) + theme_minimal(
   ) + theme(
     plot.title = element_text(hjust = 0.5)
