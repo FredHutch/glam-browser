@@ -109,6 +109,20 @@ read_hdf_manifest <- function(dataset_prefix, data_folder){
     df <- df %>% 
       select(-I2)
   }
+  # Convert columns with very few unique values to factors
+  if(nrow(df) > 5){
+    for(n in colnames(df)){
+      if(length(unique(df[[n]])) <= 5){
+        if(is.numeric(df[[n]])){
+          df[[n]] <- as.factor(df[[n]])
+          fct_inseq(df[[n]])
+        } else {
+          df[[n]] <- as.factor(df[[n]])
+        }
+        
+      }
+    }
+  }
   return(df)
 }
 
