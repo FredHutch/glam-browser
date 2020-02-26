@@ -34,7 +34,7 @@ read_hdf_has_corncob <- function(dataset_prefix, data_folder){
             data_folder, 
             paste(dataset_prefix, ".hdf5", sep="")
           ),
-          "/stats/cag/corncob"
+          "/stats/cag/corncob_wide"
         )
         return(TRUE)
       },
@@ -50,20 +50,8 @@ read_hdf_corncob_results <- function(dataset_prefix, data_folder){
       data_folder, 
       paste(dataset_prefix, ".hdf5", sep="")
     ),
-    "/stats/cag/corncob"
-  ) %>% filter(grepl("mu.", parameter))
-  
-  df$parameter <- sapply(df$parameter, function(n){str_replace(n, "mu.", "")})
-  
-  df <- df[!is.nan(df$value),]
-  
-  df$value <- sapply(
-    df$value,
-    function(v){if(v < 10){return(signif(v, digits=3))}else{return(round(v, 1))}}
+    "/stats/cag/corncob_wide"
   )
-  
-  df <- df %>% pivot_wider(names_from = type, values_from = value)
-  
   return(df)
 }
 
@@ -103,8 +91,7 @@ read_hdf_cag_details <- function(dataset_prefix, data_folder, cag_id){
 
 # Function to read the sample metadata (manifest) for this study
 read_hdf_manifest <- function(dataset_prefix, data_folder){
-  return(
-    pandas$read_hdf(
+  df <- pandas$read_hdf(
       file.path(
         data_folder, 
         paste(dataset_prefix, ".hdf5", sep="")
@@ -113,10 +100,16 @@ read_hdf_manifest <- function(dataset_prefix, data_folder){
     ) %>% 
       as_tibble  %>% 
       select(-R1) %>% 
-      select(-R2) %>% 
-      select(-I1) %>% 
+      select(-R2)
+  if("I1" %in% colnames(df)){
+    df <- df %>% 
+      select(-I1)
+  }
+  if("I2" %in% colnames(df)){
+    df <- df %>% 
       select(-I2)
-  )
+  }
+  return(df)
 }
 
 # Function to read the readcounts table for this study
