@@ -285,30 +285,44 @@ server <- function(input, output) {
   # Reactive element with a table summarizing the overall dataset
   dataset_summary_df <- reactive({
     # Read the summary table directly from the HDF5
-    return(read_hdf_summary(input$dataset, data_folder))
+    withProgress(message = "Reading dataset summary", {
+      return(read_hdf_summary(input$dataset, data_folder))
+    })
   })
   
   # Reactive element with the number of reads for this dataset
   readcounts_df <- reactive({
-    read_hdf_readcounts(input$dataset, data_folder)
+    withProgress(
+      message = "Reading alignment metrics",
+      {read_hdf_readcounts(input$dataset, data_folder)}
+    )
   })
   
   # Reactive element with the PCA results
   pca_df <- reactive({
-    read_hdf_pca(input$dataset, data_folder)
+    withProgress(
+      message = "Reading PCA",
+      {read_hdf_pca(input$dataset, data_folder)}
+    )
   })
   
   # Reactive element with the t-SNE results
   tsne_df <- reactive({
-    read_hdf_tsne(input$dataset, data_folder)
+    withProgress(
+      message = "Reading t-SNE",
+      {read_hdf_tsne(input$dataset, data_folder)}
+    )
   })
 
   # Reactive element with the table of corncob results
   corncob_results_df <- reactive({
     if(has_corncob_results()){
-      read_hdf_corncob_results(
-        input$dataset, 
-        data_folder
+      withProgress(
+        message = "Reading statistical analysis results",
+        {read_hdf_corncob_results(
+          input$dataset, 
+          data_folder
+        )}
       )
     }else{
       data.frame(parameter=c('empty'), estimate=c('empty'), stdev=c('empty'))
@@ -328,12 +342,18 @@ server <- function(input, output) {
   
   # Manifest for the dataset
   manifest_df <- reactive({
-    read_hdf_manifest(input$dataset, data_folder)
+    withProgress(
+      message = "Reading manifest",
+      {read_hdf_manifest(input$dataset, data_folder)}
+    )
   })
   
   # Summary of all CAGs in this dataset
   cag_summary_df <- reactive({
-    read_hdf_cag_summary(input$dataset, data_folder)
+    withProgress(
+      message = "Reading CAG summary",
+      {read_hdf_cag_summary(input$dataset, data_folder)}
+    )
   })
   
   # Extended CAG summary table containing corncob result metrics
