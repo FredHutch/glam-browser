@@ -190,14 +190,7 @@ plot_cag_details_tax_bars <- function(
     paste("CAG", cag_name)
   ) + theme(
     aspect.ratio=2,
-    plot.title = element_text(hjust = 0.5),
-    plot.margin=unit(c(0,0,0,0), "cm"),
-    panel.margin=unit(c(0,0,0,0), "cm"),
-    panel.background=element_blank(),
-    panel.border=element_blank(),
-    panel.grid.major=element_blank(),
-    panel.grid.minor=element_blank(),
-    plot.background=element_blank()
+    plot.title = element_text(hjust = 0.5)
   )
   return(g)
 }

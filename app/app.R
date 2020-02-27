@@ -170,7 +170,8 @@ ui <- dashboardPage(
           ),
           column(
             width = 4,
-            plotOutput("cag_details_tax_bars")
+            align = "center",
+            plotOutput("cag_details_tax_bars", width = "300px", height = "600px")
           )
         )),
         fluidRow(div(
@@ -585,10 +586,12 @@ server <- function(input, output) {
   
   # Render the assigned taxa for a CAG as a bargraph
   output$cag_details_tax_bars <- renderPlot(
-    plot_cag_details_tax_bars(
+    {plot_cag_details_tax_bars(
       cag_details_df(),
       cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
-    )
+    )},
+    width = 300,
+    height = 600
   )
   
   # Make the taxonomic assignment barplot for a single CAG available for download as a PDF
