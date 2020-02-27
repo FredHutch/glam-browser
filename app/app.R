@@ -164,10 +164,18 @@ ui <- dashboardPage(
         collapsible = TRUE,
         fluidRow(div(
           style = "padding-right: 20px; padding-left: 20px",
-          DT::DTOutput("cag_details_DT")
+          column(
+            width = 8,
+            DT::DTOutput("cag_details_DT")
+          ),
+          column(
+            width = 4,
+            plotOutput("cag_details_tax_bars")
+          )
         )),
         fluidRow(div(
           downloadButton("cag_details_csv", label="CSV"),
+          downloadButton("cag_details_pdf", label="PDF"),
           style="text-align:right; padding-right: 20px; padding-top: 10px"
         ))
       )
@@ -575,6 +583,27 @@ server <- function(input, output) {
     selection = 'none'
   )
   
+  # Render the assigned taxa for a CAG as a bargraph
+  output$cag_details_tax_bars <- renderPlot(
+    plot_cag_details_tax_bars(
+      cag_details_df(),
+      cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
+    )
+  )
+  
+  # Make the taxonomic assignment barplot for a single CAG available for download as a PDF
+  output$cag_details_pdf <- downloadHandler(
+    filename = paste(input$dataset, "CAG.taxa.pdf", sep="."),
+    content = function(file) {
+      pdf(file)
+      print(plot_cag_details_tax_bars(
+        cag_details_df(),
+        cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
+      ))
+      dev.off()
+    }
+  )
+
   # Make the details for a single CAG available for download as a CSV
   output$cag_details_csv <- downloadHandler(
     filename = paste(input$dataset, "CAG.details.csv", sep="."),

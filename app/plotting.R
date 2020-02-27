@@ -157,6 +157,51 @@ plot_corncob_results <- function(corncob_results_df, parameter){
   
 }
 
+plot_cag_details_tax_bars <- function(
+  cag_details_df,
+  cag_name
+){
+  if(nrow(cag_details_df) == 0){
+    return(ggplot() + geom_blank())
+  }
+  if(! "tax_name" %in% colnames(cag_details_df)){
+    return(ggplot() + geom_blank())
+  }
+  g <- ggplot(
+    data = cag_details_df %>%
+      filter(
+        tax_id != "0"
+      ) %>%
+      count(tax_name) %>%
+      arrange(n) %>%
+      tail(10),
+    aes(
+      x = reorder(tax_name, -n),
+      y = n
+    )
+  ) + geom_bar(
+    stat = "identity"
+  ) + coord_flip(
+  ) + ylab(
+    "Number of annotated genes"
+  ) + xlab(
+    ""
+  ) + ggtitle(
+    paste("CAG", cag_name)
+  ) + theme(
+    aspect.ratio=2,
+    plot.title = element_text(hjust = 0.5),
+    plot.margin=unit(c(0,0,0,0), "cm"),
+    panel.margin=unit(c(0,0,0,0), "cm"),
+    panel.background=element_blank(),
+    panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),
+    plot.background=element_blank()
+  )
+  return(g)
+}
+
 plot_cag_abundance <- function(
   cag_abundance_df,
   x,
