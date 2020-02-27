@@ -145,7 +145,7 @@ ui <- dashboardPage(
     fluidRow(
       box(
         width = 12,
-        title = "CAGs Summary Table",
+        title = "CAG Summary Table",
         collapsible = TRUE,
         fluidRow(div(
           style = "padding-right: 20px; padding-left: 20px",
