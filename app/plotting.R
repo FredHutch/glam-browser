@@ -1,3 +1,6 @@
+library(RColorBrewer)
+library(ComplexHeatmap)
+library(circlize)
 
 # Function to make a plot summarizing CAGs on the basis of size or abundance
 plot_cag_hist <- function(cag_summary_df, plot_type){
@@ -262,4 +265,159 @@ plot_cag_abundance <- function(
       )
     )
   }
+}
+
+plot_cag_heatmap <- function(
+  df,
+  cag_list,
+  color_by_primary,
+  color_by_secondary,
+  color_by_tertiary,
+  show_column_names,
+  checkbox_cluster
+){
+  if(nrow(df) == 0){
+    return(ggplot() + geom_blank())
+  }
+  # If the user set the tertiary label but not the secondary
+  # then just treat the tertiary as though it were the secondary
+  if(color_by_secondary == "NONE" && color_by_tertiary != "NONE"){
+    color_by_secondary <- color_by_tertiary
+    color_by_tertiary <- "NONE"
+  }
+
+  # If the user set the secondary label but not the primary
+  # then just treat the secondary as though it were the primary
+  if(color_by_primary == "NONE" && color_by_secondary != "NONE"){
+    color_by_primary <- color_by_secondary
+    color_by_secondary <- "NONE"
+  }
+  
+  # Sort the table depending on the user's input
+  if(checkbox_cluster || color_by_primary == "NONE"){
+    # Sort the table by hierarchical clustering of CAG abundances
+    df <- df[hclust(
+      dist(
+        df %>% select(cag_list),
+        method = "euclidean"
+      ),
+      method = "ward.D"
+    )$order,]
+  }else{
+    # First sort by the tertiary key
+    if(color_by_tertiary != "NONE"){
+      df <- arrange(df, df[[color_by_tertiary]])
+    }
+    # Then sort by the secondary key
+    if(color_by_secondary != "NONE"){
+      df <- arrange(df, df[[color_by_secondary]])
+    }
+    # Then the primary key
+    df <- arrange(df, df[[color_by_primary]])
+  }
+  
+  # Duplicate the specimen label as a column name
+  df$INDEX <- df$specimen
+  df <- df %>% column_to_rownames(var = "INDEX")
+
+  # Format the table for plotting CAG abundance values
+  abund_df <- df %>%
+    select(cag_list) %>%
+    t %>%
+    log10 %>%
+    replace_na(
+      df %>%
+        select(cag_list) %>%
+        min %>%
+        log10
+    )
+  
+  # Annotation with the primary color_by metadata
+  if(color_by_primary != "NONE"){
+    g1 <- set_up_heatmap_annotation(df, color_by_primary)
+  }
+
+  # Annotation with the secondary color_by metadata
+  if(color_by_secondary != "NONE"){
+    g2 <- set_up_heatmap_annotation(df, color_by_secondary)
+  }
+
+  # Annotation with the tertiary color_by metadata
+  if(color_by_tertiary != "NONE"){
+    g3 <- set_up_heatmap_annotation(df, color_by_tertiary)
+  }
+  
+  # Heatmap with CAG abundances
+  g4 <- Heatmap(
+    abund_df,
+    name = "Prop. Abund. (log10)",
+    rect_gp = gpar(col = "white", lwd = 0.5),
+    column_title = "Specimens",
+    row_title = "CAGs",
+    row_title_rot = 0,
+    cluster_rows = FALSE,
+    cluster_columns = FALSE,
+    show_column_names = show_column_names
+  )
+  if(color_by_tertiary == "NONE"){
+    if(color_by_secondary == "NONE"){
+      if(color_by_primary == "NONE"){
+        return(g4)
+      } else {
+        return(g1 %v% g4)
+      }
+    } else {
+      return(g1 %v% g2 %v% g4)
+    }
+  } else {
+    return(g1 %v% g2 %v% g3 %v% g4)
+  }
+}
+
+set_up_heatmap_annotation <- function(df, color_by){
+  # Use a dedicated function to set the colors of the annotation rows
+  cmap <- color_by_column(
+    df[[color_by]]
+  )
+  # Set up the heatmap
+  g <- Heatmap(
+    df %>%
+      select(
+        color_by
+      ) %>%
+      t,
+    name = color_by,
+    rect_gp = gpar(col = "white", lwd = 0.5),
+    column_title = "Specimens",
+    row_title = NULL,
+    cluster_rows = FALSE,
+    cluster_columns = FALSE
+  )
+  return(g)
+}
+
+color_by_column <- function(col_vals){
+  if(all(is.character(col_vals)) || length(unique(col_vals)) < 5){
+    # Make a list of colors to user
+    n <- length(unique(col_vals))
+    color_list <- rep(
+      brewer.pal(8, "Paired"), 
+      n
+    )[1:n]
+    cmap <- structure(
+      color_list,
+      names = unique(as.character(col_vals))
+    )
+  } else {
+    col_vals <- as.numeric(col_vals)
+    cmap <- colorRamp2(
+      c(
+        min(col_vals),
+        median(col_vals),
+        max(col_vals)
+      ),
+      c("blue", "white", "red")
+    )
+  }
+  return(cmap)
 }

@@ -204,6 +204,53 @@ ui <- dashboardPage(
           ))
         )
       )
+    ),
+    fluidRow(
+      box(
+        width = 12,
+        title = "CAG Abundance Heatmap",
+        collapsible = TRUE,
+        column(
+          width = 4,
+          selectizeInput(
+            "heatmap_cag_selector",
+            "CAGs",
+            NULL,
+            multiple = TRUE
+          ),
+          uiOutput("heatmap_color_by_primary"),
+          uiOutput("heatmap_color_by_secondary"),
+          uiOutput("heatmap_color_by_tertiary"),
+          fluidRow(
+            column(
+              width = 6,
+              checkboxInput(
+                "heatmap_checkbox_sample_name", 
+                "Sample Names",
+                value = TRUE
+              )
+            ),
+            column(
+              width = 6,
+              checkboxInput(
+                "heatmap_checkbox_cluster", 
+                "Cluster"
+              )
+            )
+          )
+        ),
+        column(
+          width = 8,
+          fluidRow(div(
+            plotOutput("heatmap_cag_plot")
+          )),
+          fluidRow(div(
+            downloadButton("heatmap_cag_csv", label="CSV"),
+            downloadButton("heatmap_cag_pdf", label="PDF"),
+            style="text-align:right; padding-right: 20px; padding-top: 10px"
+          ))
+        )
+      )
     )
   )
 )
@@ -220,7 +267,7 @@ hide_panel <- function(panel_name){
   }
 }
 
-server <- function(input, output) {
+server <- function(input, output, session) {
   
   # Watch for when the user changes the dataset
   observeEvent(input$dataset, {
@@ -238,7 +285,21 @@ server <- function(input, output) {
       hide_panel("corncob_results")
 
     }
-
+    
+    # Update the multiple CAG selector with the CAGs for this dataset
+    updateSelectizeInput(
+      session, 
+      'heatmap_cag_selector', 
+      choices = cag_summary_df()$CAG, 
+      server = TRUE
+    )
+    
+    # If the dataset has more than 15 samples, don't plot the sample names by default in the heatmap
+    updateCheckboxInput(
+      session, 
+      "heatmap_checkbox_sample_name", 
+      value = nrow(manifest_df()) <= 15
+    )
   })
   
   # Reactive element reading in the manifest for this dataset
@@ -444,6 +505,26 @@ server <- function(input, output) {
           manifest_df()
         )
       }
+  })
+  
+  # Relative abundance table for multiple selected CAGs
+  multiple_cag_abundance_df <- reactive({
+    if(length(input$heatmap_cag_selector) == 0){
+      return(data.frame())
+    } else {
+      return(
+        read_multiple_cag_abundances(
+          file.path(
+            data_folder, 
+            paste(input$dataset, ".hdf5", sep="")
+          ), 
+          input$heatmap_cag_selector
+        ) %>% 
+          as_tibble
+      ) %>% full_join(
+        manifest_df()
+      )
+    }
   })
   
   ###################
@@ -658,6 +739,43 @@ server <- function(input, output) {
       input$cag_abundance_geom
     )
   )
+  
+  ########################
+  # MULTIPLE CAG HEATMAP #
+  ########################
+  output$heatmap_color_by_primary <- renderUI({
+    selectInput(
+      "heatmap_color_by_primary",
+      "Color By (primary):",
+      c("NONE", colnames(manifest_df()))
+    )
+  })
+  output$heatmap_color_by_secondary <- renderUI({
+    selectInput(
+      "heatmap_color_by_secondary",
+      "Color By (secondary):",
+      c("NONE", colnames(manifest_df()))
+    )
+  })
+  output$heatmap_color_by_tertiary <- renderUI({
+    selectInput(
+      "heatmap_color_by_tertiary",
+      "Color By (tertiary):",
+      c("NONE", colnames(manifest_df()))
+    )
+  })
+  output$heatmap_cag_plot <- renderPlot({
+    plot_cag_heatmap(
+      multiple_cag_abundance_df(),
+      input$heatmap_cag_selector,
+      input$heatmap_color_by_primary,
+      input$heatmap_color_by_secondary,
+      input$heatmap_color_by_tertiary,
+      input$heatmap_checkbox_sample_name,
+      input$heatmap_checkbox_cluster
+    )
+  })
+  
 }
 
 shinyApp(ui, server)

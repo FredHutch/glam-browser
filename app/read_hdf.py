@@ -22,3 +22,21 @@ def read_cag_abundance(hdf_fp, cag_id):
       "index": "specimen"
     }
   )
+  
+
+def read_multiple_cag_abundances(hdf_fp, cag_id_list):
+  return pd.DataFrame({
+    str(cag_id): pd.read_hdf(
+      hdf_fp,
+      "/abund/cag/wide",
+      where = "CAG == {}".format(cag_id)
+    ).set_index(
+      "CAG"
+    ).T[int(cag_id)]
+    for cag_id in cag_id_list
+  }).reset_index(
+  ).rename(
+    columns = {
+      "index": "specimen"
+    }
+  )
