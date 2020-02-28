@@ -4,38 +4,38 @@ library(circlize)
 
 # Function to make a plot summarizing CAGs on the basis of size or abundance
 plot_cag_hist <- function(cag_summary_df, plot_type){
-
+  
   if(plot_type == "size"){
     p <- ggplot(
-      data = cag_summary_df %>%
-        filter(size >= 5),
+      data = cag_summary_df,
       aes(
-        x = size_log10
+        x = size_log10,
+        weight = size
       )
     ) + ggtitle(
       "CAG Size"
     ) + xlab(
-      "Number of Genes (log10)"
+      "Number of Genes per CAG (log10)"
     )
   } else {
     stopifnot(plot_type == "abundance")
     p <- ggplot(
-      data = cag_summary_df %>%
-        filter(size >= 5),
+      data = cag_summary_df,
       aes(
-        x = mean_abundance_log10
+        x = mean_abundance_log10,
+        weight = size
       )
     ) + ggtitle(
       "CAG Abundance"
     ) + xlab(
-      "Mean Abundance (log10)"
+      "Mean Abundance per CAG (log10)"
     )
   }
   return(
     p + geom_histogram(
       bins = 60
     ) + ylab(
-      "Number of CAGs per bin"
+      "Number of Genes per Bin"
     ) + theme_minimal(
     ) + theme(
       plot.title = element_text(hjust = 0.5)
@@ -49,7 +49,8 @@ plot_cag_size_abundance_distribution <- function(cag_summary_df){
       filter(size >= 5),
     aes(
       x = size_log10,
-      y = mean_abundance_log10
+      y = mean_abundance_log10,
+      weight = size
     )
   ) + ggtitle(
     "CAG Size and Abundance"
@@ -59,6 +60,8 @@ plot_cag_size_abundance_distribution <- function(cag_summary_df){
     "Mean Abundance (log10)"
   ) + geom_hex(
     bins = c(100, 30)
+  ) + labs(
+    fill = "Number of Genes per Bin"
   ) + theme_minimal(
   ) + theme(
     plot.title = element_text(hjust = 0.5)
