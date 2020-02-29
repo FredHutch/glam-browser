@@ -25,6 +25,9 @@ def read_cag_abundance(hdf_fp, cag_id):
   
 
 def read_multiple_cag_abundances(hdf_fp, cag_id_list):
+  if isinstance(cag_id_list, list) is False:
+    cag_id_list = [cag_id_list]
+
   return pd.DataFrame({
     str(cag_id): pd.read_hdf(
       hdf_fp,
