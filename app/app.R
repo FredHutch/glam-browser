@@ -191,7 +191,13 @@ ui <- dashboardPage(
           uiOutput("cag_abundance_x"),
           uiOutput("cag_abundance_hue"),
           uiOutput("cag_abundance_col"),
-          uiOutput("cag_abundance_geom")
+          uiOutput("cag_abundance_group"),
+          uiOutput("cag_abundance_geom"),
+          checkboxInput(
+            "cag_abundance_geom_logy", 
+            "Log Scale",
+            value = TRUE
+          )
         ),
         column(
           width = 8,
@@ -310,18 +316,6 @@ server <- function(input, output, session) {
     l <- unique(corncob_results_df()$parameter)
     l <- l[l != "(Intercept)"]
     return(l)
-  })
-  
-  cag_abundance_hue_parameters <- reactive({
-    l <- manifest_df() %>% colnames
-    l <- l[l != input$cag_abundance_x]
-    l <- l[l != input$cag_abundance_col]
-  })
-  
-  cag_abundance_col_parameters <- reactive({
-    l <- manifest_df() %>% colnames
-    l <- l[l != input$cag_abundance_x]
-    l <- l[l != input$cag_abundance_hue]
   })
   
   # If the source HDF5 has corncob results, display the parameter list in the sidebar
@@ -713,14 +707,21 @@ server <- function(input, output, session) {
     selectInput(
       "cag_abundance_hue",
       "Hue:",
-      c("None", cag_abundance_hue_parameters())
+      c("None", manifest_df() %>% colnames)
     )
   })
   output$cag_abundance_col <- renderUI({
     selectInput(
       "cag_abundance_col",
       "Column:",
-      c("None", cag_abundance_col_parameters())
+      c("None", manifest_df() %>% colnames)
+    )
+  })
+  output$cag_abundance_group <- renderUI({
+    selectInput(
+      "cag_abundance_group",
+      "Group By:",
+      c("None", manifest_df() %>% colnames)
     )
   })
   output$cag_abundance_geom <- renderUI({
@@ -736,7 +737,9 @@ server <- function(input, output, session) {
       input$cag_abundance_x,
       input$cag_abundance_hue,
       input$cag_abundance_col,
-      input$cag_abundance_geom
+      input$cag_abundance_group,
+      input$cag_abundance_geom,
+      input$cag_abundance_geom_logy
     )
   )
   

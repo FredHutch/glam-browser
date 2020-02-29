@@ -206,19 +206,19 @@ plot_cag_abundance <- function(
   x,
   hue,
   col,
-  geom
+  group,
+  geom,
+  logy
 ){
   if(nrow(cag_abundance_df) == 0){
     return(ggplot() + geom_blank())
   } else {
     
     if(col != "None"){
-      cag_abundance_df <- cag_abundance_df %>% rename(
-        col_variable = col
-      )
+      cag_abundance_df$col_variable <- cag_abundance_df %>% pull(col)
     }
-      
-    if(hue == "None"){
+    
+    if(hue == "None" && group == "None"){
       p <- ggplot(
         data = cag_abundance_df,
         aes_string(
@@ -227,14 +227,39 @@ plot_cag_abundance <- function(
         )
       )
     } else {
-      p <- ggplot(
-        data = cag_abundance_df,
-        aes_string(
-          x = x,
-          y = "abundance",
-          fill = hue
+      if(hue != "None" && group != "None"){
+        p <- ggplot(
+          data = cag_abundance_df,
+          aes_string(
+            x = x,
+            y = "abundance",
+            color = hue,
+            fill = hue,
+            group = group
+          )
         )
-      )
+      } else {
+        if(hue != "None"){
+          p <- ggplot(
+            data = cag_abundance_df,
+            aes_string(
+              x = x,
+              y = "abundance",
+              color = hue,
+              fill = hue
+            )
+          )
+        } else {
+          p <- ggplot(
+            data = cag_abundance_df,
+            aes_string(
+              x = x,
+              y = "abundance",
+              group = group
+            )
+          )
+        }
+      }
     }
     if(col != "None"){
       p <- p + facet_wrap(
@@ -259,11 +284,19 @@ plot_cag_abundance <- function(
       p <- p + geom_line()
     }
     if(geom == "bar"){
-      p <- p + geom_bar()
+      p <- p + geom_bar(
+        stat = "identity"
+      )
+    }
+    if(logy){
+      p <- p + scale_y_continuous(
+        "Relative Abundance (log10)",
+        trans='log10'
+      )
     }
     return(
-      p + theme_minimal(
-      ) + theme(
+      p + theme(
+        axis.text.x = element_text(angle = 90, hjust = 1),
         plot.title = element_text(hjust = 0.5)
       )
     )
