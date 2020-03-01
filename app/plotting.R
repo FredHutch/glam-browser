@@ -355,17 +355,27 @@ plot_cag_heatmap <- function(
   # Duplicate the specimen label as a column name
   df$INDEX <- df$specimen
   df <- df %>% column_to_rownames(var = "INDEX")
+  
+  # Find the lowest non-zero value for the dataset,
+  # which will be used to fill in the zero values
+  # for plotting purposes (on the log scale)
+  max_val <- df %>% 
+    select(cag_list) %>%
+    max
+  min_val <- df %>%
+    select(cag_list) %>%
+    na_if(0) %>%
+    mutate_if(is.numeric , replace_na, replace = max_val) %>%
+    min
 
   # Format the table for plotting CAG abundance values
   abund_df <- df %>%
     select(cag_list) %>%
+    na_if(0) %>%
     t %>%
     log10 %>%
     replace_na(
-      df %>%
-        select(cag_list) %>%
-        min %>%
-        log10
+      min_val
     )
   
   # Annotation with the primary color_by metadata
