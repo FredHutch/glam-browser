@@ -205,6 +205,7 @@ ui <- dashboardPage(
             plotOutput("cag_abundance_plot")
           )),
           fluidRow(div(
+            downloadButton("cag_abundance_csv", label="CSV"),
             downloadButton("cag_abundance_pdf", label="PDF"),
             style="text-align:right; padding-right: 20px; padding-top: 10px"
           ))
@@ -743,6 +744,35 @@ server <- function(input, output, session) {
     )
   )
   
+  # Make the single CAG abundance table available for download as a PDF
+  output$cag_abundance_pdf <- downloadHandler(
+    filename = paste(input$dataset, "CAG.abundance.pdf", sep="."),
+    content = function(file) {
+      pdf(file)
+      print(
+        plot_cag_abundance(
+          cag_abundance_df(),
+          input$cag_abundance_x,
+          input$cag_abundance_hue,
+          input$cag_abundance_col,
+          input$cag_abundance_group,
+          input$cag_abundance_geom,
+          input$cag_abundance_geom_logy
+        )
+      )
+      dev.off()
+    }
+  )
+  
+  # Make the single CAG abundance table available for download as a CSV
+  output$cag_details_csv <- downloadHandler(
+    filename = paste(input$dataset, "CAG.abundance.csv", sep="."),
+    content = function(file) {
+      write_csv(cag_abundance_df(), path = file)
+    },
+    contentType = "text/csv"
+  )
+  
   ########################
   # MULTIPLE CAG HEATMAP #
   ########################
@@ -778,6 +808,35 @@ server <- function(input, output, session) {
       input$heatmap_checkbox_cluster
     )
   })
+  
+  # Make the multiple CAG abundance table available for download as a PDF
+  output$heatmap_cag_pdf <- downloadHandler(
+    filename = paste(input$dataset, "multiple.CAG.abundance.pdf", sep="."),
+    content = function(file) {
+      pdf(file)
+      print(
+        plot_cag_heatmap(
+          multiple_cag_abundance_df(),
+          input$heatmap_cag_selector,
+          input$heatmap_color_by_primary,
+          input$heatmap_color_by_secondary,
+          input$heatmap_color_by_tertiary,
+          input$heatmap_checkbox_sample_name,
+          input$heatmap_checkbox_cluster
+        )
+      )
+      dev.off()
+    }
+  )
+  
+  # Make the single CAG abundance table available for download as a CSV
+  output$heatmap_cag_csv <- downloadHandler(
+    filename = paste(input$dataset, "multiple.CAG.abundance.csv", sep="."),
+    content = function(file) {
+      write_csv(multiple_cag_abundance_df(), path = file)
+    },
+    contentType = "text/csv"
+  )
   
 }
 
