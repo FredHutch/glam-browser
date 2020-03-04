@@ -1,5 +1,5 @@
 # Source the Python / Pandas code needed to read HDF5
-use_python("/Users/sminot/miniconda3/bin/python3", required = TRUE)
+use_python("/usr/bin/python3.7", required = TRUE)
 pandas <- import("pandas")
 
 # Function to the summary of the entire expeirment
