@@ -23,7 +23,7 @@ source("plotting.R")
 source("read_hdf.R")
 source_python("read_hdf.py")
 
-data_folder = "../data/"
+data_folder = Sys.getenv("DATA_DIR")
 
 # Set up the user interface
 ui <- dashboardPage(

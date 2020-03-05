@@ -31,10 +31,10 @@ steps:
 You can set this to any path on your system, but for the example we will use `$PWD/data/`.
 
 ```#!/bin/bash
-docker run -v $PWD/data:/share/data -e DATA_DIR=/share/data -p 8888:8000 glam
+docker run -v $PWD/data:/share/data -e DATA_DIR=/share/data -p 3838:7777 glam
 ```
 
-The app should be accessible on the 8000 port, at `localhost:8000`.
+The app should be accessible on the 3838 port, at `localhost:3838`.
 
 #### Development Mode
 
@@ -42,5 +42,5 @@ If you would like to run a version of the app which you are actively editing, su
 as a copy in the `$PWD/app` folder, then use the following command.
 
 ```#!/bin/bash
-docker run -v $PWD/data:/share/data -e DATA_DIR=/share/data -v $PWD/app:/share/app -e APP_DIR=/share/app -p 8888:8000 glam
+docker run -v $PWD/data:/share/data -e DATA_DIR=/share/data -v $PWD/app:/share/app -e APP_DIR=/share/app -p 3838:7777 glam
 ```

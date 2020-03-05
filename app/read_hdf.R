@@ -18,6 +18,11 @@ read_hdf_summary <- function(dataset_prefix, data_folder){
 find_datasets <- function(directory){
     # Find all of the files in the folder
     files <- list.files(directory)
+
+    # If there are no files, return an empty vector
+    if(length(files) == 0){
+      return(c())
+    }
     
     # Subset to those which end with ".hdf5"
     files <- files[sapply(files, function(n){endsWith(n, ".hdf5")})]
