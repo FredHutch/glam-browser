@@ -20,5 +20,7 @@ ARG DATA_DIR
 ENV DATA_DIR ${DATA_DIR:-/home/shiny}
 ARG APP_DIR
 ENV APP_DIR ${APP_DIR:-/home/shiny}
+ARG PYTHON_BIN
+ENV PYTHON_BIN ${PYTHON_BIN:-/usr/bin/python3.7}
 EXPOSE 7777
 CMD /usr/bin/supervisord -c /home/shiny/system/sup.conf
