@@ -138,7 +138,7 @@ read_hdf_readcounts <- function(dataset_prefix, data_folder){
       data_folder, 
       paste(dataset_prefix, ".hdf5", sep="")
     ),
-    "/summary/readcount"
+    "/summary/all"
   ) %>% 
     as_tibble
   return(df %>%

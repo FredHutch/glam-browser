@@ -45,11 +45,11 @@ ui <- dashboardPage(
         title="Sample Summary",
         collapsible = TRUE,
         column(
-          width = 4,
+          width = 6,
           DT::DTOutput("sample_summary_DT")
         ),
         column(
-          width = 3,
+          width = 2,
           radioButtons(
             "sample_summary_x_val",
             "Metric to Plot",
@@ -73,11 +73,13 @@ ui <- dashboardPage(
           )
         ),
         column(
-          width = 5,
+          width = 4,
           div(
             style = "padding-right: 20px",
             fluidRow(
-              plotOutput("sample_summary_plot")
+              plotOutput(
+                "sample_summary_plot"
+              )
             ),
             fluidRow(
               div(
@@ -436,7 +438,20 @@ server <- function(input, output, session) {
         Specimen = specimen,
         `Raw Reads` = n_reads,
         `Aligned Reads` = aligned_reads,
-        `Prop. Aligned` = prop_aligned
+        `Prop. Aligned` = prop_aligned,
+        `Genes Detected by Alignment` = n_genes_aligned,
+        `Genes Detected by Assembly` = n_genes_assembled,
+        `Estimated Gene Richness` = estimate
+      ) %>% select(
+        -error
+      ) %>% select(
+        -estimand
+      ) %>% select(
+        -interval_lower
+      ) %>% select(
+        -interval_upper
+      ) %>% select(
+        -reasonable
       )
   })
   

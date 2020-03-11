@@ -49,7 +49,11 @@ plot_sample_summary <- function(df, x_val, plot_type){
       )
     }
   }
-  return(g  + theme_minimal())
+  return(
+    g + theme_minimal(
+      base_size = 20
+    )
+  )
 }
 
 # Function to make a plot summarizing CAGs on the basis of size or abundance
