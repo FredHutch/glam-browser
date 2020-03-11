@@ -42,6 +42,57 @@ ui <- dashboardPage(
     fluidRow(
       box(
         width = 12,
+        title="Sample Summary",
+        collapsible = TRUE,
+        column(
+          width = 4,
+          DT::DTOutput("sample_summary_DT")
+        ),
+        column(
+          width = 3,
+          radioButtons(
+            "sample_summary_x_val",
+            "Metric to Plot",
+            choices = c(
+              "Raw Reads",
+              "Aligned Reads",
+              "Prop. Aligned",
+              "Genes Detected by Assembly",
+              "Genes Detected by Alignment",
+              "Estimated Gene Richness"
+            )
+          ),
+          radioButtons(
+            "sample_summary_plot_type",
+            "Plot Type",
+            choices = c(
+              "Values",
+              "Histogram",
+              "Scatter vs. Raw Reads"
+            )
+          )
+        ),
+        column(
+          width = 5,
+          div(
+            style = "padding-right: 20px",
+            fluidRow(
+              plotOutput("sample_summary_plot")
+            ),
+            fluidRow(
+              div(
+                downloadButton("sample_summary_pdf", label="PDF"),
+                downloadButton("sample_summary_csv", label="CSV"),
+                style="text-align:right"
+              )
+            )
+          )
+        )
+      )
+    ),
+    fluidRow(
+      box(
+        width = 12,
         title="Dataset Summary",
         collapsible = TRUE,
         column(
@@ -374,6 +425,21 @@ server <- function(input, output, session) {
   # REACTIVE DATA TABLES #
   ########################
   
+  # Reactive element with a table for raw reads, aligned reads, and number of genes detected
+  sample_summary_df <- reactive({
+    readcounts_df() %>%
+      mutate(
+        prop_aligned = readcounts_df()$prop_aligned %>% round(4)
+      ) %>% arrange(
+        desc(n_reads)
+      ) %>%rename(
+        Specimen = specimen,
+        `Raw Reads` = n_reads,
+        `Aligned Reads` = aligned_reads,
+        `Prop. Aligned` = prop_aligned
+      )
+  })
+  
   # Reactive element with a table summarizing the overall dataset
   dataset_summary_df <- reactive({
     # Read the summary table directly from the HDF5
@@ -548,6 +614,50 @@ server <- function(input, output, session) {
       )
     }
   })
+  
+  ##################
+  # SAMPLE SUMMARY #
+  ##################
+  
+  # Render the sample summary as a DataTable
+  output$sample_summary_DT <- DT::renderDT(
+    {sample_summary_df()},
+    rownames = FALSE
+  )
+  
+  # Render the plot
+  output$sample_summary_plot <- renderPlot(plot_sample_summary(
+    sample_summary_df(),
+    input$sample_summary_x_val,
+    input$sample_summary_plot_type
+  ))
+
+  # Make the sample summary PDF available for download
+  output$sample_summary_pdf <- downloadHandler(
+    filename = paste(
+      input$dataset,
+      "sample.summary.pdf",
+      sep="."
+    ),
+    content = function(file) {
+      pdf(file)
+      print(plot_sample_summary(
+        sample_summary_df(),
+        input$sample_summary_x_val,
+        input$sample_summary_plot_type
+      ))
+      dev.off()
+    }
+  )
+  
+  # Make the sample summary CSV available for download
+  output$sample_summary_csv <- downloadHandler(
+    filename = paste(input$dataset, "sample.summary.csv", sep="."),
+    content = function(file) {
+      write_csv(sample_summary_df(), path = file)
+    },
+    contentType = "text/csv"
+  )
   
   ###################
   # DATASET SUMMARY #

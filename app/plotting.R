@@ -2,6 +2,56 @@ library(RColorBrewer)
 library(ComplexHeatmap)
 library(circlize)
 
+# Function to plot the number of reads per sample
+plot_sample_summary <- function(df, x_val, plot_type){
+  
+  if(plot_type == "Values"){
+    g <- ggplot(
+      data = df,
+      aes(
+        x = df$Specimen,
+        y = df[[x_val]]
+      )
+    ) + geom_bar(
+      stat = "identity"
+    ) + xlab(
+      "Specimen Name"
+    ) + ylab(
+      x_val
+    ) + coord_flip(
+    )
+  } else {
+    if(plot_type == "Histogram"){
+      g <- ggplot(
+        data = df,
+        aes(
+          x = df[[x_val]]
+        )
+      ) + geom_histogram(
+      ) + xlab(
+        x_val
+      ) + ylab(
+        "Number of specimens per bin"
+      )
+    } else {
+      stopifnot(plot_type == "Scatter vs. Raw Reads")
+      g <- ggplot(
+        data = df,
+        aes(
+          x = df[["Raw Reads"]],
+          y = df[[x_val]]
+        )
+      ) + geom_point(
+      ) + ylab(
+        x_val
+      ) + xlab(
+        "Raw Reads"
+      )
+    }
+  }
+  return(g  + theme_minimal())
+}
+
 # Function to make a plot summarizing CAGs on the basis of size or abundance
 plot_cag_hist <- function(cag_summary_df, plot_type){
   
