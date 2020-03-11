@@ -534,6 +534,7 @@ server <- function(input, output, session) {
         ) %>%
         rename(
           `Mean Abundance` = mean_abundance,
+          `Std. Abundance` = std_abundance,
           `Mean Abundance (log10)` = mean_abundance_log10,
           Prevalence = prevalence,
           `Number of Genes` = size,
@@ -546,6 +547,7 @@ server <- function(input, output, session) {
       cag_summary_df() %>%
         rename(
           `Mean Abundance` = mean_abundance,
+          `Std. Abundance` = std_abundance,
           `Mean Abundance (log10)` = mean_abundance_log10,
           Prevalence = prevalence,
           `Number of Genes` = size,

@@ -164,7 +164,8 @@ read_hdf_cag_summary <- function(dataset_prefix, data_folder){
       prevalence = prevalence %>% signif(4)
     ) %>%
     mutate( # Format some columns as scientific notation
-      mean_abundance = mean_abundance %>% signif(4)
+      mean_abundance = mean_abundance %>% signif(4),
+      std_abundance = std_abundance %>% signif(4)
     )
 
   return(summary_df)
