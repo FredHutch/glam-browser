@@ -101,6 +101,7 @@ plot_cag_hist <- function(cag_summary_df, plot_type){
     ) + ylab(
       "Number of Genes per Bin"
     ) + theme_minimal(
+      base_size = 20
     ) + theme(
       plot.title = element_text(hjust = 0.5)
     )
@@ -127,6 +128,7 @@ plot_cag_size_abundance_distribution <- function(cag_summary_df){
   ) + labs(
     fill = "Number of Genes per Bin"
   ) + theme_minimal(
+    base_size = 20
   ) + theme(
     plot.title = element_text(hjust = 0.5)
   )
@@ -163,6 +165,7 @@ plot_ordination_scatter <- function(ordination_df, manifest_df, color_ordination
   ) + ylab(
     names(ordination_df)[3]
   ) + theme_minimal(
+    base_size = 20
   ) + theme(
     plot.title = element_text(hjust = 0.5)
   )
@@ -216,6 +219,7 @@ plot_corncob_results <- function(corncob_results_df, parameter){
     ) + ylab(
       "p-value (-log10)"
     ) + theme_minimal(
+      base_size = 20
     ) + theme(
       plot.title = element_text(hjust = 0.5)
     )
@@ -258,6 +262,8 @@ plot_cag_details_tax_bars <- function(
     ""
   ) + ggtitle(
     paste("CAG", cag_name)
+  ) + theme_minimal(
+    base_size = 20
   ) + theme(
     aspect.ratio=2,
     plot.title = element_text(hjust = 0.5)
@@ -359,7 +365,9 @@ plot_cag_abundance <- function(
       )
     }
     return(
-      p + theme(
+      p + theme_minimal(
+        base_size = 20
+      ) + theme(
         axis.text.x = element_text(angle = 90, hjust = 1),
         plot.title = element_text(hjust = 0.5)
       )
