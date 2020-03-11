@@ -3,7 +3,7 @@ library(ComplexHeatmap)
 library(circlize)
 
 # Function to plot the number of reads per sample
-plot_sample_summary <- function(df, x_val, plot_type){
+plot_sample_summary <- function(df, x_val, plot_type, show_ylabels){
   
   if(plot_type == "Values"){
     g <- ggplot(
@@ -49,11 +49,21 @@ plot_sample_summary <- function(df, x_val, plot_type){
       )
     }
   }
-  return(
-    g + theme_minimal(
-      base_size = 20
+  if(plot_type == "Values" && show_ylabels == FALSE){
+    return(
+      g + theme_minimal(
+        base_size = 20
+      ) + theme(
+        axis.text.y = element_blank()
+      )
     )
-  )
+  } else {
+    return(
+      g + theme_minimal(
+        base_size = 20
+      )
+    )
+  }
 }
 
 # Function to make a plot summarizing CAGs on the basis of size or abundance

@@ -70,6 +70,11 @@ ui <- dashboardPage(
               "Histogram",
               "Scatter vs. Raw Reads"
             )
+          ),
+          checkboxInput(
+            "sample_summary_show_ylabels",
+            "Show sample labels",
+            value = TRUE
           )
         ),
         column(
@@ -646,7 +651,8 @@ server <- function(input, output, session) {
   output$sample_summary_plot <- renderPlot(plot_sample_summary(
     sample_summary_df(),
     input$sample_summary_x_val,
-    input$sample_summary_plot_type
+    input$sample_summary_plot_type,
+    input$sample_summary_show_ylabels
   ))
 
   # Make the sample summary PDF available for download
@@ -661,7 +667,8 @@ server <- function(input, output, session) {
       print(plot_sample_summary(
         sample_summary_df(),
         input$sample_summary_x_val,
-        input$sample_summary_plot_type
+        input$sample_summary_plot_type,
+        input$sample_summary_show_ylabels
       ))
       dev.off()
     }
