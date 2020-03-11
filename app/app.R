@@ -540,101 +540,109 @@ server <- function(input, output, session) {
   
   # Extended CAG summary table containing corncob result metrics
   cag_extended_summary_df <- reactive({
-    if(has_corncob_results() && is.null(input$parameter) == FALSE){
-      cag_summary_df() %>%
-        full_join(corncob_results_filtered_df()) %>%
-        arrange(
-          p_value
-        ) %>%
-        drop_na(p_value) %>% # Drop CAGs with no p-values computed
-        mutate( # Truncate significant digits
-          estimate = estimate %>% signif(4),
-          p_value = p_value %>% signif(4),
-          std_error = std_error %>% signif(4)
-        ) %>%
-        rename(
-          `Mean Abundance` = mean_abundance,
-          `Std. Abundance` = std_abundance,
-          `Mean Abundance (log10)` = mean_abundance_log10,
-          Prevalence = prevalence,
-          `Number of Genes` = size,
-          `Number of Genes (log10)` = size_log10,
-          `Estimated Coefficient` = estimate,
-          `Std. Error` = std_error,
-          `p-value` = p_value
-        )
-    } else {
-      cag_summary_df() %>%
-        rename(
-          `Mean Abundance` = mean_abundance,
-          `Std. Abundance` = std_abundance,
-          `Mean Abundance (log10)` = mean_abundance_log10,
-          Prevalence = prevalence,
-          `Number of Genes` = size,
-          `Number of Genes (log10)` = size_log10
-        )
-    }
+    withProgress(message = "Formatting extended CAG summary", {
+      if(has_corncob_results() && is.null(input$parameter) == FALSE){
+        cag_summary_df() %>%
+          full_join(corncob_results_filtered_df()) %>%
+          arrange(
+            p_value
+          ) %>%
+          drop_na(p_value) %>% # Drop CAGs with no p-values computed
+          mutate( # Truncate significant digits
+            estimate = estimate %>% signif(4),
+            p_value = p_value %>% signif(4),
+            std_error = std_error %>% signif(4)
+          ) %>%
+          rename(
+            `Mean Abundance` = mean_abundance,
+            `Std. Abundance` = std_abundance,
+            `Mean Abundance (log10)` = mean_abundance_log10,
+            Prevalence = prevalence,
+            `Number of Genes` = size,
+            `Number of Genes (log10)` = size_log10,
+            `Estimated Coefficient` = estimate,
+            `Std. Error` = std_error,
+            `p-value` = p_value
+          )
+      } else {
+        cag_summary_df() %>%
+          rename(
+            `Mean Abundance` = mean_abundance,
+            `Std. Abundance` = std_abundance,
+            `Mean Abundance (log10)` = mean_abundance_log10,
+            Prevalence = prevalence,
+            `Number of Genes` = size,
+            `Number of Genes (log10)` = size_log10
+          )
+      }
+    })
   })
   
   # Summary table for the single selected CAG
   cag_details_df <- reactive({
-    if(is.null(input$cag_summary_DT_rows_selected)){
-      return(data.frame())
-    } else {
-      # Get the ID for the CAG which has been selected
-      cag_id <- cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
-      return(
-        read_cag_details(
-          file.path(
-            data_folder, 
-            paste(input$dataset, ".hdf5", sep="")
-          ), 
-          cag_id
+    withProgress(message = "Reading CAG details", {
+      if(is.null(input$cag_summary_DT_rows_selected)){
+        return(data.frame())
+      } else {
+        # Get the ID for the CAG which has been selected
+        cag_id <- cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
+        return(
+          read_cag_details(
+            file.path(
+              data_folder, 
+              paste(input$dataset, ".hdf5", sep="")
+            ), 
+            cag_id
+          )
         )
-      )
-    }
+      }
+    })
   })
   
   # Relative abundance table for the single selected CAG
   cag_abundance_df <- reactive({
-    if(is.null(input$cag_summary_DT_rows_selected)){
-      return(data.frame())
-    } else {
-      # Get the ID for the CAG which has been selected
-      cag_id <- cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
-      return(
-        read_cag_abundance(
-          file.path(
-            data_folder, 
-            paste(input$dataset, ".hdf5", sep="")
-          ), 
-          cag_id
-        ) %>% 
-          as_tibble
-        ) %>% full_join(
-          manifest_df()
-        )
+    withProgress(message = "Reading CAG abundance", {
+      if(is.null(input$cag_summary_DT_rows_selected)){
+        return(data.frame())
+      } else {
+        # Get the ID for the CAG which has been selected
+        cag_id <- cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
+        return(
+          read_cag_abundance(
+            file.path(
+              data_folder, 
+              paste(input$dataset, ".hdf5", sep="")
+            ), 
+            cag_id
+          ) %>% 
+            as_tibble
+          ) %>% full_join(
+            manifest_df()
+          )
       }
+    })
   })
   
   # Relative abundance table for multiple selected CAGs
   multiple_cag_abundance_df <- reactive({
-    if(length(input$heatmap_cag_selector) == 0){
-      return(data.frame())
-    } else {
-      return(
-        read_multiple_cag_abundances(
-          file.path(
-            data_folder, 
-            paste(input$dataset, ".hdf5", sep="")
-          ), 
-          input$heatmap_cag_selector
-        ) %>% 
-          as_tibble
-      ) %>% full_join(
-        manifest_df()
-      )
-    }
+    withProgress(message = "Reading multiple CAG abundances", {
+      if(length(input$heatmap_cag_selector) == 0){
+        return(data.frame())
+      } else {
+        return(
+          read_multiple_cag_abundances(
+            file.path(
+              data_folder, 
+              paste(input$dataset, ".hdf5", sep="")
+            ), 
+            input$heatmap_cag_selector
+          ) %>% 
+            as_tibble
+        ) %>% full_join(
+          manifest_df()
+        )
+      }
+    })
   })
   
   ##################
@@ -643,17 +651,25 @@ server <- function(input, output, session) {
   
   # Render the sample summary as a DataTable
   output$sample_summary_DT <- DT::renderDT(
-    {sample_summary_df()},
+    {
+      withProgress(message = "Rendering specimen summary table", {
+        sample_summary_df()
+      })
+    },
     rownames = FALSE
   )
   
   # Render the plot
-  output$sample_summary_plot <- renderPlot(plot_sample_summary(
-    sample_summary_df(),
-    input$sample_summary_x_val,
-    input$sample_summary_plot_type,
-    input$sample_summary_show_ylabels
-  ))
+  output$sample_summary_plot <- renderPlot({
+    withProgress(message = "Plotting sample summary", {
+      plot_sample_summary(
+        sample_summary_df(),
+        input$sample_summary_x_val,
+        input$sample_summary_plot_type,
+        input$sample_summary_show_ylabels
+      )
+    })
+  })
 
   # Make the sample summary PDF available for download
   output$sample_summary_pdf <- downloadHandler(
@@ -693,9 +709,21 @@ server <- function(input, output, session) {
   }, options = list(dom="t"))
   
   # Render the plots in the dataset summary tabset
-  output$cag_size_histogram <- renderPlot(plot_cag_hist(cag_summary_df(), "size"))
-  output$cag_abundance_histogram <- renderPlot(plot_cag_hist(cag_summary_df(), "abundance"))
-  output$cag_size_abundance_distribution <- renderPlot(plot_cag_size_abundance_distribution(cag_summary_df()))
+  output$cag_size_histogram <- renderPlot({
+    withProgress(message = "Plotting CAG size histogram", {
+      plot_cag_hist(cag_summary_df(), "size")
+    })
+  })
+  output$cag_abundance_histogram <- renderPlot({
+    withProgress(message = "Plotting CAG abundance histogram", {
+      plot_cag_hist(cag_summary_df(), "abundance")
+    })
+  })
+  output$cag_size_abundance_distribution <- renderPlot({
+    withProgress(message = "Plotting CAG size-abundance hexbin", {
+      plot_cag_size_abundance_distribution(cag_summary_df())
+    })
+  })
 
   # Make the dataset summary PDF available for download
   output$dataset_summary_pdf <- downloadHandler(
@@ -726,12 +754,20 @@ server <- function(input, output, session) {
   # ORDINATION #
   ##############
   
-  output$ordination_pca_scatter <- renderPlot(plot_ordination_scatter(
-    pca_df(), manifest_df(), input$color_ordination_by, "PCA"
-  ))
-  output$ordination_tsne_scatter <- renderPlot(plot_ordination_scatter(
-    tsne_df(), manifest_df(), input$color_ordination_by, "t-SNE"
-  ))
+  output$ordination_pca_scatter <- renderPlot({
+    withProgress(message = "Plotting PCA", {
+      plot_ordination_scatter(
+        pca_df(), manifest_df(), input$color_ordination_by, "PCA"
+      )
+    })
+  })
+  output$ordination_tsne_scatter <- renderPlot({
+    withProgress(message = "Plotting t-SNE", {
+      plot_ordination_scatter(
+        tsne_df(), manifest_df(), input$color_ordination_by, "t-SNE"
+      )
+    })
+  })
   output$ordination_pdf <- downloadHandler(
     filename = paste(
       input$dataset,
@@ -760,9 +796,11 @@ server <- function(input, output, session) {
 
 
   # Render the corncob results as a scatter plot
-  output$corncob_results_plot <- renderPlot(
-    plot_corncob_results(corncob_results_df(), input$parameter)
-  )
+  output$corncob_results_plot <- renderPlot({
+    withProgress(message = "Plotting corncob results", {
+      plot_corncob_results(corncob_results_df(), input$parameter)
+    })
+  })
 
   # Make the corncob results PDF available for download
   output$corncob_results_pdf <- downloadHandler(
@@ -791,7 +829,11 @@ server <- function(input, output, session) {
 
   # Render the CAG summary as a DataTable
   output$cag_summary_DT <- DT::renderDT(
-    {cag_extended_summary_df()}, 
+    {
+      withProgress(message = "Rendering CAG summary table", {
+        cag_extended_summary_df()
+      })
+    }, 
     rownames = FALSE,
     server = TRUE,
     selection = list(
@@ -815,7 +857,11 @@ server <- function(input, output, session) {
   
   # Render the details for a single CAG as a DataTable
   output$cag_details_DT <- DT::renderDT(
-    {cag_details_df()},
+    {
+      withProgress(message = "Rendering CAG details table", {
+        cag_details_df()
+      })
+    },
     rownames = FALSE,
     server = TRUE,
     selection = 'none'
@@ -823,10 +869,14 @@ server <- function(input, output, session) {
   
   # Render the assigned taxa for a CAG as a bargraph
   output$cag_details_tax_bars <- renderPlot(
-    {plot_cag_details_tax_bars(
-      cag_details_df(),
-      cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
-    )},
+    {
+      withProgress(message = "Rendering CAG taxonomy plot", {
+        plot_cag_details_tax_bars(
+          cag_details_df(),
+          cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
+        )
+      })
+    },
     width = 300,
     height = 600
   )
@@ -893,17 +943,19 @@ server <- function(input, output, session) {
       c("point", "boxplot", "jitter", "line", "bar")
     )
   })
-  output$cag_abundance_plot <- renderPlot(
-    plot_cag_abundance(
-      cag_abundance_df(),
-      input$cag_abundance_x,
-      input$cag_abundance_hue,
-      input$cag_abundance_col,
-      input$cag_abundance_group,
-      input$cag_abundance_geom,
-      input$cag_abundance_geom_logy
-    )
-  )
+  output$cag_abundance_plot <- renderPlot({
+    withProgress(message = "Plotting CAG abundance", {
+      plot_cag_abundance(
+        cag_abundance_df(),
+        input$cag_abundance_x,
+        input$cag_abundance_hue,
+        input$cag_abundance_col,
+        input$cag_abundance_group,
+        input$cag_abundance_geom,
+        input$cag_abundance_geom_logy
+      )
+    })
+  })
   
   # Make the single CAG abundance table available for download as a PDF
   output$cag_abundance_pdf <- downloadHandler(
@@ -959,15 +1011,17 @@ server <- function(input, output, session) {
     )
   })
   output$heatmap_cag_plot <- renderPlot({
-    plot_cag_heatmap(
-      multiple_cag_abundance_df(),
-      input$heatmap_cag_selector,
-      input$heatmap_color_by_primary,
-      input$heatmap_color_by_secondary,
-      input$heatmap_color_by_tertiary,
-      input$heatmap_checkbox_sample_name,
-      input$heatmap_checkbox_cluster
-    )
+    withProgress(message = "Plotting CAG heatmap", {
+      plot_cag_heatmap(
+        multiple_cag_abundance_df(),
+        input$heatmap_cag_selector,
+        input$heatmap_color_by_primary,
+        input$heatmap_color_by_secondary,
+        input$heatmap_color_by_tertiary,
+        input$heatmap_checkbox_sample_name,
+        input$heatmap_checkbox_cluster
+      )
+    })
   })
   
   # Make the multiple CAG abundance table available for download as a PDF
