@@ -278,6 +278,33 @@ server <- function(input, output, session) {
   
   # Watch for when the user changes the dataset
   observeEvent(input$dataset, {
+    
+    # Read all of the data objects while showing status updates
+    withProgress(message = 'Reading data', value = 0, {
+      
+      # Number of objects to read
+      n = 8
+      # Read in each table in turn
+      dummy <- manifest_df()
+      # And update the progress bar for each one
+      incProgress(1/n, detail = "Read in metadata table")
+      # etc.
+      dummy <- corncob_results_df()
+      incProgress(1/n, detail = "Read in corncob results")
+      dummy <- dataset_summary_df()
+      incProgress(1/n, detail = "Read in dataset summary table")
+      dummy <- readcounts_df()
+      incProgress(1/n, detail = "Read in aligned reads table")
+      dummy <- pca_df()
+      incProgress(1/n, detail = "Read in PCA table")
+      dummy <- tsne_df()
+      incProgress(1/n, detail = "Read in t-SNE table")
+      dummy <- cag_summary_df()
+      dummy <- cag_extended_summary_df()
+      incProgress(1/n, detail = "Read in CAG summary table")
+      dummy <- cag_details_df()
+      incProgress(1/n, detail = "Read in CAG detail table")
+    })
 
     # If the new dataset contains corncob results, show the corncob menu and display
     if(read_hdf_has_corncob(input$dataset, data_folder)){
