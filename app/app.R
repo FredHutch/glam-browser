@@ -31,16 +31,65 @@ ui <- dashboardPage(
   dashboardSidebar(
     useShinyjs(),
     # Dropdown menu to select the dataset of interest
-    selectInput(
-      "dataset",
-      "Dataset:",
-      find_datasets(data_folder)
+    div(
+      selectInput(
+        "dataset",
+        "Dataset:",
+        find_datasets(data_folder)
+      ),
+      style = "position:fixed; width: 200px"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#sampleSummaryTable", "Sample Summary Table"),
+      style = "padding-left: 20px; top: 140px; position:fixed; z: 10000"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#sampleSummaryPlot", "Sample Summary Plot"),
+      style = "padding-left: 20px; top: 160px; position:fixed"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#datasetSummary", "Dataset Summary"),
+      style = "padding-left: 20px; top: 180px; position:fixed"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#sampleOrdination", "Sample Ordination"),
+      style = "padding-left: 20px; top: 200px; position:fixed"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#statisticalAnalysis", "Statistical Analysis"),
+      style = "padding-left: 20px; top: 220px; position:fixed"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#cagSummaryTable", "CAG Summary Table"),
+      style = "padding-left: 20px; top: 240px; position:fixed"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#selectedCagDetails", "Selected CAG Details"),
+      style = "padding-left: 20px; top: 260px; position:fixed"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#selectedCagAbundance", "Selected CAG Abundance"),
+      style = "padding-left: 20px; top: 280px; position:fixed"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#cagAbundanceHeatmap", "CAG Abundance Heatmap"),
+      style = "padding-left: 20px; top: 300px; position:fixed"
     )
   ),
   dashboardBody(
     useShinyjs(),
     fluidRow(
       box(
+        id = "sampleSummaryTable",
         width = 12,
         title="Sample Summary Table",
         collapsible = TRUE,
@@ -52,6 +101,7 @@ ui <- dashboardPage(
     ),
     fluidRow(
       box(
+        id = "sampleSummaryPlot",
         width = 12,
         title="Sample Summary Plot",
         collapsible = TRUE,
@@ -106,6 +156,7 @@ ui <- dashboardPage(
     ),
     fluidRow(
       box(
+        id = "datasetSummary",
         width = 12,
         title="Dataset Summary",
         collapsible = TRUE,
@@ -149,6 +200,7 @@ ui <- dashboardPage(
     ),
     fluidRow(
       box(
+        id = "sampleOrdination",
         width = 12,
         title="Sample Ordination",
         collapsible = TRUE,
@@ -187,6 +239,7 @@ ui <- dashboardPage(
     ),
     fluidRow(
       box(
+        id = "statisticalAnalysis",
         width = 12,
         title="Statistical Analysis",
         collapsible = TRUE,
@@ -209,6 +262,7 @@ ui <- dashboardPage(
     ),
     fluidRow(
       box(
+        id = "cagSummaryTable",
         width = 12,
         title = "CAG Summary Table",
         collapsible = TRUE,
@@ -224,6 +278,7 @@ ui <- dashboardPage(
     ),
     fluidRow(
       box(
+        id = "selectedCagDetails",
         width = 12,
         title = "Selected CAG Details",
         collapsible = TRUE,
@@ -252,6 +307,7 @@ ui <- dashboardPage(
     ),
     fluidRow(
       box(
+        id = "selectedCagAbundance",
         width = 12,
         title = "Selected CAG Abundance",
         collapsible = TRUE,
@@ -283,6 +339,7 @@ ui <- dashboardPage(
     ),
     fluidRow(
       box(
+        id = "cagAbundanceHeatmap",
         width = 12,
         title = "CAG Abundance Heatmap",
         collapsible = TRUE,
