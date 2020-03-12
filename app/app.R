@@ -42,14 +42,21 @@ ui <- dashboardPage(
     fluidRow(
       box(
         width = 12,
-        title="Sample Summary",
+        title="Sample Summary Table",
         collapsible = TRUE,
         column(
-          width = 6,
+          width = 12,
           DT::DTOutput("sample_summary_DT")
-        ),
+        )
+      )
+    ),
+    fluidRow(
+      box(
+        width = 12,
+        title="Sample Summary Plot",
+        collapsible = TRUE,
         column(
-          width = 2,
+          width = 4,
           radioButtons(
             "sample_summary_x_val",
             "Metric to Plot",
@@ -78,7 +85,7 @@ ui <- dashboardPage(
           )
         ),
         column(
-          width = 4,
+          width = 8,
           div(
             style = "padding-right: 20px",
             fluidRow(
@@ -223,13 +230,17 @@ ui <- dashboardPage(
         fluidRow(div(
           style = "padding-right: 20px; padding-left: 20px",
           column(
-            width = 8,
-            DT::DTOutput("cag_details_DT")
-          ),
-          column(
-            width = 4,
+            width = 12,
             align = "center",
-            plotOutput("cag_details_tax_bars", width = "300px", height = "600px")
+            DT::DTOutput("cag_details_DT")
+          )
+        )),
+        fluidRow(div(
+          style = "padding-right: 20px; padding-left: 20px",
+          column(
+            width = 12,
+            align = "center",
+            plotOutput("cag_details_tax_bars", width = "600px", height = "300px")
           )
         )),
         fluidRow(div(

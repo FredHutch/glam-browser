@@ -255,7 +255,6 @@ plot_cag_details_tax_bars <- function(
     )
   ) + geom_bar(
     stat = "identity"
-  ) + coord_flip(
   ) + ylab(
     "Number of annotated genes"
   ) + xlab(
