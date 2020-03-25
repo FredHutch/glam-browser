@@ -661,7 +661,23 @@ server <- function(input, output, session) {
               paste(input$dataset, ".hdf5", sep="")
             ), 
             cag_id
-          )
+          ) %>%
+          mutate( # Truncate significant digits
+            abundance = abundance %>% as.numeric %>% signif(2),
+            prevalence = prevalence %>% as.numeric %>% signif(2)
+          ) %>%
+            rename(
+              `Gene Name` = gene,
+              `Mean Abundance` = abundance,
+              Length = length,
+              Prevalence = prevalence,
+              `eggNOG ID` = eggNOG_ortholog,
+              `eggNOG Taxon` = eggNOG_tax,
+              `eggNOG Description` = eggNOG_desc,
+              `Tax ID` = tax_id,
+              `Taxon` = tax_name,
+              Rank = tax_rank
+            )
         )
       }
     })

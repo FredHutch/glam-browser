@@ -238,19 +238,19 @@ plot_cag_details_tax_bars <- function(
   if(nrow(cag_details_df) == 0){
     return(ggplot() + geom_blank())
   }
-  if(! "tax_name" %in% colnames(cag_details_df)){
+  if(! "Taxon" %in% colnames(cag_details_df)){
     return(ggplot() + geom_blank())
   }
   g <- ggplot(
     data = cag_details_df %>%
       filter(
-        tax_id != "0"
+        `Tax ID` != "0"
       ) %>%
-      count(tax_name) %>%
+      count(Taxon) %>%
       arrange(n) %>%
       tail(10),
     aes(
-      x = reorder(tax_name, -n),
+      x = reorder(Taxon, -n),
       y = n
     )
   ) + geom_bar(
