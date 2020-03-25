@@ -126,7 +126,7 @@ plot_cag_size_abundance_distribution <- function(cag_summary_df){
   ) + geom_hex(
     bins = c(100, 30)
   ) + labs(
-    fill = "Number of Genes per Bin"
+    fill = "Genes per Bin"
   ) + theme_minimal(
     base_size = 20
   ) + theme(
@@ -259,13 +259,10 @@ plot_cag_details_tax_bars <- function(
     "Number of annotated genes"
   ) + xlab(
     ""
-  ) + ggtitle(
-    paste("CAG", cag_name)
   ) + theme_minimal(
-    base_size = 20
   ) + theme(
-    aspect.ratio=2,
-    plot.title = element_text(hjust = 0.5)
+    aspect.ratio=0.4,
+    axis.text.x = element_text(angle = 90)
   )
   return(g)
 }
