@@ -32,57 +32,57 @@ ui <- dashboardPage(
     useShinyjs(),
     # Dropdown menu to select the dataset of interest
     div(
+      icon("list-alt", lib="glyphicon"),
+      tags$a(href="#sampleSummaryTable", "Sample Summary Table"),
+      style = "padding-left: 20px; top: 80px; position:fixed"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#sampleSummaryPlot", "Sample Summary Plot"),
+      style = "padding-left: 20px; top: 100px; position:fixed"
+    ),
+    div(
+      icon("chart-area"),
+      tags$a(href="#datasetSummary", "Dataset Summary"),
+      style = "padding-left: 20px; top: 120px; position:fixed"
+    ),
+    div(
+      icon("picture", lib="glyphicon"),
+      tags$a(href="#sampleOrdination", "Sample Ordination"),
+      style = "padding-left: 20px; top: 140px; position:fixed"
+    ),
+    div(
+      icon("chart-bar"),
+      tags$a(href="#statisticalAnalysis", "Statistical Analysis"),
+      style = "padding-left: 20px; top: 160px; position:fixed"
+    ),
+    div(
+      icon("list-alt", lib="glyphicon"),
+      tags$a(href="#cagSummaryTable", "CAG Summary Table"),
+      style = "padding-left: 20px; top: 180px; position:fixed"
+    ),
+    div(
+      icon("list-alt", lib="glyphicon"),
+      tags$a(href="#selectedCagDetails", "Selected CAG Details"),
+      style = "padding-left: 20px; top: 200px; position:fixed"
+    ),
+    div(
+      icon("picture", lib="glyphicon"),
+      tags$a(href="#selectedCagAbundance", "Selected CAG Abundance"),
+      style = "padding-left: 20px; top: 220px; position:fixed"
+    ),
+    div(
+      icon("picture", lib="glyphicon"),
+      tags$a(href="#cagAbundanceHeatmap", "CAG Abundance Heatmap"),
+      style = "padding-left: 20px; top: 240px; position:fixed"
+    ),
+    div(
       selectInput(
         "dataset",
         "Dataset:",
         find_datasets(data_folder)
       ),
-      style = "position:fixed; width: 200px"
-    ),
-    div(
-      icon("chart-bar"),
-      tags$a(href="#sampleSummaryTable", "Sample Summary Table"),
-      style = "padding-left: 20px; top: 140px; position:fixed; z: 10000"
-    ),
-    div(
-      icon("chart-bar"),
-      tags$a(href="#sampleSummaryPlot", "Sample Summary Plot"),
-      style = "padding-left: 20px; top: 160px; position:fixed"
-    ),
-    div(
-      icon("chart-bar"),
-      tags$a(href="#datasetSummary", "Dataset Summary"),
-      style = "padding-left: 20px; top: 180px; position:fixed"
-    ),
-    div(
-      icon("chart-bar"),
-      tags$a(href="#sampleOrdination", "Sample Ordination"),
-      style = "padding-left: 20px; top: 200px; position:fixed"
-    ),
-    div(
-      icon("chart-bar"),
-      tags$a(href="#statisticalAnalysis", "Statistical Analysis"),
-      style = "padding-left: 20px; top: 220px; position:fixed"
-    ),
-    div(
-      icon("chart-bar"),
-      tags$a(href="#cagSummaryTable", "CAG Summary Table"),
-      style = "padding-left: 20px; top: 240px; position:fixed"
-    ),
-    div(
-      icon("chart-bar"),
-      tags$a(href="#selectedCagDetails", "Selected CAG Details"),
-      style = "padding-left: 20px; top: 260px; position:fixed"
-    ),
-    div(
-      icon("chart-bar"),
-      tags$a(href="#selectedCagAbundance", "Selected CAG Abundance"),
-      style = "padding-left: 20px; top: 280px; position:fixed"
-    ),
-    div(
-      icon("chart-bar"),
-      tags$a(href="#cagAbundanceHeatmap", "CAG Abundance Heatmap"),
-      style = "padding-left: 20px; top: 300px; position:fixed"
+      style = "position:fixed; top: 260px; width: 200px"
     )
   ),
   dashboardBody(
@@ -944,9 +944,7 @@ server <- function(input, output, session) {
           cag_extended_summary_df()$CAG[input$cag_summary_DT_rows_selected]
         )
       })
-    },
-    width = 300,
-    height = 600
+    }
   )
   
   # Make the taxonomic assignment barplot for a single CAG available for download as a PDF
