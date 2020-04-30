@@ -2,6 +2,7 @@
 
 import click
 import dash
+import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.express as px
@@ -39,40 +40,67 @@ app.title = "GLAM Browser"
 
 app.layout = html.Div(
     children=[
-        html.H1(children='GLAM Browser'),
-
-        html.P(children='''
-            Interactive results browser for gene-level metagenomic analysis with geneshot.
-        '''),
-
-        html.P(children='''
-            Data HDF5: %s
-        ''' % os.getenv("HDF5_FP").split("/")[-1]),
-
+        dbc.NavbarSimple(
+            brand="GLAM Browser",
+            light=True,
+            sticky="top",
+            children=[
+                dbc.NavItem(
+                    dbc.NavLink(
+                        os.getenv("HDF5_FP").split("/")[-1],
+                        href="#"
+                    )
+                ),
+                dbc.DropdownMenu(
+                    children = [
+                        dbc.DropdownMenuItem("Genes Detected", href="#richness")
+                    ],
+                    nav=True,
+                    in_navbar=True,
+                    label="Contents",
+                )
+            ],
+        ),
+        ########
+        # BODY #
+        ########
         html.Div(
             [
-                html.Div([
-                    dcc.Graph(
-                        id='richness-graph'
-                    )
-                ]),
-                html.Div([
-                    html.Label('Display Values'),
-                    dcc.Dropdown(
-                        id="richness-dropdown",
-                        options=[
-                            {'label': 'Genes Assembled (#)', 'value': 'n_genes_assembled'},
-                            {'label': 'Genes Aligned (#)', 'value': 'n_genes_aligned'},
-                            {'label': 'Reads Aligned (%)', 'value': 'prop_reads_aligned'},
-                        ],
-                        value='prop_reads_aligned'
-                    ),
-                ])
+                ##################
+                # RICHNESS GRAPH #
+                ##################
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                dcc.Graph(
+                                    id='richness-graph'
+                                )
+                            ],
+                            className="col-sm-8",
+                        ),
+                        html.Div(
+                            [
+                                html.Label('Display Values'),
+                                dcc.Dropdown(
+                                    id="richness-metric-dropdown",
+                                    options=[
+                                        {'label': 'Genes Assembled (#)', 'value': 'n_genes_assembled'},
+                                        {'label': 'Genes Aligned (#)', 'value': 'n_genes_aligned'},
+                                        {'label': 'Reads Aligned (%)', 'value': 'prop_reads_aligned'},
+                                    ],
+                                    value='prop_reads_aligned'
+                                ),
+                            ],
+                            className="col-sm-4",
+                        )
+                    ],
+                    className="row"
+                )
             ],
-            className="row"
+            className="container"
         )
-    ],
-    className="container",
+    ]
 )
 
 # Default figure layout
@@ -84,7 +112,7 @@ layout = go.Layout(
 # Functions used to render graphs
 @app.callback(
     Output('richness-graph', 'figure'),
-    [Input('richness-dropdown', 'value')])
+    [Input('richness-metric-dropdown', 'value')])
 def draw_richness(selected_metric):
     if "genes" in selected_metric:
         hovertemplate = "%{text}: %{x:,} reads - %{y:,} genes<extra></extra>"
