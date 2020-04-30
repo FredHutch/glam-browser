@@ -41,10 +41,10 @@ richness_df = richness_df.assign(
 )
 
 # The limits of CAG sizes
-cag_size_min = cag_summary_df["size"].min()
-cag_size_max = cag_summary_df["size"].max()
+cag_size_log = cag_summary_df["size"].apply(np.log10)
+cag_size_min = cag_size_log.min()
+cag_size_max = cag_size_log.max()
 cag_size_range = cag_size_max - cag_size_min
-cag_size_step = int(max(1, cag_size_range / 100))
 
 # Set index on manifest
 manifest_df.set_index("specimen", inplace=True)
@@ -169,17 +169,31 @@ app.layout = html.Div(
                                 html.Label('CAG Size Window'),
                                 dcc.RangeSlider(
                                     id="cag-size-slider",
-                                    min=cag_size_min,
+                                    min=0,
                                     max=cag_size_max,
-                                    step=cag_size_step,
+                                    step=0.1,
                                     marks={
-                                        str(n): str(n)
-                                        for n in np.arange(cag_size_min, cag_size_max, max(1, int(cag_size_range / 5)))
+                                        str(n): str(10**n)
+                                        for n in range(int(cag_size_max))
                                     },
                                     value=[
-                                        cag_size_min,
+                                        max(cag_size_min, np.log10(5)),
                                         cag_size_max
                                     ]
+                                ),
+                                html.Br(),
+                                html.Label('Number of Bins'),
+                                dcc.Slider(
+                                    id="cag-nbinsx-slider",
+                                    min=5,
+                                    max=100,
+                                    step=1,
+                                    marks={
+                                        "5": "5",
+                                        "20": "20",
+                                        "100": "100",
+                                    },
+                                    value=20
                                 ),
                                 html.Br(),
                                 html.Label('Log Scale'),
@@ -325,27 +339,28 @@ def draw_richness(selected_metric, selected_type):
     Output('cag-size-graph', 'figure'),
     [
         Input('cag-size-slider', 'value'),
+        Input('cag-nbinsx-slider', 'value'),
         Input('cag-size-log', 'value'),
     ])
-def draw_cag_size(selected_range, log_scale):
+def draw_cag_size(selected_range, nbinsx, log_scale):
 
-    plot_vals = cag_summary_df.query(
-        "size >= %s" % selected_range[0]
-    ).query(
-        "size <= %s" % selected_range[1]
-    )["size"]
-
-    if log_scale == "on":
-        plot_vals = plot_vals.apply(np.log10)
+    plot_vals = cag_size_log[
+        (cag_size_log >= selected_range[0]) & 
+        (cag_size_log <= selected_range[1])
+    ]
 
     fig = go.Figure(
         data=[
             go.Histogram(
                 x=plot_vals,
-                histfunc="sum"
+                histfunc="sum",
+                nbinsx=nbinsx,
             )
         ],
     )
+
+    if log_scale == "on":
+        fig.update_layout(yaxis_type="log")
 
     fig.update_layout(
         title={
@@ -355,7 +370,7 @@ def draw_cag_size(selected_range, log_scale):
             'xanchor': 'center',
             'yanchor': 'top'
         },
-        xaxis_title="CAG Size ({}number of genes per CAG)".format("log10 " if log_scale == "on" else ""), 
+        xaxis_title="CAG Size (log10 number of genes per CAG)",
         yaxis_title="Number of Genes (per bin)", 
         template="simple_white"
     )
