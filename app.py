@@ -89,7 +89,9 @@ app.layout = html.Div(
                 ),
                 dbc.DropdownMenu(
                     children = [
-                        dbc.DropdownMenuItem("Genes Detected", href="#richness")
+                        dbc.DropdownMenuItem("Genes Detected", href="#richness"),
+                        dbc.DropdownMenuItem("CAG Size", href="#cag-size"),
+                        dbc.DropdownMenuItem("PCA / t-SNE", href="#ordination"),
                     ],
                     nav=True,
                     in_navbar=True,
@@ -109,6 +111,7 @@ app.layout = html.Div(
                     [
                         html.Div(
                             [
+                                html.A(id="richness"),
                                 dcc.Graph(
                                     id='richness-graph'
                                 )
@@ -154,6 +157,7 @@ app.layout = html.Div(
                     [
                         html.Div(
                             [
+                                html.A(id="cag-size"),
                                 dcc.Graph(
                                     id='cag-size-graph'
                                 )
@@ -203,6 +207,7 @@ app.layout = html.Div(
                     [
                         html.Div(
                             [
+                                html.A(id="ordination"),
                                 dcc.Graph(
                                     id='ordination-graph'
                                 )
