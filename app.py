@@ -81,6 +81,7 @@ app.layout = html.Div(
                         ),
                         html.Div(
                             [
+                                html.Br(),
                                 html.Label('Display Values'),
                                 dcc.Dropdown(
                                     id="richness-metric-dropdown",
@@ -90,6 +91,16 @@ app.layout = html.Div(
                                         {'label': 'Reads Aligned (%)', 'value': 'prop_reads_aligned'},
                                     ],
                                     value='prop_reads_aligned'
+                                ),
+                                html.Br(),
+                                html.Label('Plot Type'),
+                                dcc.Dropdown(
+                                    id="richness-type-dropdown",
+                                    options=[
+                                        {'label': 'Points', 'value': 'scatter'},
+                                        {'label': 'Histogram', 'value': 'hist'},
+                                    ],
+                                    value='scatter'
                                 ),
                             ],
                             className="col-sm-4",
@@ -112,22 +123,40 @@ layout = go.Layout(
 # Functions used to render graphs
 @app.callback(
     Output('richness-graph', 'figure'),
-    [Input('richness-metric-dropdown', 'value')])
-def draw_richness(selected_metric):
-    if "genes" in selected_metric:
-        hovertemplate = "%{text}: %{x:,} reads - %{y:,} genes<extra></extra>"
-    else:
-        hovertemplate = "%{text}: %{x:,} reads - %{y:.2f} aligned<extra></extra>"
+    [
+        Input('richness-metric-dropdown', 'value'),
+        Input('richness-type-dropdown', 'value'),
+    ])
+def draw_richness(selected_metric, selected_type):
+    assert selected_type in ["hist", "scatter"]
+
+    if selected_type == "scatter":
+        if "genes" in selected_metric:
+            hovertemplate = "%{text}: %{x:,} reads - %{y:,} genes<extra></extra>"
+        else:
+            hovertemplate = "%{text}: %{x:,} reads - %{y:.2f} aligned<extra></extra>"
+            
+        fig = go.Figure(
+            data=go.Scatter(
+                x=richness_df["n_reads"],
+                y=richness_df[selected_metric],
+                text=richness_df["specimen"],
+                hovertemplate=hovertemplate,
+                mode="markers",
+            ),
+        )
         
-    fig = go.Figure(
-        data=go.Scatter(
-            x=richness_df["n_reads"],
-            y=richness_df[selected_metric],
-            text=richness_df["specimen"],
-            hovertemplate=hovertemplate,
-            mode="markers",
-        ),
-    )
+    else:
+        assert selected_type == "hist"
+
+        fig = go.Figure(
+            data=[
+                go.Histogram(
+                    y=richness_df[selected_metric],
+                )
+            ],
+        )
+
     fig.update_layout(
         title={
             'text': "Gene Analysis Summary",
@@ -136,7 +165,6 @@ def draw_richness(selected_metric):
             'xanchor': 'center',
             'yanchor': 'top'
         },
-        xaxis_title="Number of Reads",
         yaxis_title={
             "prop_reads_aligned": "Prop. Reads Aligned",
             "n_genes_aligned": "Num. Genes Aligned",
