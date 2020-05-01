@@ -77,6 +77,137 @@ external_stylesheets = [
     }
 ]
 
+###############################
+# REUSABLE DISPLAY COMPONENTS #
+###############################
+def graph_div(anchor_id, graph_id):
+    """Return a div containing a dcc.Graph and anchor, all within a col-sm-8."""
+    return html.Div(
+        [
+            html.A(id=anchor_id),
+            dcc.Graph(
+                id=graph_id
+            )
+        ],
+        className="col-sm-8",
+    )
+
+
+def cag_size_slider(slider_id, label_text='CAG Size Filter'):
+    return [
+        html.Label(label_text),
+        dcc.RangeSlider(
+            id=slider_id,
+            min=0,
+            max=cag_size_max,
+            step=0.1,
+            marks={
+                str(n): str(10**n)
+                for n in range(int(cag_size_max))
+            },
+            value=[
+                max(cag_size_min, np.log10(5)),
+                cag_size_max
+            ]
+        ),
+        html.Br()
+    ]
+    
+
+def cag_prevalence_slider(slider_id, label_text='CAG Prevalence Filter'):
+    return [
+        html.Label(label_text),
+        dcc.RangeSlider(
+            id=slider_id,
+            min=0,
+            max=1,
+            step=0.01,
+            marks={
+                "0": "0",
+                "0.5": "0.5",
+                "1": "1"
+            },
+            value=[0, 1]
+        ),
+        html.Br()
+    ]
+    
+
+def cag_abundance_slider(slider_id, label_text='CAG Abundance Filter'):
+    return [
+        html.Label(label_text),
+        dcc.RangeSlider(
+            id=slider_id,
+            min=0,
+            max=1,
+            step=0.001,
+            marks={
+                "0": "0",
+                "1": "1",
+            },
+            value=[
+                0, 
+                cag_summary_df["mean_abundance"].apply(float).max()
+            ]
+        ),
+        html.Br()
+    ]
+
+def cag_metric_dropdown(slider_id, label_text='Metric', default_value="size"):
+    return [
+        html.Label(label_text),
+        dcc.Dropdown(
+            id=slider_id,
+            options=[
+                {'label': 'CAG ID', 'value': 'CAG'},
+                {'label': 'Size', 'value': 'size'},
+                {'label': 'Mean Abund.', 'value': 'mean_abundance'},
+                {'label': 'Prevalence', 'value': 'prevalence'},
+                {'label': 'Std. Abund', 'value': 'std_abundance'},
+            ],
+            value=default_value
+        ),
+        html.Br()
+    ]
+
+def log_scale_radio_button(id_string):
+    return [
+        html.Br(),
+        html.Label('Log Scale'),
+        dcc.RadioItems(
+            id=id_string,
+            options=[
+                {'label': 'On', 'value': 'on'},
+                {'label': 'Off', 'value': 'off'},
+            ],
+            value='off',
+        ),
+        html.Br()
+    ]
+
+def nbins_slider(id_string):
+    return [
+        html.Label('Number of Bins'),
+        dcc.Slider(
+            id=id_string,
+            min=5,
+            max=100,
+            step=1,
+            marks={
+                "5": "5",
+                "20": "20",
+                "100": "100",
+            },
+            value=20
+        ),
+        html.Br()
+    ]
+
+#################################
+# \ REUSABLE DISPLAY COMPONENTS #
+#################################
+
+
 # Set up the app
 app = dash.Dash(
     __name__, 
@@ -119,15 +250,7 @@ app.layout = html.Div(
                 ##################
                 html.Div(
                     [
-                        html.Div(
-                            [
-                                html.A(id="richness"),
-                                dcc.Graph(
-                                    id='richness-graph'
-                                )
-                            ],
-                            className="col-sm-8",
-                        ),
+                        graph_div("richness", 'richness-graph'),
                         html.Div(
                             [
                                 html.Br(),
@@ -152,7 +275,7 @@ app.layout = html.Div(
                                     value='scatter'
                                 ),
                             ],
-                            className="col-sm-4",
+                            className="col-sm-4 my-auto",
                         )
                     ],
                     className="row"
@@ -165,58 +288,16 @@ app.layout = html.Div(
                 ##################
                 html.Div(
                     [
+                        graph_div("cag-size", 'cag-size-graph'),
                         html.Div(
-                            [
-                                html.A(id="cag-size"),
-                                dcc.Graph(
-                                    id='cag-size-graph'
-                                )
-                            ],
-                            className="col-sm-8",
-                        ),
-                        html.Div(
-                            [
-                                html.Label('CAG Size Window'),
-                                dcc.RangeSlider(
-                                    id="cag-size-slider",
-                                    min=0,
-                                    max=cag_size_max,
-                                    step=0.1,
-                                    marks={
-                                        str(n): str(10**n)
-                                        for n in range(int(cag_size_max))
-                                    },
-                                    value=[
-                                        max(cag_size_min, np.log10(5)),
-                                        cag_size_max
-                                    ]
-                                ),
-                                html.Br(),
-                                html.Label('Number of Bins'),
-                                dcc.Slider(
-                                    id="cag-nbinsx-slider",
-                                    min=5,
-                                    max=100,
-                                    step=1,
-                                    marks={
-                                        "5": "5",
-                                        "20": "20",
-                                        "100": "100",
-                                    },
-                                    value=20
-                                ),
-                                html.Br(),
-                                html.Label('Log Scale'),
-                                dcc.RadioItems(
-                                    id="cag-size-log",
-                                    options=[
-                                        {'label': 'On', 'value': 'on'},
-                                        {'label': 'Off', 'value': 'off'},
-                                    ],
-                                    value='off',
-                                )
-                            ],
-                            className="col-sm-4",
+                            cag_size_slider(
+                                "cag-size-slider"
+                            ) + nbins_slider(
+                                "cag-nbinsx-slider"
+                            ) + log_scale_radio_button(
+                                "cag-size-log"
+                            ),
+                            className="col-sm-4 my-auto",
                         )
                     ],
                     className="row"
@@ -229,15 +310,7 @@ app.layout = html.Div(
                 ####################
                 html.Div(
                     [
-                        html.Div(
-                            [
-                                html.A(id="ordination"),
-                                dcc.Graph(
-                                    id='ordination-graph'
-                                )
-                            ],
-                            className="col-sm-8",
-                        ),
+                        graph_div("ordination", 'ordination-graph'),
                         html.Div(
                             [
                                 html.Label('Ordination Method'),
@@ -262,7 +335,7 @@ app.layout = html.Div(
                                     value='none'
                                 ),
                             ],
-                            className="col-sm-4",
+                            className="col-sm-4 my-auto",
                         )
                     ],
                     className="row"
@@ -270,96 +343,65 @@ app.layout = html.Div(
                 ######################
                 # / ORDINATION GRAPH #
                 ######################
-                ######################
-                # CAG SUMMARY FIGURE #
-                ######################
+                #########################
+                # CAG SUMMARY HISTOGRAM #
+                #########################
                 html.Div(
                     [
+                        graph_div("cag-summary-histogram", 'cag-summary-histogram-graph'),
                         html.Div(
-                            [
-                                html.A(id="cag-summary"),
-                                dcc.Graph(
-                                    id='cag-summary-graph'
-                                )
-                            ],
-                            className="col-sm-8",
-                        ),
-                        html.Div(
-                            [
-                                html.Label('X-axis'),
-                                dcc.Dropdown(
-                                    id="cag-summary-xaxis-dropdown",
-                                    options=[
-                                        {'label': 'CAG ID', 'value': 'CAG'},
-                                        {'label': 'Size', 'value': 'size'},
-                                        {'label': 'Mean Abund.', 'value': 'mean_abundance'},
-                                        {'label': 'Prevalence', 'value': 'prevalence'},
-                                        {'label': 'Std. Abund', 'value': 'std_abundance'},
-                                    ],
-                                    value='size'
-                                ),
-                                html.Br(),
-                                html.Label('Y-axis'),
-                                dcc.Dropdown(
-                                    id="cag-summary-yaxis-dropdown",
-                                    options=[
-                                        {'label': 'CAG ID', 'value': 'CAG'},
-                                        {'label': 'Size', 'value': 'size'},
-                                        {'label': 'Mean Abund.', 'value': 'mean_abundance'},
-                                        {'label': 'Prevalence', 'value': 'prevalence'},
-                                        {'label': 'Std. Abund', 'value': 'std_abundance'},
-                                    ],
-                                    value='mean_abundance'
-                                ),
-                                html.Br(),
-                                html.Label('Size Filter'),
-                                dcc.RangeSlider(
-                                    id="cag-summary-size-slider",
-                                    min=0,
-                                    max=cag_size_max,
-                                    step=0.1,
-                                    marks={
-                                        str(n): str(10**n)
-                                        for n in range(int(cag_size_max))
-                                    },
-                                    value=[
-                                        max(cag_size_min, np.log10(5)),
-                                        cag_size_max
-                                    ]
-                                ),
-                                html.Br(),
-                                html.Label('Prevalence Filter'),
-                                dcc.RangeSlider(
-                                    id="cag-summary-prevalence-slider",
-                                    min=0,
-                                    max=1,
-                                    step=0.01,
-                                    marks={
-                                        "0": "0",
-                                        "0.5": "0.5",
-                                        "1": "1"
-                                    },
-                                    value=[0, 1]
-                                ),
-                                html.Br(),
-                                html.Label('Plot Type'),
-                                dcc.Dropdown(
-                                    id="cag-summary-type-dropdown",
-                                    options=[
-                                        {'label': 'Points', 'value': 'scatter'},
-                                        {'label': 'Histogram', 'value': 'histogram'},
-                                    ],
-                                    value='scatter'
-                                ),
-                            ],
-                            className="col-sm-4",
+                            cag_metric_dropdown(
+                                "cag-summary-histogram-metric-dropdown",
+                                default_value="size"
+                            ) + cag_size_slider(
+                                "cag-summary-histogram-size-slider"
+                            ) + cag_prevalence_slider(
+                                "cag-summary-histogram-prevalence-slider"
+                            ) + cag_abundance_slider(
+                                "cag-summary-histogram-abundance-slider"
+                            ) + nbins_slider(
+                                "cag-summary-histogram-nbinsx-slider"
+                            ) + log_scale_radio_button(
+                                "cag-summary-histogram-log"
+                            ),
+                            className="col-sm-4 my-auto",
                         )
                     ],
                     className="row"
                 ),
-                ########################
-                # / CAG SUMMARY FIGURE #
-                ########################
+                ###########################
+                # / CAG SUMMARY HISTOGRAM #
+                ###########################
+                #######################
+                # CAG SUMMARY SCATTER #
+                #######################
+                html.Div(
+                    [
+                        graph_div("cag-summary-scatter", 'cag-summary-scatter-graph'), 
+                        html.Div(
+                            cag_metric_dropdown(
+                                "cag-summary-scatter-xaxis-dropdown",
+                                label_text="X-axis",
+                                default_value="size"
+                            ) + cag_metric_dropdown(
+                                "cag-summary-scatter-yaxis-dropdown",
+                                label_text="Y-axis",
+                                default_value="mean_abundance"
+                            ) + cag_size_slider(
+                                "cag-summary-scatter-size-slider"
+                            ) + cag_prevalence_slider(
+                                "cag-summary-scatter-prevalence-slider"
+                            ) + cag_abundance_slider(
+                                "cag-summary-scatter-abundance-slider"
+                            ),
+                            className="col-sm-4 my-auto",
+                        )
+                    ],
+                    className="row"
+                ),
+                #########################
+                # / CAG SUMMARY SCATTER #
+                #########################
             ],
             className="container"
         )
@@ -385,6 +427,13 @@ layout = go.Layout(
     ])
 def draw_richness(selected_metric, selected_type):
     assert selected_type in ["hist", "scatter"]
+    assert selected_metric in richness_df.columns.values, (selected_metric, richness_df.columns.values)
+
+    metric_names = {
+        "prop_reads_aligned": "Prop. Reads Aligned",
+        "n_genes_aligned": "Num. Genes Aligned",
+        "n_genes_assembled": "Num. Genes Assembled",
+    }
 
     if selected_type == "scatter":
         if "genes" in selected_metric:
@@ -401,7 +450,10 @@ def draw_richness(selected_metric, selected_type):
                 mode="markers",
             ),
         )
-        
+        fig.update_layout(
+            xaxis_title="Number of Reads"
+        )
+
     else:
         assert selected_type == "hist"
 
@@ -412,6 +464,9 @@ def draw_richness(selected_metric, selected_type):
                 )
             ],
         )
+        fig.update_layout(
+            xaxis_title="Number of Specimens"
+        )
 
     fig.update_layout(
         title={
@@ -421,11 +476,7 @@ def draw_richness(selected_metric, selected_type):
             'xanchor': 'center',
             'yanchor': 'top'
         },
-        yaxis_title={
-            "prop_reads_aligned": "Prop. Reads Aligned",
-            "n_genes_aligned": "Num. Genes Aligned",
-            "n_genes_assembled": "Num. Genes Assembled",
-        }[selected_metric], 
+        yaxis_title=metric_names[selected_metric], 
         template="simple_white"
     )
 
@@ -556,19 +607,20 @@ def draw_ordination(algorithm, metadata):
 
     return fig
 
-####################
-# CAG SUMMARY GRAPH #
-####################
+#########################
+# CAG SUMMARY HISTOGRAM #
+#########################
 @app.callback(
-    Output('cag-summary-graph', 'figure'),
+    Output('cag-summary-histogram-graph', 'figure'),
     [
-        Input('cag-summary-xaxis-dropdown', 'value'),
-        Input('cag-summary-yaxis-dropdown', 'value'),
-        Input('cag-summary-size-slider', 'value'),
-        Input('cag-summary-prevalence-slider', 'value'),
-        Input('cag-summary-type-dropdown', 'value'),
+        Input('cag-summary-histogram-metric-dropdown', 'value'),
+        Input('cag-summary-histogram-size-slider', 'value'),
+        Input('cag-summary-histogram-prevalence-slider', 'value'),
+        Input('cag-summary-histogram-abundance-slider', 'value'),
+        Input('cag-summary-histogram-nbinsx-slider', 'value'),
+        Input('cag-summary-histogram-log', 'value'),
     ])
-def draw_ordination(xaxis, yaxis, size_range, prevalence_range, plot_type):
+def draw_cag_summary_histogram(metric, size_range, prevalence_range, abundance_range, nbinsx, log_scale):
 
     # Apply the filters
     plot_df = cag_summary_df.applymap(
@@ -581,33 +633,13 @@ def draw_ordination(xaxis, yaxis, size_range, prevalence_range, plot_type):
         "prevalence >= {}".format(prevalence_range[0])
     ).query(
         "prevalence <= {}".format(prevalence_range[1])
+    ).query(
+        "mean_abundance >= {}".format(abundance_range[0])
+    ).query(
+        "mean_abundance <= {}".format(abundance_range[1])
     ).apply(
         lambda c: c.apply(np.log10) if c.name == "size" else c
     )
-
-    assert plot_type in ["scatter", "histogram"]
-    if plot_type == "scatter":
-
-        fig = go.Figure(
-            data=go.Scattergl(
-                x=plot_df[xaxis],
-                y=plot_df[yaxis],
-                ids=plot_df["CAG"].values,
-                text=plot_df["CAG"].values,
-                hoverinfo="text",
-                mode="markers",
-            ),
-        )
-
-    else:
-
-        fig = go.Figure(
-            data=[
-                go.Histogram(
-                    y=plot_df[xaxis],
-                )
-            ],
-        )
 
     axis_names = {
         "CAG": "CAG ID",
@@ -617,16 +649,96 @@ def draw_ordination(xaxis, yaxis, size_range, prevalence_range, plot_type):
         "prevalence": "Prevalence",
     }
 
+    fig = go.Figure(
+        data=[
+            go.Histogram(
+                x=plot_df[metric],
+                nbinsx=nbinsx,
+            )
+        ],
+    )
+
+    if log_scale == "on":
+        fig.update_layout(yaxis_type="log")
+
     fig.update_layout(
+        xaxis_title=axis_names.get(metric, metric),
+        yaxis_title="Number of CAGs",
         title={
-            'text': "CAG Summary Metrics",
+            'text': "CAG Summary Histogram",
             'y': 0.9,
             'x': 0.5, 
             'xanchor': 'center',
             'yanchor': 'top',
         },
+        template="simple_white"
+    )
+
+    return fig
+
+
+#######################
+# CAG SUMMARY SCATTER #
+#######################
+@app.callback(
+    Output('cag-summary-scatter-graph', 'figure'),
+    [
+        Input('cag-summary-scatter-xaxis-dropdown', 'value'),
+        Input('cag-summary-scatter-yaxis-dropdown', 'value'),
+        Input('cag-summary-scatter-size-slider', 'value'),
+        Input('cag-summary-scatter-prevalence-slider', 'value'),
+        Input('cag-summary-scatter-abundance-slider', 'value'),
+    ])
+def draw_cag_summary_scatter(xaxis, yaxis, size_range, prevalence_range, abundance_range):
+
+    # Apply the filters
+    plot_df = cag_summary_df.applymap(
+        float
+    ).query(
+        "size >= {}".format(10**size_range[0])
+    ).query(
+        "size <= {}".format(10**size_range[1])
+    ).query(
+        "prevalence >= {}".format(prevalence_range[0])
+    ).query(
+        "prevalence <= {}".format(prevalence_range[1])
+    ).query(
+        "mean_abundance >= {}".format(abundance_range[0])
+    ).query(
+        "mean_abundance <= {}".format(abundance_range[1])
+    ).apply(
+        lambda c: c.apply(np.log10) if c.name == "size" else c
+    )
+
+    axis_names = {
+        "CAG": "CAG ID",
+        "size": "Number of Genes (log10)",
+        "mean_abundance": "Mean Abundance",
+        "std_abundance": "Std. Abundance",
+        "prevalence": "Prevalence",
+    }
+
+    fig = go.Figure(
+        data=go.Scattergl(
+            x=plot_df[xaxis],
+            y=plot_df[yaxis],
+            ids=plot_df["CAG"].values,
+            text=plot_df["CAG"].values,
+            hoverinfo="text",
+            mode="markers",
+        ),
+    )
+
+    fig.update_layout(
         xaxis_title=axis_names.get(xaxis, xaxis),
         yaxis_title=axis_names.get(yaxis, yaxis),
+        title={
+            'text': "CAG Summary Scatterplot",
+            'y': 0.9,
+            'x': 0.5, 
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
         template="simple_white"
     )
 
