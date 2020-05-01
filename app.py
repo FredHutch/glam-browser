@@ -2,6 +2,7 @@
 
 import click
 import dash
+import dash_table
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
@@ -38,6 +39,15 @@ with pd.HDFStore(hdf5_fp, "r") as store:
 # Precompute the proportion of reads which align
 richness_df = richness_df.assign(
     prop_reads_aligned=richness_df["aligned_reads"] / richness_df["n_reads"]
+)
+
+# Round to 4 significant figures on the CAG summary metrics
+cag_summary_df = cag_summary_df.apply(
+    lambda c: c.apply(
+        lambda i: '{:g}'.format(float('{:.4g}'.format(i)))
+    ) if c.name in [
+        "std_abundance", "prevalence", "mean_abundance"
+    ] else c
 )
 
 # The limits of CAG sizes
@@ -260,6 +270,138 @@ app.layout = html.Div(
                 ######################
                 # / ORDINATION GRAPH #
                 ######################
+                ##################
+                # CAG DATA TABLE #
+                ##################
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.A(id="cag-table"),
+                                dash_table.DataTable(
+                                    id='cag-table-datatable',
+                                    columns=[
+                                        {
+                                            "name": {
+                                                "mean_abundance": "Mean Abund.",
+                                                "prevalence": "Prevalence",
+                                                "size": "Size (# of genes)",
+                                                "std_abundance": "Std. Abund.",
+                                                "CAG": "CAG ID"
+                                            }.get(i, i), 
+                                            "id": i,
+                                            "type": "numeric"
+                                        }
+                                        for i in cag_summary_df.columns
+                                    ],
+                                    data=cag_summary_df.query(
+                                        "size > 1"
+                                    ).to_dict('records'),
+                                    page_action='native',
+                                    sort_action='native',
+                                    filter_action='native',
+                                    row_selectable='single',
+                                    page_size=10,
+                                )
+                            ],
+                            className="col",
+                        )
+                    ],
+                    className="row"
+                ),
+                ####################
+                # / CAG DATA TABLE #
+                ####################
+                ######################
+                # CAG SUMMARY FIGURE #
+                ######################
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.A(id="cag-summary"),
+                                dcc.Graph(
+                                    id='cag-summary-graph'
+                                )
+                            ],
+                            className="col-sm-8",
+                        ),
+                        html.Div(
+                            [
+                                html.Label('X-axis'),
+                                dcc.Dropdown(
+                                    id="cag-summary-xaxis-dropdown",
+                                    options=[
+                                        {'label': 'CAG ID', 'value': 'CAG'},
+                                        {'label': 'Size', 'value': 'size'},
+                                        {'label': 'Mean Abund.', 'value': 'mean_abundance'},
+                                        {'label': 'Prevalence', 'value': 'prevalence'},
+                                        {'label': 'Std. Abund', 'value': 'std_abundance'},
+                                    ],
+                                    value='size'
+                                ),
+                                html.Br(),
+                                html.Label('Y-axis'),
+                                dcc.Dropdown(
+                                    id="cag-summary-yaxis-dropdown",
+                                    options=[
+                                        {'label': 'CAG ID', 'value': 'CAG'},
+                                        {'label': 'Size', 'value': 'size'},
+                                        {'label': 'Mean Abund.', 'value': 'mean_abundance'},
+                                        {'label': 'Prevalence', 'value': 'prevalence'},
+                                        {'label': 'Std. Abund', 'value': 'std_abundance'},
+                                    ],
+                                    value='mean_abundance'
+                                ),
+                                html.Br(),
+                                html.Label('Size Filter'),
+                                dcc.RangeSlider(
+                                    id="cag-summary-size-slider",
+                                    min=0,
+                                    max=cag_size_max,
+                                    step=0.1,
+                                    marks={
+                                        str(n): str(10**n)
+                                        for n in range(int(cag_size_max))
+                                    },
+                                    value=[
+                                        max(cag_size_min, np.log10(5)),
+                                        cag_size_max
+                                    ]
+                                ),
+                                html.Br(),
+                                html.Label('Prevalence Filter'),
+                                dcc.RangeSlider(
+                                    id="cag-summary-prevalence-slider",
+                                    min=0,
+                                    max=1,
+                                    step=0.01,
+                                    marks={
+                                        "0": "0",
+                                        "0.5": "0.5",
+                                        "1": "1"
+                                    },
+                                    value=[0, 1]
+                                ),
+                                html.Br(),
+                                html.Label('Plot Type'),
+                                dcc.Dropdown(
+                                    id="cag-summary-type-dropdown",
+                                    options=[
+                                        {'label': 'Points', 'value': 'scatter'},
+                                        {'label': 'Histogram', 'value': 'histogram'},
+                                    ],
+                                    value='scatter'
+                                ),
+                            ],
+                            className="col-sm-4",
+                        )
+                    ],
+                    className="row"
+                ),
+                ########################
+                # / CAG SUMMARY FIGURE #
+                ########################
             ],
             className="container"
         )
@@ -451,6 +593,82 @@ def draw_ordination(algorithm, metadata):
         },
         xaxis_title=plot_df.columns.values[0],
         yaxis_title=plot_df.columns.values[1],
+        template="simple_white"
+    )
+
+    return fig
+
+####################
+# CAG SUMMARY GRAPH #
+####################
+@app.callback(
+    Output('cag-summary-graph', 'figure'),
+    [
+        Input('cag-summary-xaxis-dropdown', 'value'),
+        Input('cag-summary-yaxis-dropdown', 'value'),
+        Input('cag-summary-size-slider', 'value'),
+        Input('cag-summary-prevalence-slider', 'value'),
+        Input('cag-summary-type-dropdown', 'value'),
+    ])
+def draw_ordination(xaxis, yaxis, size_range, prevalence_range, plot_type):
+
+    # Apply the filters
+    plot_df = cag_summary_df.applymap(
+        float
+    ).query(
+        "size >= {}".format(10**size_range[0])
+    ).query(
+        "size <= {}".format(10**size_range[1])
+    ).query(
+        "prevalence >= {}".format(prevalence_range[0])
+    ).query(
+        "prevalence <= {}".format(prevalence_range[1])
+    ).apply(
+        lambda c: c.apply(np.log10) if c.name == "size" else c
+    )
+
+    assert plot_type in ["scatter", "histogram"]
+    if plot_type == "scatter":
+
+        fig = go.Figure(
+            data=go.Scattergl(
+                x=plot_df[xaxis],
+                y=plot_df[yaxis],
+                ids=plot_df["CAG"].values,
+                text=plot_df["CAG"].values,
+                hoverinfo="text",
+                mode="markers",
+            ),
+        )
+
+    else:
+
+        fig = go.Figure(
+            data=[
+                go.Histogram(
+                    y=plot_df[xaxis],
+                )
+            ],
+        )
+
+    axis_names = {
+        "CAG": "CAG ID",
+        "size": "Number of Genes (log10)",
+        "mean_abundance": "Mean Abundance",
+        "std_abundance": "Std. Abundance",
+        "prevalence": "Prevalence",
+    }
+
+    fig.update_layout(
+        title={
+            'text': "CAG Summary Metrics",
+            'y': 0.9,
+            'x': 0.5, 
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
+        xaxis_title=axis_names.get(xaxis, xaxis),
+        yaxis_title=axis_names.get(yaxis, yaxis),
         template="simple_white"
     )
 
