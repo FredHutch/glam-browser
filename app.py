@@ -34,6 +34,14 @@ with pd.HDFStore(hdf5_fp, "r") as store:
     # Precomputed t-SNE (on specimens)
     tsne_df = pd.read_hdf(store, "/ordination/tsne")
 
+    # Corncob results (for volcano plot)
+    if "/stats/cag/corncob_wide" in store:
+        corncob_df = pd.read_hdf(store, "/stats/cag/corncob_wide")
+    elif "/stats/cag/corncob" in store:
+        corncob_df = pd.read_hdf(store, "/stats/cag/corncob")
+    else:
+        corncob_df = None
+
 # Precompute some useful metrics
 
 # Precompute the proportion of reads which align
@@ -66,6 +74,11 @@ metadata_fields = [n for n in manifest_df.columns.values if n not in ["R1", "R2"
 pca_df.set_index("specimen", inplace=True)
 tsne_df.set_index("specimen", inplace=True)
 
+# Calculate the -log10(p_value)
+corncob_df = corncob_df.assign(
+    neg_log_pvalue = corncob_df["p_value"].apply(np.log10) * -1
+)
+max_neg_log_pvalue = corncob_df["neg_log_pvalue"].max()
 
 # external CSS stylesheets
 external_stylesheets = [
@@ -131,6 +144,68 @@ def plot_type_dropdown(
         html.Br(),
     ]
 
+def volcano_parameter_dropdown(
+    dropdown_id, 
+    label_text='Parameter',
+):
+    if corncob_df is None:
+
+        return [
+            html.Label(label_text),
+            dcc.Dropdown(
+                id=dropdown_id,
+                options=[
+                    {'label': 'None', 'value': 'none'},
+                ],
+                value="none"
+            ),
+            html.Br(),
+        ]
+
+    else:
+
+        parameter_list = corncob_df[
+            "parameter"
+        ].drop_duplicates(
+        ).sort_values(
+        ).tolist(
+        )
+
+        return [
+            html.Label(label_text),
+            dcc.Dropdown(
+                id=dropdown_id,
+                options=[
+                    {'label': l, 'value': l}
+                    for l in parameter_list
+                ],
+                value=parameter_list[0]
+            ),
+            html.Br(),
+        ]
+
+
+def volcano_pvalue_slider(slider_id, label_text='P-Value Filter'):
+    return [
+        html.Label(label_text),
+        dcc.Slider(
+            id=slider_id,
+            min=0,
+            max=max_neg_log_pvalue,
+            step=0.1,
+            marks={
+                str(int(n)): str(int(n))
+                for n in np.arange(
+                    0,
+                    max_neg_log_pvalue,
+                    max(1, int(max_neg_log_pvalue / 5))
+                )
+            },
+            value=1
+        ),
+        html.Br()
+    ]
+    
 def cag_size_slider(slider_id, label_text='CAG Size Filter'):
     return [
         html.Label(label_text),
@@ -442,6 +517,26 @@ app.layout = html.Div(
         #########################
         # / CAG SUMMARY SCATTER #
         #########################
+        ################
+        # VOLCANO PLOT #
+        ################
+        card_wrapper(
+            "Association Screening",
+            [
+                graph_div("volcano", 'volcano-graph'), 
+                html.Div(
+                    volcano_parameter_dropdown(
+                        "volcano-parameter-dropdown",
+                    ) + volcano_pvalue_slider(
+                        "volcano-pvalue-slider",
+                    ),
+                    className="col-sm-4 my-auto",
+                )
+            ]
+        ),
+        ##################
+        # / VOLCANO PLOT #
+        ##################
     ],
     className="container"
 )
@@ -819,6 +914,53 @@ def draw_cag_summary_scatter(xaxis, yaxis, size_range, prevalence_range, abundan
             'yanchor': 'top',
         },
         template="simple_white"
+    )
+
+    return fig
+
+################
+# VOLCANO PLOT #
+################
+@app.callback(
+    Output('volcano-graph', 'figure'),
+    [
+        Input('volcano-parameter-dropdown', 'value'),
+        Input('volcano-pvalue-slider', 'value'),
+    ])
+def draw_volcano_plot(parameter, neg_log_pvalue_min):
+
+    if corncob_df is None:
+        return go.Figure()
+
+    # Subset to just this parameter
+    plot_df = corncob_df.query(
+        "parameter == '{}'".format(parameter)
+    ).query(
+        "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
+    )
+
+    fig = go.Figure(
+        data=go.Scattergl(
+            x=plot_df["estimate"],
+            y=plot_df["neg_log_pvalue"],
+            ids=plot_df["CAG"].values,
+            text=plot_df["CAG"].values,
+            hovertemplate="CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}",
+            mode="markers",
+        ),
+    )
+
+    fig.update_layout(
+        xaxis_title="Estimated Coefficient",
+        yaxis_title="p-value (-log10)",
+        title={
+            'text': "Estimated Associations",
+            'y': 0.9,
+            'x': 0.5, 
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
+        template="simple_white",
     )
 
     return fig
