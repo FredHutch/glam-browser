@@ -270,48 +270,6 @@ app.layout = html.Div(
                 ######################
                 # / ORDINATION GRAPH #
                 ######################
-                ##################
-                # CAG DATA TABLE #
-                ##################
-                html.Div(
-                    [
-                        html.Div(
-                            [
-                                html.A(id="cag-table"),
-                                dash_table.DataTable(
-                                    id='cag-table-datatable',
-                                    columns=[
-                                        {
-                                            "name": {
-                                                "mean_abundance": "Mean Abund.",
-                                                "prevalence": "Prevalence",
-                                                "size": "Size (# of genes)",
-                                                "std_abundance": "Std. Abund.",
-                                                "CAG": "CAG ID"
-                                            }.get(i, i), 
-                                            "id": i,
-                                            "type": "numeric"
-                                        }
-                                        for i in cag_summary_df.columns
-                                    ],
-                                    data=cag_summary_df.query(
-                                        "size > 1"
-                                    ).to_dict('records'),
-                                    page_action='native',
-                                    sort_action='native',
-                                    filter_action='native',
-                                    row_selectable='single',
-                                    page_size=10,
-                                )
-                            ],
-                            className="col",
-                        )
-                    ],
-                    className="row"
-                ),
-                ####################
-                # / CAG DATA TABLE #
-                ####################
                 ######################
                 # CAG SUMMARY FIGURE #
                 ######################
