@@ -42,6 +42,9 @@ with pd.HDFStore(hdf5_fp, "r") as store:
     else:
         corncob_df = None
 
+    # CAG abundance
+    cag_abundance_df = pd.read_hdf(store, "/abund/cag/wide")
+
 # Precompute some useful metrics
 
 # Precompute the proportion of reads which align
@@ -73,6 +76,9 @@ metadata_fields = [n for n in manifest_df.columns.values if n not in ["R1", "R2"
 # Set index on ordination tables
 pca_df.set_index("specimen", inplace=True)
 tsne_df.set_index("specimen", inplace=True)
+
+# Set index on CAG abundance table
+cag_abundance_df.set_index("CAG", inplace=True)
 
 # Calculate the -log10(p_value)
 corncob_df = corncob_df.assign(
@@ -123,6 +129,28 @@ def graph_div(anchor_id, graph_id):
         ],
         className="col-sm-8",
     )
+
+
+def metadata_field_dropdown(
+    dropdown_id, 
+    label_text='Metadata Label', 
+    default_value="none"
+):
+    return [
+        html.Label(label_text),
+        dcc.Dropdown(
+            id=dropdown_id,
+            options=[
+                {'label': 'None', 'value': 'none'},
+            ] + [
+                {'label': f, "value": f}
+                for f in metadata_fields
+            ],
+            value=default_value
+        ),
+        html.Br(),
+
+    ]
 
 
 def plot_type_dropdown(
@@ -428,19 +456,9 @@ app.layout = html.Div(
                             value='pca'
                         ),
                         html.Br(),
-                        html.Label('Metadata Label'),
-                        dcc.Dropdown(
-                            id="ordination-metadata",
-                            options=[
-                                {'label': 'None', 'value': 'none'},
-                            ] + [
-                                {'label': f, "value": f}
-                                for f in metadata_fields
-                            ],
-                            value='none'
-                        ),
-                        html.Br(),
-                    ] + plot_type_dropdown(
+                    ] + metadata_field_dropdown(
+                        "ordination-metadata"
+                    ) + plot_type_dropdown(
                         "ordination-type-dropdown",
                         label_text="Metadata Overlay",
                         options=[
@@ -537,6 +555,50 @@ app.layout = html.Div(
         ##################
         # / VOLCANO PLOT #
         ##################
+        ###################
+        # SINGLE CAG PLOT #
+        ###################
+        card_wrapper(
+            "Individual CAG Abundance",
+            [
+                graph_div("single-cag", 'single-cag-graph'), 
+                html.Div(
+                    [
+                        html.Label("CAG"),
+                        dcc.Dropdown(
+                            id="single-cag-selector",
+                            options=[
+                                {'label': 'CAG {}'.format(cag_id), 'value': str(cag_id)}
+                                for cag_id in cag_summary_df["CAG"].values
+                            ],
+                            placeholder="Select a CAG",
+                        ),
+                        html.Br(),
+                    ] + metadata_field_dropdown(
+                        "single-cag-xaxis",
+                        label_text="X-axis",
+                        default_value=metadata_fields[0]
+                    ) + plot_type_dropdown(
+                        "single-cag-plot-type",
+                        options = [
+                            {'label': 'Points', 'value': 'scatter'},
+                            {'label': 'Line', 'value': 'line'},
+                            {'label': 'Boxplot', 'value': 'boxplot'},
+                        ]
+                    ) + metadata_field_dropdown(
+                        "single-cag-color",
+                        label_text="Color",
+                    ) + metadata_field_dropdown(
+                        "single-cag-facet",
+                        label_text="Facet",
+                    ),
+                    className="col-sm-4 my-auto",
+                )
+            ]
+        ),
+        #####################
+        # / SINGLE CAG PLOT #
+        #####################
     ],
     className="container"
 )
@@ -898,7 +960,7 @@ def draw_cag_summary_scatter(xaxis, yaxis, size_range, prevalence_range, abundan
             y=plot_df[yaxis],
             ids=plot_df["CAG"].values,
             text=plot_df["CAG"].values,
-            hoverinfo="text",
+            hovertemplate="CAG %{id}<br>X-value: %{x}<br>Y-value: %{y}",
             mode="markers",
         ),
     )
@@ -945,8 +1007,9 @@ def draw_volcano_plot(parameter, neg_log_pvalue_min):
             y=plot_df["neg_log_pvalue"],
             ids=plot_df["CAG"].values,
             text=plot_df["CAG"].values,
-            hovertemplate="CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}",
+            hovertemplate="CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}<extra></extra>",
             mode="markers",
+            opacity=0.5,
         ),
     )
 
@@ -963,6 +1026,66 @@ def draw_volcano_plot(parameter, neg_log_pvalue_min):
         template="simple_white",
     )
 
+    return fig
+
+
+###################
+# SINGLE CAG PLOT #
+###################
+@app.callback(
+    Output('single-cag-graph', 'figure'),
+    [
+        Input('single-cag-selector', 'value'),
+        Input('single-cag-xaxis', 'value'),
+        Input('single-cag-plot-type', 'value'),
+        Input('single-cag-color', 'value'),
+        Input('single-cag-facet', 'value'),
+    ])
+def draw_single_cag_plot(cag_id, xaxis, plot_type, color, facet):
+
+    if cag_id is None or cag_id == "none":
+        fig = go.Figure()
+        fig.update_layout(
+            template="simple_white",
+        )
+        return fig
+
+    plot_df = manifest_df.assign(
+        CAG_ABUND = cag_abundance_df.loc[int(cag_id)]
+    )
+
+    if plot_type == "scatter":
+        fig = px.scatter(
+            plot_df,
+            x = xaxis,
+            y = "CAG_ABUND",
+            color = None if color == "none" else color,
+            facet_col = None if facet == "none" else facet
+        )
+
+    elif plot_type == "boxplot":
+        fig = px.box(
+            plot_df,
+            x = xaxis,
+            y = "CAG_ABUND",
+            color = None if color == "none" else color,
+            facet_col = None if facet == "none" else facet
+        )
+
+    else:
+        assert plot_type == "line"
+        fig = px.line(
+            plot_df,
+            x = xaxis,
+            y = "CAG_ABUND",
+            color = None if color == "none" else color,
+            facet_col = None if facet == "none" else facet
+        )
+
+    fig.update_layout(
+        template="simple_white",
+        yaxis_title="CAG {}".format(cag_id)
+    )
     return fig
 
 if __name__ == '__main__':
