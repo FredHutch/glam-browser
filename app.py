@@ -80,6 +80,25 @@ external_stylesheets = [
 ###############################
 # REUSABLE DISPLAY COMPONENTS #
 ###############################
+def card_wrapper(card_title, card_body):
+    """Nest a set of display elements within a card, including body and title"""
+    return html.Div(
+        [
+            html.Div(
+                [
+                    card_title
+                ],
+                className="card-header"
+            ),
+            html.Div(
+                card_body,
+                className="row"
+            )
+
+        ],
+        className="card"
+    )
+
 def graph_div(anchor_id, graph_id):
     """Return a div containing a dcc.Graph and anchor, all within a col-sm-8."""
     return html.Div(
@@ -243,169 +262,165 @@ app.layout = html.Div(
         ########
         # BODY #
         ########
-        html.Div(
+        ##################
+        # RICHNESS GRAPH #
+        ##################
+        card_wrapper(
+            "Gene Analysis Summary",
             [
-                ##################
-                # RICHNESS GRAPH #
-                ##################
+                graph_div("richness", 'richness-graph'),
                 html.Div(
                     [
-                        graph_div("richness", 'richness-graph'),
-                        html.Div(
-                            [
-                                html.Br(),
-                                html.Label('Display Values'),
-                                dcc.Dropdown(
-                                    id="richness-metric-dropdown",
-                                    options=[
-                                        {'label': 'Genes Assembled (#)', 'value': 'n_genes_assembled'},
-                                        {'label': 'Genes Aligned (#)', 'value': 'n_genes_aligned'},
-                                        {'label': 'Reads Aligned (%)', 'value': 'prop_reads_aligned'},
-                                    ],
-                                    value='prop_reads_aligned'
-                                ),
-                                html.Br(),
-                                html.Label('Plot Type'),
-                                dcc.Dropdown(
-                                    id="richness-type-dropdown",
-                                    options=[
-                                        {'label': 'Points', 'value': 'scatter'},
-                                        {'label': 'Histogram', 'value': 'hist'},
-                                    ],
-                                    value='scatter'
-                                ),
+                        html.Br(),
+                        html.Label('Display Values'),
+                        dcc.Dropdown(
+                            id="richness-metric-dropdown",
+                            options=[
+                                {'label': 'Genes Assembled (#)', 'value': 'n_genes_assembled'},
+                                {'label': 'Genes Aligned (#)', 'value': 'n_genes_aligned'},
+                                {'label': 'Reads Aligned (%)', 'value': 'prop_reads_aligned'},
                             ],
-                            className="col-sm-4 my-auto",
-                        )
-                    ],
-                    className="row"
-                ),
-                ####################
-                # / RICHNESS GRAPH #
-                ####################
-                ##################
-                # CAG SIZE GRAPH #
-                ##################
-                html.Div(
-                    [
-                        graph_div("cag-size", 'cag-size-graph'),
-                        html.Div(
-                            cag_size_slider(
-                                "cag-size-slider"
-                            ) + nbins_slider(
-                                "cag-nbinsx-slider"
-                            ) + log_scale_radio_button(
-                                "cag-size-log"
-                            ),
-                            className="col-sm-4 my-auto",
-                        )
-                    ],
-                    className="row"
-                ),
-                ####################
-                # / CAG SIZE GRAPH #
-                ####################
-                ####################
-                # ORDINATION GRAPH #
-                ####################
-                html.Div(
-                    [
-                        graph_div("ordination", 'ordination-graph'),
-                        html.Div(
-                            [
-                                html.Label('Ordination Method'),
-                                dcc.Dropdown(
-                                    id="ordination-algorithm",
-                                    options=[
-                                        {'label': 'PCA', 'value': 'pca'},
-                                        {'label': 't-SNE', 'value': 'tsne'},
-                                    ],
-                                    value='pca'
-                                ),
-                                html.Br(),
-                                html.Label('Metadata Label'),
-                                dcc.Dropdown(
-                                    id="ordination-metadata",
-                                    options=[
-                                        {'label': 'None', 'value': 'none'},
-                                    ] + [
-                                        {'label': f, "value": f}
-                                        for f in metadata_fields
-                                    ],
-                                    value='none'
-                                ),
+                            value='prop_reads_aligned'
+                        ),
+                        html.Br(),
+                        html.Label('Plot Type'),
+                        dcc.Dropdown(
+                            id="richness-type-dropdown",
+                            options=[
+                                {'label': 'Points', 'value': 'scatter'},
+                                {'label': 'Histogram', 'value': 'hist'},
                             ],
-                            className="col-sm-4 my-auto",
-                        )
+                            value='scatter'
+                        ),
                     ],
-                    className="row"
-                ),
-                ######################
-                # / ORDINATION GRAPH #
-                ######################
-                #########################
-                # CAG SUMMARY HISTOGRAM #
-                #########################
+                    className="col-sm-4 my-auto",
+                )
+            ]
+        ),
+        ####################
+        # / RICHNESS GRAPH #
+        ####################        
+        ##################
+        # CAG SIZE GRAPH #
+        ##################
+        card_wrapper(
+            "CAG Size Summary",
+            [
+                graph_div("cag-size", 'cag-size-graph'),
+                html.Div(
+                    cag_size_slider(
+                        "cag-size-slider"
+                    ) + nbins_slider(
+                        "cag-nbinsx-slider"
+                    ) + log_scale_radio_button(
+                        "cag-size-log"
+                    ),
+                    className="col-sm-4 my-auto",
+                )
+            ]
+        ),
+        ####################
+        # / CAG SIZE GRAPH #
+        ####################
+        ####################
+        # ORDINATION GRAPH #
+        ####################
+        card_wrapper(
+            "Ordination Analysis",
+            [
+                graph_div("ordination", 'ordination-graph'),
                 html.Div(
                     [
-                        graph_div("cag-summary-histogram", 'cag-summary-histogram-graph'),
-                        html.Div(
-                            cag_metric_dropdown(
-                                "cag-summary-histogram-metric-dropdown",
-                                default_value="size"
-                            ) + cag_size_slider(
-                                "cag-summary-histogram-size-slider"
-                            ) + cag_prevalence_slider(
-                                "cag-summary-histogram-prevalence-slider"
-                            ) + cag_abundance_slider(
-                                "cag-summary-histogram-abundance-slider"
-                            ) + nbins_slider(
-                                "cag-summary-histogram-nbinsx-slider"
-                            ) + log_scale_radio_button(
-                                "cag-summary-histogram-log"
-                            ),
-                            className="col-sm-4 my-auto",
-                        )
+                        html.Label('Ordination Method'),
+                        dcc.Dropdown(
+                            id="ordination-algorithm",
+                            options=[
+                                {'label': 'PCA', 'value': 'pca'},
+                                {'label': 't-SNE', 'value': 'tsne'},
+                            ],
+                            value='pca'
+                        ),
+                        html.Br(),
+                        html.Label('Metadata Label'),
+                        dcc.Dropdown(
+                            id="ordination-metadata",
+                            options=[
+                                {'label': 'None', 'value': 'none'},
+                            ] + [
+                                {'label': f, "value": f}
+                                for f in metadata_fields
+                            ],
+                            value='none'
+                        ),
                     ],
-                    className="row"
-                ),
-                ###########################
-                # / CAG SUMMARY HISTOGRAM #
-                ###########################
-                #######################
-                # CAG SUMMARY SCATTER #
-                #######################
-                html.Div(
-                    [
-                        graph_div("cag-summary-scatter", 'cag-summary-scatter-graph'), 
-                        html.Div(
-                            cag_metric_dropdown(
-                                "cag-summary-scatter-xaxis-dropdown",
-                                label_text="X-axis",
-                                default_value="size"
-                            ) + cag_metric_dropdown(
-                                "cag-summary-scatter-yaxis-dropdown",
-                                label_text="Y-axis",
-                                default_value="mean_abundance"
-                            ) + cag_size_slider(
-                                "cag-summary-scatter-size-slider"
-                            ) + cag_prevalence_slider(
-                                "cag-summary-scatter-prevalence-slider"
-                            ) + cag_abundance_slider(
-                                "cag-summary-scatter-abundance-slider"
-                            ),
-                            className="col-sm-4 my-auto",
-                        )
-                    ],
-                    className="row"
-                ),
-                #########################
-                # / CAG SUMMARY SCATTER #
-                #########################
+                    className="col-sm-4 my-auto",
+                )
             ],
-            className="container"
-        )
-    ]
+        ),
+        ######################
+        # / ORDINATION GRAPH #
+        ######################
+        #########################
+        # CAG SUMMARY HISTOGRAM #
+        #########################
+        card_wrapper(
+            "CAG Summary Histogram",
+            [
+                graph_div("cag-summary-histogram", 'cag-summary-histogram-graph'),
+                html.Div(
+                    cag_metric_dropdown(
+                        "cag-summary-histogram-metric-dropdown",
+                        default_value="size"
+                    ) + cag_size_slider(
+                        "cag-summary-histogram-size-slider"
+                    ) + cag_prevalence_slider(
+                        "cag-summary-histogram-prevalence-slider"
+                    ) + cag_abundance_slider(
+                        "cag-summary-histogram-abundance-slider"
+                    ) + nbins_slider(
+                        "cag-summary-histogram-nbinsx-slider"
+                    ) + log_scale_radio_button(
+                        "cag-summary-histogram-log"
+                    ),
+                    className="col-sm-4 my-auto",
+                )
+            ]
+        ),
+        ###########################
+        # / CAG SUMMARY HISTOGRAM #
+        ###########################
+        #######################
+        # CAG SUMMARY SCATTER #
+        #######################
+        card_wrapper(
+            "CAG Summary Scatterplot",
+            [
+                graph_div("cag-summary-scatter", 'cag-summary-scatter-graph'), 
+                html.Div(
+                    cag_metric_dropdown(
+                        "cag-summary-scatter-xaxis-dropdown",
+                        label_text="X-axis",
+                        default_value="size"
+                    ) + cag_metric_dropdown(
+                        "cag-summary-scatter-yaxis-dropdown",
+                        label_text="Y-axis",
+                        default_value="mean_abundance"
+                    ) + cag_size_slider(
+                        "cag-summary-scatter-size-slider"
+                    ) + cag_prevalence_slider(
+                        "cag-summary-scatter-prevalence-slider"
+                    ) + cag_abundance_slider(
+                        "cag-summary-scatter-abundance-slider"
+                    ),
+                    className="col-sm-4 my-auto",
+                )
+            ]
+        ),
+        #########################
+        # / CAG SUMMARY SCATTER #
+        #########################
+    ],
+    className="container"
 )
 
 # Default figure layout
