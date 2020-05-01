@@ -112,6 +112,25 @@ def graph_div(anchor_id, graph_id):
     )
 
 
+def plot_type_dropdown(
+    dropdown_id, 
+    label_text='Plot Type',
+    options=[
+        {'label': 'Points', 'value': 'scatter'},
+        {'label': 'Histogram', 'value': 'hist'},
+    ],
+    default_value="scatter"
+):
+    return [
+        html.Label(label_text),
+        dcc.Dropdown(
+            id=dropdown_id,
+            options=options,
+            value=default_value
+        ),
+        html.Br(),
+    ]
+
 def cag_size_slider(slider_id, label_text='CAG Size Filter'):
     return [
         html.Label(label_text),
@@ -283,16 +302,9 @@ app.layout = html.Div(
                             value='prop_reads_aligned'
                         ),
                         html.Br(),
-                        html.Label('Plot Type'),
-                        dcc.Dropdown(
-                            id="richness-type-dropdown",
-                            options=[
-                                {'label': 'Points', 'value': 'scatter'},
-                                {'label': 'Histogram', 'value': 'hist'},
-                            ],
-                            value='scatter'
-                        ),
-                    ],
+                    ] + plot_type_dropdown(
+                        "richness-type-dropdown"
+                    ),
                     className="col-sm-4 my-auto",
                 )
             ]
@@ -352,7 +364,18 @@ app.layout = html.Div(
                             ],
                             value='none'
                         ),
-                    ],
+                        html.Br(),
+                    ] + plot_type_dropdown(
+                        "ordination-type-dropdown",
+                        label_text="Metadata Overlay",
+                        options=[
+                            {'label': 'Color', 'value': 'color'},
+                            {'label': 'Boxplot', 'value': 'boxplot'},
+                            {'label': 'Scatter', 'value': 'scatter'},
+                        ],
+                        default_value="color"
+
+                    ),
                     className="col-sm-4 my-auto",
                 )
             ],
@@ -552,8 +575,9 @@ def draw_cag_size(selected_range, nbinsx, log_scale):
     [
         Input('ordination-algorithm', 'value'),
         Input('ordination-metadata', 'value'),
+        Input('ordination-type-dropdown', 'value'),
     ])
-def draw_ordination(algorithm, metadata):
+def draw_ordination(algorithm, metadata, plot_type):
 
     if algorithm == "pca":
         plot_df = pca_df
@@ -561,7 +585,7 @@ def draw_ordination(algorithm, metadata):
         assert algorithm == "tsne"
         plot_df = tsne_df
 
-    if metadata == "none":
+    if metadata is None or metadata == "none":
 
         fig = go.Figure(
             data=go.Scatter(
@@ -574,38 +598,80 @@ def draw_ordination(algorithm, metadata):
             ),
         )
 
+        fig.update_layout(
+            xaxis_title=plot_df.columns.values[0],
+            yaxis_title=plot_df.columns.values[1],
+        )
+
     else:
 
+        # Add the metadata to the table
         plot_df[metadata] = manifest_df[metadata]
 
-        cmap = dict(zip(
-            plot_df[metadata].unique(),
-            sns.color_palette(
-                "colorblind",
-                plot_df[metadata].unique().shape[0],
-            ).as_hex()
-        ))
+        # Overlay the metadata as color
+        if plot_type == "color":
 
-        fig = go.Figure()
+            cmap = dict(zip(
+                plot_df[metadata].unique(),
+                sns.color_palette(
+                    "colorblind",
+                    plot_df[metadata].unique().shape[0],
+                ).as_hex()
+            ))
 
-        for group_name, group_plot_df in plot_df.groupby(metadata):
-            fig.add_trace(
-                go.Scatter(
-                    x=group_plot_df[plot_df.columns.values[0]],
-                    y=group_plot_df[plot_df.columns.values[1]],
-                    ids=group_plot_df.index.values,
-                    text=group_plot_df.index.values,
-                    hoverinfo="text",
-                    mode="markers",
-                    marker={
-                        "color": cmap[group_name]
-                    },
-                    legendgroup=metadata,
-                    name=group_name,
-                ),
+            fig = go.Figure()
+
+            for group_name, group_plot_df in plot_df.groupby(metadata):
+                fig.add_trace(
+                    go.Scatter(
+                        x=group_plot_df[plot_df.columns.values[0]],
+                        y=group_plot_df[plot_df.columns.values[1]],
+                        ids=group_plot_df.index.values,
+                        text=group_plot_df.index.values,
+                        hoverinfo="text",
+                        mode="markers",
+                        marker={
+                            "color": cmap[group_name]
+                        },
+                        legendgroup=metadata,
+                        name=group_name,
+                    ),
+                )
+
+            fig.update_layout(
+                xaxis_title=plot_df.columns.values[0],
+                yaxis_title=plot_df.columns.values[1],
+                showlegend=True,
             )
 
-        fig.update_layout(showlegend=True)
+        # Make a boxplot by metadata
+        elif plot_type == "boxplot":
+
+            fig = px.box(
+                plot_df,
+                x=metadata, 
+                y=plot_df.columns.values[0]
+            )
+
+            fig.update_layout(
+                xaxis_title=metadata,
+                yaxis_title=plot_df.columns.values[0],
+            )
+
+        # Make a scatter plot with the metadata
+        else:
+            assert plot_type == "scatter"
+
+            fig = px.scatter(
+                plot_df,
+                x=metadata, 
+                y=plot_df.columns.values[0]
+            )
+
+            fig.update_layout(
+                xaxis_title=metadata,
+                yaxis_title=plot_df.columns.values[0],
+            )
 
     fig.update_layout(
         title={
@@ -615,8 +681,6 @@ def draw_ordination(algorithm, metadata):
             'xanchor': 'center',
             'yanchor': 'top',
         },
-        xaxis_title=plot_df.columns.values[0],
-        yaxis_title=plot_df.columns.values[1],
         template="simple_white"
     )
 
