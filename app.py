@@ -951,12 +951,12 @@ def draw_ordination(
         # Histogram on the top panel
         fig.add_trace(
             go.Histogram(
-                x=plot_df[plot_df.columns.values[0]],
+                x=plot_df[plot_df.columns.values[primary_pc - 1]],
             ),
             row=1, col=1
         )
         fig.update_xaxes(
-            title_text=plot_df.columns.values[0],
+            title_text=plot_df.columns.values[primary_pc - 1],
             row=1, col=1
         )
         fig.update_yaxes(
@@ -966,12 +966,13 @@ def draw_ordination(
         # Scatter on the bottom panel
         fig.add_trace(
             go.Scatter(
-                x=plot_df[plot_df.columns.values[0]],
-                y=plot_df[plot_df.columns.values[1]],
+                x=plot_df[plot_df.columns.values[primary_pc - 1]],
+                y=plot_df[plot_df.columns.values[secondary_pc - 1]],
                 ids=plot_df.index.values,
                 text=plot_df.index.values,
                 hoverinfo="text",
                 mode="markers",
+                marker_color="blue"
             ),
             row=2, col=1
         )
@@ -1047,7 +1048,7 @@ def draw_ordination(
                 fig.add_trace(
                     go.Box(
                         x=metadata_plot_df[
-                            plot_df.columns.values[0]
+                            plot_df.columns.values[primary_pc - 1]
                         ],
                         name=metadata_label,
                         marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
@@ -1058,10 +1059,10 @@ def draw_ordination(
                 fig.add_trace(
                     go.Scatter(
                         x=metadata_plot_df[
-                            plot_df.columns.values[0]
+                            plot_df.columns.values[primary_pc - 1]
                         ],
                         y=metadata_plot_df[
-                            plot_df.columns.values[1]
+                            plot_df.columns.values[secondary_pc - 1]
                         ],
                         name=metadata_label,
                         ids=plot_df.index.values,
@@ -1078,7 +1079,7 @@ def draw_ordination(
             fig.add_trace(
                 go.Scatter(
                     x=plot_df[
-                        plot_df.columns.values[0]
+                        plot_df.columns.values[primary_pc - 1]
                     ],
                     y=plot_df[metadata],
                     ids=plot_df.index.values,
@@ -1093,8 +1094,8 @@ def draw_ordination(
             # Scatter on the bottom panel
             fig.add_trace(
                 go.Scatter(
-                    x=plot_df[plot_df.columns.values[0]],
-                    y=plot_df[plot_df.columns.values[1]],
+                    x=plot_df[plot_df.columns.values[primary_pc - 1]],
+                    y=plot_df[plot_df.columns.values[secondary_pc - 1]],
                     ids=plot_df.index.values,
                     text=plot_df[metadata],
                     hoverinfo="text",
@@ -1105,11 +1106,11 @@ def draw_ordination(
             )
 
     fig.update_xaxes(
-        title_text=plot_df.columns.values[0],
+        title_text=plot_df.columns.values[primary_pc - 1],
         row=2, col=1
     )
     fig.update_yaxes(
-        title_text=plot_df.columns.values[1],
+        title_text=plot_df.columns.values[secondary_pc - 1],
         row=2, col=1
     )
 
