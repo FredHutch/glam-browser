@@ -995,10 +995,6 @@ def draw_ordination(
             ),
             row=1, col=1
         )
-        fig.update_xaxes(
-            title_text=plot_df.columns.values[primary_pc - 1],
-            row=1, col=1
-        )
         fig.update_yaxes(
             title_text="Number of Specimens",
             row=1, col=1
@@ -1145,6 +1141,16 @@ def draw_ordination(
                 row=2, col=1
             )
 
+        fig.update_yaxes(
+            title_text=metadata,
+            row=1, col=1
+        )
+
+
+    fig.update_xaxes(
+        title_text=plot_df.columns.values[primary_pc - 1],
+        row=1, col=1
+    )
     fig.update_xaxes(
         title_text=plot_df.columns.values[primary_pc - 1],
         row=2, col=1
