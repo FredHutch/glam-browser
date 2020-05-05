@@ -197,21 +197,22 @@ def basic_slider(
     included=True
 ):
     return [
-        html.Label(label_text),
-        dcc.Slider(
-            id=slider_id,
-            min=min_value,
-            max=max_value,
-            step=step_value,
-            marks={
-                str(n): str(n)
-                for n in marks
-            },
-            value=default_value,
-            included=included
-        ),
-        html.Br()
-
+        html.Div([
+            html.Label(label_text),
+            dcc.Slider(
+                id=slider_id,
+                min=min_value,
+                max=max_value,
+                step=step_value,
+                marks={
+                    str(n): str(n)
+                    for n in marks
+                },
+                value=default_value,
+                included=included
+            ),
+            html.Br()
+        ], id="%s-div" % slider_id)
     ]
 
 def volcano_parameter_dropdown(
@@ -489,16 +490,6 @@ app.layout = html.Div(
                 graph_div("ordination", 'ordination-graph'),
                 html.Div(
                     [
-                        html.Label('Ordination Method'),
-                        dcc.Dropdown(
-                            id="ordination-algorithm",
-                            options=[
-                                {'label': 'PCA', 'value': 'pca'},
-                                {'label': 't-SNE', 'value': 'tsne'},
-                            ],
-                            value='pca'
-                        ),
-                        html.Br(),
                         html.Label('Distance Metric'),
                         dcc.Dropdown(
                             id="ordination-metric",
@@ -510,17 +501,27 @@ app.layout = html.Div(
                             value='euclidean'
                         ),
                         html.Br(),
+                        html.Label('Ordination Method'),
+                        dcc.Dropdown(
+                            id="ordination-algorithm",
+                            options=[
+                                {'label': 'PCA', 'value': 'pca'},
+                                {'label': 't-SNE', 'value': 'tsne'},
+                            ],
+                            value='pca'
+                        ),
+                        html.Br(),
                     ] + ordination_pc_slider(
                         "ordination-primary-pc",
-                        'Primary Axis (PCA)',
+                        'Primary Axis',
                         1
                     ) + ordination_pc_slider(
                         "ordination-secondary-pc",
-                        'Secondary Axis (PCA)',
+                        'Secondary Axis',
                         2
                     ) + basic_slider(
                         "ordination-tsne-perplexity",
-                        "Perplexity (t-SNE)",
+                        "Perplexity",
                         max_value=100,
                         default_value=30,
                         marks=[0, 10, 20, 30, 50, 70, 100],
@@ -904,6 +905,39 @@ def run_tsne(df, perplexity=30, n_components=2):
         ]
     )
 
+# LOGIC FOR SHOW/HIDE IN ORDINATION CARD
+@app.callback(
+    Output('ordination-primary-pc-div', 'style'),
+    [
+        Input('ordination-algorithm', 'value'),
+    ])
+def show_hide_ordination_primary_pc(algorithm):
+    if algorithm == "pca":
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
+@app.callback(
+    Output('ordination-secondary-pc-div', 'style'),
+    [
+        Input('ordination-algorithm', 'value'),
+    ])
+def show_hide_ordination_secondary_pc(algorithm):
+    if algorithm == "pca":
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
+@app.callback(
+    Output('ordination-tsne-perplexity-div', 'style'),
+    [
+        Input('ordination-algorithm', 'value'),
+    ])
+def show_hide_ordination_perplexity(algorithm):
+    if algorithm == "pca":
+        return {'display': 'none'}
+    else:
+        return {'display': 'block'}
 
 @app.callback(
     Output('ordination-graph', 'figure'),
