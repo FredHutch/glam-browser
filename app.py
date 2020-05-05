@@ -938,6 +938,10 @@ def draw_ordination(
             perplexity=perplexity
         )
 
+        # Always plot the first and second axes
+        primary_pc = 1
+        secondary_pc = 2
+
     # Make a plot with two panels, one on top of the other, sharing the x-axis
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True
