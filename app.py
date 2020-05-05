@@ -179,13 +179,11 @@ def ordination_pc_slider(
             1,
             min(
                 manifest_df.shape[0], 
-                10
+                13
             ),
-            max(
-                1,
-                int(manifest_df.shape[0] / 4)
-            )
-        )
+            2
+        ),
+        included=False
     )
 
 def basic_slider(
@@ -195,7 +193,8 @@ def basic_slider(
     max_value=10,
     step_value=1,
     default_value=1,
-    marks=[]
+    marks=[],
+    included=True
 ):
     return [
         html.Label(label_text),
@@ -208,7 +207,8 @@ def basic_slider(
                 str(n): str(n)
                 for n in marks
             },
-            value=default_value
+            value=default_value,
+            included=included
         ),
         html.Br()
 
@@ -523,6 +523,8 @@ app.layout = html.Div(
                         "Perplexity (t-SNE)",
                         max_value=100,
                         default_value=30,
+                        marks=[0, 10, 20, 30, 50, 70, 100],
+                        included=False,
                     ) + metadata_field_dropdown(
                         "ordination-metadata"
                     ),
