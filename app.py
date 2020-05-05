@@ -8,16 +8,22 @@ import dash_core_components as dcc
 import dash_html_components as html
 import plotly.express as px
 import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 from dash.dependencies import Input, Output
 import numpy as np
 import os
 import pandas as pd
 import seaborn as sns
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 # Read in data from the HDF5 defined in `HDF5_fp`
 hdf5_fp = os.getenv("HDF5_FP")
 assert os.path.exists(hdf5_fp), "Path does not exist: {}".format(hdf5_fp)
 with pd.HDFStore(hdf5_fp, "r") as store:
+
+    # Table with summary of the entire experiment
+    experiment_df = pd.read_hdf(store, "/summary/experiment")
 
     # Table for RICHNESS GRAPH
     richness_df = pd.read_hdf(store, "/summary/all")
@@ -28,22 +34,14 @@ with pd.HDFStore(hdf5_fp, "r") as store:
     # Specimen metadata table (manifest provided by user)
     manifest_df = pd.read_hdf(store, "/manifest")
 
-    # Precomputed PCA (on specimens)
-    pca_df = pd.read_hdf(store, "/ordination/pca")
-
-    # Precomputed t-SNE (on specimens)
-    tsne_df = pd.read_hdf(store, "/ordination/tsne")
+    # Pairwise distance tables
+    distance_df_dict = {
+        metric: pd.read_hdf(store, "/distances/%s" % metric).set_index("specimen")
+        for metric in ["euclidean", "aitchison", "braycurtis", "jaccard"]
+    }
 
     # Corncob results (for volcano plot)
-    if "/stats/cag/corncob_wide" in store:
-        corncob_df = pd.read_hdf(store, "/stats/cag/corncob_wide")
-    elif "/stats/cag/corncob" in store:
-        corncob_df = pd.read_hdf(store, "/stats/cag/corncob")
-    else:
-        corncob_df = None
-
-    # CAG abundance
-    cag_abundance_df = pd.read_hdf(store, "/abund/cag/wide")
+    corncob_df = pd.read_hdf(store, "/stats/cag/corncob")
 
 # Precompute some useful metrics
 
@@ -57,7 +55,7 @@ cag_summary_df = cag_summary_df.apply(
     lambda c: c.apply(
         lambda i: '{:g}'.format(float('{:.4g}'.format(i)))
     ) if c.name in [
-        "std_abundance", "prevalence", "mean_abundance"
+        "std_abundance", "prevalence", "mean_abundance", "entropy"
     ] else c
 )
 
@@ -72,13 +70,6 @@ manifest_df.set_index("specimen", inplace=True)
 
 # Metadata fields found in the manifest
 metadata_fields = [n for n in manifest_df.columns.values if n not in ["R1", "R2", "I1", "I2"]]
-
-# Set index on ordination tables
-pca_df.set_index("specimen", inplace=True)
-tsne_df.set_index("specimen", inplace=True)
-
-# Set index on CAG abundance table
-cag_abundance_df.set_index("CAG", inplace=True)
 
 # Calculate the -log10(p_value)
 corncob_df = corncob_df.assign(
@@ -118,7 +109,8 @@ def card_wrapper(card_title, card_body):
         className="card"
     )
 
-def graph_div(anchor_id, graph_id):
+
+def graph_div(anchor_id, graph_id, className="col-sm-8"):
     """Return a div containing a dcc.Graph and anchor, all within a col-sm-8."""
     return html.Div(
         [
@@ -127,7 +119,7 @@ def graph_div(anchor_id, graph_id):
                 id=graph_id
             )
         ],
-        className="col-sm-8",
+        className=className,
     )
 
 
@@ -170,6 +162,56 @@ def plot_type_dropdown(
             value=default_value
         ),
         html.Br(),
+    ]
+
+def ordination_pc_slider(
+    slider_id,
+    label_text,
+    default_value
+):
+    return basic_slider(
+        slider_id,
+        label_text,
+        min_value=1,
+        max_value=min(manifest_df.shape[0], 10),
+        default_value=default_value,
+        marks = range(
+            1,
+            min(
+                manifest_df.shape[0], 
+                10
+            ),
+            max(
+                1,
+                int(manifest_df.shape[0] / 4)
+            )
+        )
+    )
+
+def basic_slider(
+    slider_id,
+    label_text,
+    min_value=1,
+    max_value=10,
+    step_value=1,
+    default_value=1,
+    marks=[]
+):
+    return [
+        html.Label(label_text),
+        dcc.Slider(
+            id=slider_id,
+            min=min_value,
+            max=max_value,
+            step=step_value,
+            marks={
+                str(n): str(n)
+                for n in marks
+            },
+            value=default_value
+        ),
+        html.Br()
+
     ]
 
 def volcano_parameter_dropdown(
@@ -355,6 +397,7 @@ app = dash.Dash(
     external_stylesheets=external_stylesheets
 )
 app.title = "GLAM Browser"
+app.config.suppress_callback_exceptions = True
 
 app.layout = html.Div(
     children=[
@@ -456,18 +499,32 @@ app.layout = html.Div(
                             value='pca'
                         ),
                         html.Br(),
-                    ] + metadata_field_dropdown(
+                        html.Label('Distance Metric'),
+                        dcc.Dropdown(
+                            id="ordination-metric",
+                            options=[
+                                {'label': 'Euclidean', 'value': 'euclidean'},
+                                {'label': 'Aitchison', 'value': 'aitchison'},
+                                {'label': 'Braycurtis', 'value': 'braycurtis'},
+                            ],
+                            value='euclidean'
+                        ),
+                        html.Br(),
+                    ] + ordination_pc_slider(
+                        "ordination-primary-pc",
+                        'Primary Axis (PCA)',
+                        1
+                    ) + ordination_pc_slider(
+                        "ordination-secondary-pc",
+                        'Secondary Axis (PCA)',
+                        2
+                    ) + basic_slider(
+                        "ordination-tsne-perplexity",
+                        "Perplexity (t-SNE)",
+                        max_value=100,
+                        default_value=30,
+                    ) + metadata_field_dropdown(
                         "ordination-metadata"
-                    ) + plot_type_dropdown(
-                        "ordination-type-dropdown",
-                        label_text="Metadata Overlay",
-                        options=[
-                            {'label': 'Color', 'value': 'color'},
-                            {'label': 'Boxplot', 'value': 'boxplot'},
-                            {'label': 'Scatter', 'value': 'scatter'},
-                        ],
-                        default_value="color"
-
                     ),
                     className="col-sm-4 my-auto",
                 )
@@ -476,129 +533,195 @@ app.layout = html.Div(
         ######################
         # / ORDINATION GRAPH #
         ######################
-        #########################
-        # CAG SUMMARY HISTOGRAM #
-        #########################
-        card_wrapper(
-            "CAG Summary Histogram",
-            [
-                graph_div("cag-summary-histogram", 'cag-summary-histogram-graph'),
-                html.Div(
-                    cag_metric_dropdown(
-                        "cag-summary-histogram-metric-dropdown",
-                        default_value="size"
-                    ) + cag_size_slider(
-                        "cag-summary-histogram-size-slider"
-                    ) + cag_prevalence_slider(
-                        "cag-summary-histogram-prevalence-slider"
-                    ) + cag_abundance_slider(
-                        "cag-summary-histogram-abundance-slider"
-                    ) + nbins_slider(
-                        "cag-summary-histogram-nbinsx-slider"
-                    ) + log_scale_radio_button(
-                        "cag-summary-histogram-log"
-                    ),
-                    className="col-sm-4 my-auto",
-                )
-            ]
-        ),
-        ###########################
-        # / CAG SUMMARY HISTOGRAM #
-        ###########################
-        #######################
-        # CAG SUMMARY SCATTER #
-        #######################
-        card_wrapper(
-            "CAG Summary Scatterplot",
-            [
-                graph_div("cag-summary-scatter", 'cag-summary-scatter-graph'), 
-                html.Div(
-                    cag_metric_dropdown(
-                        "cag-summary-scatter-xaxis-dropdown",
-                        label_text="X-axis",
-                        default_value="size"
-                    ) + cag_metric_dropdown(
-                        "cag-summary-scatter-yaxis-dropdown",
-                        label_text="Y-axis",
-                        default_value="mean_abundance"
-                    ) + cag_size_slider(
-                        "cag-summary-scatter-size-slider"
-                    ) + cag_prevalence_slider(
-                        "cag-summary-scatter-prevalence-slider"
-                    ) + cag_abundance_slider(
-                        "cag-summary-scatter-abundance-slider"
-                    ),
-                    className="col-sm-4 my-auto",
-                )
-            ]
-        ),
+        # #########################
+        # # CAG SUMMARY HISTOGRAM #
+        # #########################
+        # card_wrapper(
+        #     "CAG Summary Histogram",
+        #     [
+        #         graph_div("cag-summary-histogram", 'cag-summary-histogram-graph'),
+        #         html.Div(
+        #             cag_metric_dropdown(
+        #                 "cag-summary-histogram-metric-dropdown",
+        #                 default_value="size"
+        #             ) + cag_size_slider(
+        #                 "cag-summary-histogram-size-slider"
+        #             ) + cag_prevalence_slider(
+        #                 "cag-summary-histogram-prevalence-slider"
+        #             ) + cag_abundance_slider(
+        #                 "cag-summary-histogram-abundance-slider"
+        #             ) + nbins_slider(
+        #                 "cag-summary-histogram-nbinsx-slider"
+        #             ) + log_scale_radio_button(
+        #                 "cag-summary-histogram-log"
+        #             ),
+        #             className="col-sm-4 my-auto",
+        #         )
+        #     ]
+        # ),
+        # ###########################
+        # # / CAG SUMMARY HISTOGRAM #
+        # ###########################
+        # #######################
+        # # CAG SUMMARY SCATTER #
+        # #######################
+        # card_wrapper(
+        #     "CAG Summary Scatterplot",
+        #     [
+        #         graph_div("cag-summary-scatter", 'cag-summary-scatter-graph'), 
+        #         html.Div(
+        #             cag_metric_dropdown(
+        #                 "cag-summary-scatter-xaxis-dropdown",
+        #                 label_text="X-axis",
+        #                 default_value="size"
+        #             ) + cag_metric_dropdown(
+        #                 "cag-summary-scatter-yaxis-dropdown",
+        #                 label_text="Y-axis",
+        #                 default_value="mean_abundance"
+        #             ) + cag_size_slider(
+        #                 "cag-summary-scatter-size-slider"
+        #             ) + cag_prevalence_slider(
+        #                 "cag-summary-scatter-prevalence-slider"
+        #             ) + cag_abundance_slider(
+        #                 "cag-summary-scatter-abundance-slider"
+        #             ),
+        #             className="col-sm-4 my-auto",
+        #         )
+        #     ]
+        # ),
         #########################
         # / CAG SUMMARY SCATTER #
         #########################
-        ################
-        # VOLCANO PLOT #
-        ################
-        card_wrapper(
-            "Association Screening",
-            [
-                graph_div("volcano", 'volcano-graph'), 
-                html.Div(
-                    volcano_parameter_dropdown(
-                        "volcano-parameter-dropdown",
-                    ) + volcano_pvalue_slider(
-                        "volcano-pvalue-slider",
-                    ),
-                    className="col-sm-4 my-auto",
-                )
-            ]
-        ),
-        ##################
-        # / VOLCANO PLOT #
-        ##################
-        ###################
-        # SINGLE CAG PLOT #
-        ###################
-        card_wrapper(
-            "Individual CAG Abundance",
-            [
-                graph_div("single-cag", 'single-cag-graph'), 
-                html.Div(
-                    [
-                        html.Label("CAG"),
-                        dcc.Dropdown(
-                            id="single-cag-selector",
-                            options=[
-                                {'label': 'CAG {}'.format(cag_id), 'value': str(cag_id)}
-                                for cag_id in cag_summary_df["CAG"].values
-                            ],
-                            placeholder="Select a CAG",
-                        ),
-                        html.Br(),
-                    ] + metadata_field_dropdown(
-                        "single-cag-xaxis",
-                        label_text="X-axis",
-                        default_value=metadata_fields[0]
-                    ) + plot_type_dropdown(
-                        "single-cag-plot-type",
-                        options = [
-                            {'label': 'Points', 'value': 'scatter'},
-                            {'label': 'Line', 'value': 'line'},
-                            {'label': 'Boxplot', 'value': 'boxplot'},
-                        ]
-                    ) + metadata_field_dropdown(
-                        "single-cag-color",
-                        label_text="Color",
-                    ) + metadata_field_dropdown(
-                        "single-cag-facet",
-                        label_text="Facet",
-                    ),
-                    className="col-sm-4 my-auto",
-                )
-            ]
-        ),
+        # ###################
+        # # CAG DETAIL CARD #
+        # ###################
+        # html.Div(
+        #     [
+        #         html.Div(
+        #             [
+        #                 "CAG Details"
+        #             ],
+        #             className="card-header"
+        #         ),
+        #         html.Div(
+        #             [
+        #                 graph_div("cag-detail-tax", 'cag-detail-tax-graph', className="col-sm-12"), 
+        #             ],
+        #             className="row"
+        #         ),
+        #         html.Div(
+        #             [
+        #                 graph_div("cag-detail-heatmap", 'cag-detail-heatmap-graph'), 
+        #                 html.Div(
+        #                     metadata_field_dropdown(
+        #                         "cag-detail-heatmap-color-primary",
+        #                         label_text="Color By (primary)",
+        #                     ) + metadata_field_dropdown(
+        #                         "cag-detail-heatmap-color-secondary",
+        #                         label_text="Color By (secondary)",
+        #                     ) + metadata_field_dropdown(
+        #                         "cag-detail-heatmap-color-tertiary",
+        #                         label_text="Color By (tertiary)",
+        #                     ),
+        #                     className="col-sm-4 my-auto",
+        #                 )
+        #             ],
+        #             className="row"
+        #         )
+
+        #     ],
+        #     className="card"
+        # ),
+        # #####################
+        # # / CAG DETAIL CARD #
+        # #####################
+        # ################
+        # # VOLCANO PLOT #
+        # ################
+        # card_wrapper(
+        #     "Association Screening",
+        #     [
+        #         graph_div("volcano", 'volcano-graph'), 
+        #         html.Div(
+        #             volcano_parameter_dropdown(
+        #                 "volcano-parameter-dropdown",
+        #             ) + volcano_pvalue_slider(
+        #                 "volcano-pvalue-slider",
+        #             ),
+        #             className="col-sm-4 my-auto",
+        #         )
+        #     ]
+        # ),
+        # ##################
+        # # / VOLCANO PLOT #
+        # ##################
+        # ###################
+        # # SINGLE CAG PLOT #
+        # ###################
+        # card_wrapper(
+        #     "Individual CAG Abundance",
+        #     [
+        #         graph_div("single-cag", 'single-cag-graph'), 
+        #         html.Div(
+        #             [
+        #                 html.Label("CAG"),
+        #                 dcc.Dropdown(
+        #                     id="single-cag-selector",
+        #                     options=[
+        #                         {'label': 'CAG {}'.format(cag_id), 'value': str(cag_id)}
+        #                         for cag_id in cag_summary_df["CAG"].values
+        #                     ],
+        #                     placeholder="Select a CAG",
+        #                 ),
+        #                 html.Br(),
+        #             ] + metadata_field_dropdown(
+        #                 "single-cag-xaxis",
+        #                 label_text="X-axis",
+        #                 default_value=metadata_fields[0]
+        #             ) + plot_type_dropdown(
+        #                 "single-cag-plot-type",
+        #                 options = [
+        #                     {'label': 'Points', 'value': 'scatter'},
+        #                     {'label': 'Line', 'value': 'line'},
+        #                     {'label': 'Boxplot', 'value': 'boxplot'},
+        #                 ]
+        #             ) + metadata_field_dropdown(
+        #                 "single-cag-color",
+        #                 label_text="Color",
+        #             ) + metadata_field_dropdown(
+        #                 "single-cag-facet",
+        #                 label_text="Facet",
+        #             ),
+        #             className="col-sm-4 my-auto",
+        #         ),
+        #     ]
+        # ),
         #####################
         # / SINGLE CAG PLOT #
         #####################
+        # ########################
+        # # CAG MEMBERSHIP TABLE #
+        # ########################
+        # card_wrapper(
+        #     "CAG Membership",
+        #     [
+        #         html.A(id="cag-membership"),
+        #         dash_table.DataTable(
+        #             id='cag-membership-table',
+        #             columns=[
+        #                 {"name": i, "id": i}
+        #                 for i in gene_annot_df.columns
+        #                 if i not in ["CAG", "abundance", "prevalence"]
+        #             ],
+        #             page_current=0,
+        #             page_size=10,
+        #             page_action='custom'
+        #         )
+        #     ]
+        # ),
+        # ##########################
+        # # / CAG MEMBERSHIP TABLE #
+        # ##########################
     ],
     className="container"
 )
@@ -646,7 +769,8 @@ def draw_richness(selected_metric, selected_type):
             ),
         )
         fig.update_layout(
-            xaxis_title="Number of Reads"
+            xaxis_title="Number of Reads",
+            xaxis_range=[0, richness_df["n_reads"].max() * 1.05],
         )
 
     else:
@@ -671,6 +795,7 @@ def draw_richness(selected_metric, selected_type):
             'xanchor': 'center',
             'yanchor': 'top'
         },
+        yaxis_range=[0, richness_df[selected_metric].max() * 1.05],
         yaxis_title=metric_names[selected_metric], 
         template="simple_white"
     )
@@ -727,25 +852,120 @@ def draw_cag_size(selected_range, nbinsx, log_scale):
 ####################
 # ORDINATION GRAPH #
 ####################
+def run_pca(df):
+    """Dimensionality reduction with PCA."""
+
+    # Initialize the PCA object
+    pca = PCA()
+
+    # Fit to the data
+    pca.fit(df)
+
+    # Make an output DataFrame
+    return pd.DataFrame(
+        pca.transform(
+            df
+        ),
+        index=df.index.values,
+        columns=[
+            "PC%d (%s%s)" % (
+                ix + 1,
+                round(100 * r, 1) if r > 0.01 else "%.1E" % (100 * r),
+                '%'
+            )
+            for ix, r in enumerate(
+                pca.explained_variance_ratio_
+            )
+        ]
+    )
+
+def run_tsne(df, perplexity=30, n_components=2):
+    """Dimensionality reduction with t-SNE."""
+
+    # Initialize the TSNE object
+    tsne = TSNE(
+        n_components=n_components,
+        perplexity=perplexity,
+    )
+
+    # Make an output DataFrame with the transformed data
+    return pd.DataFrame(
+        tsne.fit_transform(
+            df
+        ),
+        index=df.index.values,
+        columns=[
+            "t-SNE %d" % (
+                ix + 1
+            )
+            for ix in range(n_components)
+        ]
+    )
+
+
 @app.callback(
     Output('ordination-graph', 'figure'),
     [
         Input('ordination-algorithm', 'value'),
+        Input('ordination-metric', 'value'),
+        Input('ordination-primary-pc', 'value'),
+        Input('ordination-secondary-pc', 'value'),
+        Input('ordination-tsne-perplexity', 'value'),
         Input('ordination-metadata', 'value'),
-        Input('ordination-type-dropdown', 'value'),
     ])
-def draw_ordination(algorithm, metadata, plot_type):
+def draw_ordination(
+    algorithm, 
+    metric,
+    primary_pc, 
+    secondary_pc,
+    perplexity,
+    metadata,
+):
+    """Perform ordination and make the display plots."""
+
+    assert metric in distance_df_dict, "Distance metric not found: %s" % metric
 
     if algorithm == "pca":
-        plot_df = pca_df
+        plot_df = run_pca(
+            distance_df_dict[metric]
+        )
+
     else:
-        assert algorithm == "tsne"
-        plot_df = tsne_df
+        assert algorithm == "tsne", "Algorithm not found: %s" % algorithm
 
-    if metadata is None or metadata == "none":
+        plot_df = run_tsne(
+            distance_df_dict[metric],
+            perplexity=perplexity
+        )
 
-        fig = go.Figure(
-            data=go.Scatter(
+    # Make a plot with two panels, one on top of the other, sharing the x-axis
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True
+    )
+
+    # The plot will depend on whether metadata has been selected
+    if metadata == "none":
+
+        # No metadata
+
+        # Histogram on the top panel
+        fig.add_trace(
+            go.Histogram(
+                x=plot_df[plot_df.columns.values[0]],
+            ),
+            row=1, col=1
+        )
+        fig.update_xaxes(
+            title_text=plot_df.columns.values[0],
+            row=1, col=1
+        )
+        fig.update_yaxes(
+            title_text="Number of Specimens",
+            row=1, col=1
+        )
+        # Scatter on the bottom panel
+        fig.add_trace(
+            go.Scatter(
                 x=plot_df[plot_df.columns.values[0]],
                 y=plot_df[plot_df.columns.values[1]],
                 ids=plot_df.index.values,
@@ -753,340 +973,437 @@ def draw_ordination(algorithm, metadata, plot_type):
                 hoverinfo="text",
                 mode="markers",
             ),
-        )
-
-        fig.update_layout(
-            xaxis_title=plot_df.columns.values[0],
-            yaxis_title=plot_df.columns.values[1],
+            row=2, col=1
         )
 
     else:
 
-        # Add the metadata to the table
-        plot_df[metadata] = manifest_df[metadata]
+        # Add the specified metadata to the DataFrame
+        plot_df = plot_df.assign(
+            METADATA = manifest_df[metadata]
+        ).rename(columns={
+            "METADATA": metadata
+        })
 
-        # Overlay the metadata as color
-        if plot_type == "color":
+        # Make a numeric transform of the metadata
+        if plot_df[metadata].apply(
+            lambda n: isinstance(n, float) or isinstance(n, int)
+        ).all():
 
-            cmap = dict(zip(
-                plot_df[metadata].unique(),
-                sns.color_palette(
-                    "colorblind",
-                    plot_df[metadata].unique().shape[0],
-                ).as_hex()
-            ))
+            # The metadata is already numeric
+            plot_df = plot_df.assign(
+                METADATA_FLOAT = plot_df[metadata]
+            )
 
-            fig = go.Figure()
+        # Try to convert to datetime
+        elif pd.to_datetime(plot_df[metadata], errors="coerce").isnull().sum() == 0:
+            plot_df = plot_df.assign(
+                METADATA_FLOAT = pd.to_datetime(
+                    plot_df[metadata], 
+                    errors="raise"
+                ).apply(str)
+            )
 
-            for group_name, group_plot_df in plot_df.groupby(metadata):
+        # Treat as categorical
+        else:
+            # Assign a rank order
+            rank_order = {
+                n: ix
+                for ix, n in enumerate(plot_df[metadata].drop_duplicates().sort_values().values)
+            }
+            plot_df = plot_df.assign(
+                METADATA_FLOAT = plot_df[metadata].apply(rank_order.get)
+            )
+
+        # Set up a metadata color map depending on how many distinct values
+        # there are. For small numbers, use "colorblind", otherwise "coolwarm"
+        if plot_df["METADATA_FLOAT"].unique().shape[0] <= 5:
+            palette_name = "colorblind"
+            
+        else:
+            palette_name = "coolwarm"
+
+        # Here is the actual color map
+        cmap = dict(zip(
+            plot_df["METADATA_FLOAT"].drop_duplicates().sort_values().values,
+            sns.color_palette(
+                palette_name,
+                plot_df["METADATA_FLOAT"].unique().shape[0]
+            ).as_hex()
+        ))
+
+        # Now add that color to the plot DataFrame
+        plot_df = plot_df.assign(
+            METADATA_COLOR = plot_df["METADATA_FLOAT"].apply(cmap.get)
+        )
+        assert plot_df["METADATA_COLOR"].isnull().sum() == 0, (plot_df.head(), cmap)
+
+        # Scatterplot or Boxplot on the top panel
+        if plot_df[metadata].unique().shape[0] <= 5:
+
+            # Iterate over each of the metadata groups
+            for metadata_label, metadata_plot_df in plot_df.groupby(metadata):
+                # Boxplot on the upper panel
+                fig.add_trace(
+                    go.Box(
+                        x=metadata_plot_df[
+                            plot_df.columns.values[0]
+                        ],
+                        name=metadata_label,
+                        marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
+                    ),
+                    row=1, col=1
+                )
+                # Scatter on the bottom panel
                 fig.add_trace(
                     go.Scatter(
-                        x=group_plot_df[plot_df.columns.values[0]],
-                        y=group_plot_df[plot_df.columns.values[1]],
-                        ids=group_plot_df.index.values,
-                        text=group_plot_df.index.values,
+                        x=metadata_plot_df[
+                            plot_df.columns.values[0]
+                        ],
+                        y=metadata_plot_df[
+                            plot_df.columns.values[1]
+                        ],
+                        name=metadata_label,
+                        ids=plot_df.index.values,
+                        text=plot_df.index.values,
                         hoverinfo="text",
                         mode="markers",
-                        marker={
-                            "color": cmap[group_name]
-                        },
-                        legendgroup=metadata,
-                        name=group_name,
+                        marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
                     ),
+                    row=2, col=1
                 )
-
-            fig.update_layout(
-                xaxis_title=plot_df.columns.values[0],
-                yaxis_title=plot_df.columns.values[1],
-                showlegend=True,
-            )
-
-        # Make a boxplot by metadata
-        elif plot_type == "boxplot":
-
-            fig = px.box(
-                plot_df,
-                x=metadata, 
-                y=plot_df.columns.values[0]
-            )
-
-            fig.update_layout(
-                xaxis_title=metadata,
-                yaxis_title=plot_df.columns.values[0],
-            )
-
-        # Make a scatter plot with the metadata
+                
         else:
-            assert plot_type == "scatter"
-
-            fig = px.scatter(
-                plot_df,
-                x=metadata, 
-                y=plot_df.columns.values[0]
+            # Scatter on the upper panel
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_df[
+                        plot_df.columns.values[0]
+                    ],
+                    y=plot_df[metadata],
+                    ids=plot_df.index.values,
+                    text=plot_df.index.values,
+                    hoverinfo="text",
+                    mode="markers",
+                    marker_color=plot_df["METADATA_COLOR"],
+                ),
+                row=1, col=1
             )
 
-            fig.update_layout(
-                xaxis_title=metadata,
-                yaxis_title=plot_df.columns.values[0],
+            # Scatter on the bottom panel
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_df[plot_df.columns.values[0]],
+                    y=plot_df[plot_df.columns.values[1]],
+                    ids=plot_df.index.values,
+                    text=plot_df[metadata],
+                    hoverinfo="text",
+                    mode="markers",
+                    marker_color=plot_df["METADATA_COLOR"],
+                ),
+                row=2, col=1
             )
 
-    fig.update_layout(
-        title={
-            'text': "PCA" if algorithm == "pca" else "t-SNE",
-            'y': 0.9,
-            'x': 0.5, 
-            'xanchor': 'center',
-            'yanchor': 'top',
-        },
-        template="simple_white"
+    fig.update_xaxes(
+        title_text=plot_df.columns.values[0],
+        row=2, col=1
     )
-
-    return fig
-
-#########################
-# CAG SUMMARY HISTOGRAM #
-#########################
-@app.callback(
-    Output('cag-summary-histogram-graph', 'figure'),
-    [
-        Input('cag-summary-histogram-metric-dropdown', 'value'),
-        Input('cag-summary-histogram-size-slider', 'value'),
-        Input('cag-summary-histogram-prevalence-slider', 'value'),
-        Input('cag-summary-histogram-abundance-slider', 'value'),
-        Input('cag-summary-histogram-nbinsx-slider', 'value'),
-        Input('cag-summary-histogram-log', 'value'),
-    ])
-def draw_cag_summary_histogram(metric, size_range, prevalence_range, abundance_range, nbinsx, log_scale):
-
-    # Apply the filters
-    plot_df = cag_summary_df.applymap(
-        float
-    ).query(
-        "size >= {}".format(10**size_range[0])
-    ).query(
-        "size <= {}".format(10**size_range[1])
-    ).query(
-        "prevalence >= {}".format(prevalence_range[0])
-    ).query(
-        "prevalence <= {}".format(prevalence_range[1])
-    ).query(
-        "mean_abundance >= {}".format(abundance_range[0])
-    ).query(
-        "mean_abundance <= {}".format(abundance_range[1])
-    ).apply(
-        lambda c: c.apply(np.log10) if c.name == "size" else c
-    )
-
-    axis_names = {
-        "CAG": "CAG ID",
-        "size": "Number of Genes (log10)",
-        "mean_abundance": "Mean Abundance",
-        "std_abundance": "Std. Abundance",
-        "prevalence": "Prevalence",
-    }
-
-    fig = go.Figure(
-        data=[
-            go.Histogram(
-                x=plot_df[metric],
-                nbinsx=nbinsx,
-            )
-        ],
-    )
-
-    if log_scale == "on":
-        fig.update_layout(yaxis_type="log")
-
-    fig.update_layout(
-        xaxis_title=axis_names.get(metric, metric),
-        yaxis_title="Number of CAGs",
-        title={
-            'text': "CAG Summary Histogram",
-            'y': 0.9,
-            'x': 0.5, 
-            'xanchor': 'center',
-            'yanchor': 'top',
-        },
-        template="simple_white"
-    )
-
-    return fig
-
-
-#######################
-# CAG SUMMARY SCATTER #
-#######################
-@app.callback(
-    Output('cag-summary-scatter-graph', 'figure'),
-    [
-        Input('cag-summary-scatter-xaxis-dropdown', 'value'),
-        Input('cag-summary-scatter-yaxis-dropdown', 'value'),
-        Input('cag-summary-scatter-size-slider', 'value'),
-        Input('cag-summary-scatter-prevalence-slider', 'value'),
-        Input('cag-summary-scatter-abundance-slider', 'value'),
-    ])
-def draw_cag_summary_scatter(xaxis, yaxis, size_range, prevalence_range, abundance_range):
-
-    # Apply the filters
-    plot_df = cag_summary_df.applymap(
-        float
-    ).query(
-        "size >= {}".format(10**size_range[0])
-    ).query(
-        "size <= {}".format(10**size_range[1])
-    ).query(
-        "prevalence >= {}".format(prevalence_range[0])
-    ).query(
-        "prevalence <= {}".format(prevalence_range[1])
-    ).query(
-        "mean_abundance >= {}".format(abundance_range[0])
-    ).query(
-        "mean_abundance <= {}".format(abundance_range[1])
-    ).apply(
-        lambda c: c.apply(np.log10) if c.name == "size" else c
-    )
-
-    axis_names = {
-        "CAG": "CAG ID",
-        "size": "Number of Genes (log10)",
-        "mean_abundance": "Mean Abundance",
-        "std_abundance": "Std. Abundance",
-        "prevalence": "Prevalence",
-    }
-
-    fig = go.Figure(
-        data=go.Scattergl(
-            x=plot_df[xaxis],
-            y=plot_df[yaxis],
-            ids=plot_df["CAG"].values,
-            text=plot_df["CAG"].values,
-            hovertemplate="CAG %{id}<br>X-value: %{x}<br>Y-value: %{y}",
-            mode="markers",
-        ),
+    fig.update_yaxes(
+        title_text=plot_df.columns.values[1],
+        row=2, col=1
     )
 
     fig.update_layout(
-        xaxis_title=axis_names.get(xaxis, xaxis),
-        yaxis_title=axis_names.get(yaxis, yaxis),
-        title={
-            'text': "CAG Summary Scatterplot",
-            'y': 0.9,
-            'x': 0.5, 
-            'xanchor': 'center',
-            'yanchor': 'top',
-        },
-        template="simple_white"
-    )
-
-    return fig
-
-################
-# VOLCANO PLOT #
-################
-@app.callback(
-    Output('volcano-graph', 'figure'),
-    [
-        Input('volcano-parameter-dropdown', 'value'),
-        Input('volcano-pvalue-slider', 'value'),
-    ])
-def draw_volcano_plot(parameter, neg_log_pvalue_min):
-
-    if corncob_df is None:
-        return go.Figure()
-
-    # Subset to just this parameter
-    plot_df = corncob_df.query(
-        "parameter == '{}'".format(parameter)
-    ).query(
-        "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
-    )
-
-    fig = go.Figure(
-        data=go.Scattergl(
-            x=plot_df["estimate"],
-            y=plot_df["neg_log_pvalue"],
-            ids=plot_df["CAG"].values,
-            text=plot_df["CAG"].values,
-            hovertemplate="CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}<extra></extra>",
-            mode="markers",
-            opacity=0.5,
-        ),
-    )
-
-    fig.update_layout(
-        xaxis_title="Estimated Coefficient",
-        yaxis_title="p-value (-log10)",
-        title={
-            'text': "Estimated Associations",
-            'y': 0.9,
-            'x': 0.5, 
-            'xanchor': 'center',
-            'yanchor': 'top',
-        },
+        showlegend=False,
         template="simple_white",
+        height=800,
+        width=600,
     )
 
     return fig
 
+# #########################
+# # CAG SUMMARY HISTOGRAM #
+# #########################
+# @app.callback(
+#     Output('cag-summary-histogram-graph', 'figure'),
+#     [
+#         Input('cag-summary-histogram-metric-dropdown', 'value'),
+#         Input('cag-summary-histogram-size-slider', 'value'),
+#         Input('cag-summary-histogram-prevalence-slider', 'value'),
+#         Input('cag-summary-histogram-abundance-slider', 'value'),
+#         Input('cag-summary-histogram-nbinsx-slider', 'value'),
+#         Input('cag-summary-histogram-log', 'value'),
+#     ])
+# def draw_cag_summary_histogram(metric, size_range, prevalence_range, abundance_range, nbinsx, log_scale):
 
-###################
-# SINGLE CAG PLOT #
-###################
-@app.callback(
-    Output('single-cag-graph', 'figure'),
-    [
-        Input('single-cag-selector', 'value'),
-        Input('single-cag-xaxis', 'value'),
-        Input('single-cag-plot-type', 'value'),
-        Input('single-cag-color', 'value'),
-        Input('single-cag-facet', 'value'),
-    ])
-def draw_single_cag_plot(cag_id, xaxis, plot_type, color, facet):
+#     # Apply the filters
+#     plot_df = cag_summary_df.applymap(
+#         float
+#     ).query(
+#         "size >= {}".format(10**size_range[0])
+#     ).query(
+#         "size <= {}".format(10**size_range[1])
+#     ).query(
+#         "prevalence >= {}".format(prevalence_range[0])
+#     ).query(
+#         "prevalence <= {}".format(prevalence_range[1])
+#     ).query(
+#         "mean_abundance >= {}".format(abundance_range[0])
+#     ).query(
+#         "mean_abundance <= {}".format(abundance_range[1])
+#     ).apply(
+#         lambda c: c.apply(np.log10) if c.name == "size" else c
+#     )
 
-    if cag_id is None or cag_id == "none":
-        fig = go.Figure()
-        fig.update_layout(
-            template="simple_white",
-        )
-        return fig
+#     axis_names = {
+#         "CAG": "CAG ID",
+#         "size": "Number of Genes (log10)",
+#         "mean_abundance": "Mean Abundance",
+#         "std_abundance": "Std. Abundance",
+#         "prevalence": "Prevalence",
+#     }
 
-    plot_df = manifest_df.assign(
-        CAG_ABUND = cag_abundance_df.loc[int(cag_id)]
-    )
+#     fig = go.Figure(
+#         data=[
+#             go.Histogram(
+#                 x=plot_df[metric],
+#                 nbinsx=nbinsx,
+#             )
+#         ],
+#     )
 
-    if plot_type == "scatter":
-        fig = px.scatter(
-            plot_df,
-            x = xaxis,
-            y = "CAG_ABUND",
-            color = None if color == "none" else color,
-            facet_col = None if facet == "none" else facet
-        )
+#     if log_scale == "on":
+#         fig.update_layout(yaxis_type="log")
 
-    elif plot_type == "boxplot":
-        fig = px.box(
-            plot_df,
-            x = xaxis,
-            y = "CAG_ABUND",
-            color = None if color == "none" else color,
-            facet_col = None if facet == "none" else facet
-        )
+#     fig.update_layout(
+#         xaxis_title=axis_names.get(metric, metric),
+#         yaxis_title="Number of CAGs",
+#         title={
+#             'text': "CAG Summary Histogram",
+#             'y': 0.9,
+#             'x': 0.5, 
+#             'xanchor': 'center',
+#             'yanchor': 'top',
+#         },
+#         template="simple_white"
+#     )
 
-    else:
-        assert plot_type == "line"
-        fig = px.line(
-            plot_df,
-            x = xaxis,
-            y = "CAG_ABUND",
-            color = None if color == "none" else color,
-            facet_col = None if facet == "none" else facet
-        )
+#     return fig
 
-    fig.update_layout(
-        template="simple_white",
-        yaxis_title="CAG {}".format(cag_id)
-    )
-    return fig
+
+# #######################
+# # CAG SUMMARY SCATTER #
+# #######################
+# @app.callback(
+#     Output('cag-summary-scatter-graph', 'figure'),
+#     [
+#         Input('cag-summary-scatter-xaxis-dropdown', 'value'),
+#         Input('cag-summary-scatter-yaxis-dropdown', 'value'),
+#         Input('cag-summary-scatter-size-slider', 'value'),
+#         Input('cag-summary-scatter-prevalence-slider', 'value'),
+#         Input('cag-summary-scatter-abundance-slider', 'value'),
+#     ])
+# def draw_cag_summary_scatter(xaxis, yaxis, size_range, prevalence_range, abundance_range):
+
+#     # Apply the filters
+#     plot_df = cag_summary_df.applymap(
+#         float
+#     ).query(
+#         "size >= {}".format(10**size_range[0])
+#     ).query(
+#         "size <= {}".format(10**size_range[1])
+#     ).query(
+#         "prevalence >= {}".format(prevalence_range[0])
+#     ).query(
+#         "prevalence <= {}".format(prevalence_range[1])
+#     ).query(
+#         "mean_abundance >= {}".format(abundance_range[0])
+#     ).query(
+#         "mean_abundance <= {}".format(abundance_range[1])
+#     ).apply(
+#         lambda c: c.apply(np.log10) if c.name == "size" else c
+#     )
+
+#     axis_names = {
+#         "CAG": "CAG ID",
+#         "size": "Number of Genes (log10)",
+#         "mean_abundance": "Mean Abundance",
+#         "std_abundance": "Std. Abundance",
+#         "prevalence": "Prevalence",
+#     }
+
+#     fig = go.Figure(
+#         data=go.Scattergl(
+#             x=plot_df[xaxis],
+#             y=plot_df[yaxis],
+#             ids=plot_df["CAG"].values,
+#             text=plot_df["CAG"].values,
+#             hovertemplate="CAG %{id}<br>X-value: %{x}<br>Y-value: %{y}",
+#             mode="markers",
+#         ),
+#     )
+
+#     fig.update_layout(
+#         xaxis_title=axis_names.get(xaxis, xaxis),
+#         yaxis_title=axis_names.get(yaxis, yaxis),
+#         title={
+#             'text': "CAG Summary Scatterplot",
+#             'y': 0.9,
+#             'x': 0.5, 
+#             'xanchor': 'center',
+#             'yanchor': 'top',
+#         },
+#         template="simple_white"
+#     )
+
+#     return fig
+
+# ##################
+# # CAG DETAIL TAX #
+# ##################
+# @app.callback(
+#     Output('cag-detail-tax-graph', 'figure'),
+#     [
+#     ])
+# def draw_cag_detail_tax():
+
+#     fig = Go.figure([])
+#     return fig
+
+# ######################
+# # CAG DETAIL HEATMAP #
+# ######################
+# @app.callback(
+#     Output('cag-detail-heatmap-graph', 'figure'),
+#     [
+#         Input('cag-detail-heatmap-color-primary', 'value'),
+#         Input('cag-detail-heatmap-color-secondary', 'value'),
+#         Input('cag-detail-heatmap-color-tertiary', 'value'),
+#     ])
+# def draw_cag_detail_heatmap():
+
+#     fig = Go.figure([])
+#     return fig
+
+# ################
+# # VOLCANO PLOT #
+# ################
+# @app.callback(
+#     Output('volcano-graph', 'figure'),
+#     [
+#         Input('volcano-parameter-dropdown', 'value'),
+#         Input('volcano-pvalue-slider', 'value'),
+#     ])
+# def draw_volcano_plot(parameter, neg_log_pvalue_min):
+
+#     if corncob_df is None:
+#         return go.Figure()
+
+#     # Subset to just this parameter
+#     plot_df = corncob_df.query(
+#         "parameter == '{}'".format(parameter)
+#     ).query(
+#         "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
+#     )
+
+#     fig = go.Figure(
+#         data=go.Scattergl(
+#             x=plot_df["estimate"],
+#             y=plot_df["neg_log_pvalue"],
+#             ids=plot_df["CAG"].values,
+#             text=plot_df["CAG"].values,
+#             hovertemplate="CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}<extra></extra>",
+#             mode="markers",
+#             opacity=0.5,
+#         ),
+#     )
+
+#     fig.update_layout(
+#         xaxis_title="Estimated Coefficient",
+#         yaxis_title="p-value (-log10)",
+#         title={
+#             'text': "Estimated Associations",
+#             'y': 0.9,
+#             'x': 0.5, 
+#             'xanchor': 'center',
+#             'yanchor': 'top',
+#         },
+#         template="simple_white",
+#     )
+
+#     return fig
+
+
+# ###################
+# # SINGLE CAG PLOT #
+# ###################
+# @app.callback(
+#     Output('single-cag-graph', 'figure'),
+#     [
+#         Input('single-cag-selector', 'value'),
+#         Input('single-cag-xaxis', 'value'),
+#         Input('single-cag-plot-type', 'value'),
+#         Input('single-cag-color', 'value'),
+#         Input('single-cag-facet', 'value'),
+#     ])
+# def draw_single_cag_plot(cag_id, xaxis, plot_type, color, facet):
+
+#     if cag_id is None or cag_id == "none":
+#         fig = go.Figure()
+#         fig.update_layout(
+#             template="simple_white",
+#         )
+#         return fig
+
+#     plot_df = manifest_df.assign(
+#         CAG_ABUND = cag_abundance_df.loc[int(cag_id)]
+#     )
+
+#     if plot_type == "scatter":
+#         plot_func = px.scatter
+
+#     elif plot_type == "boxplot":
+#         plot_func = px.box
+
+#     else:
+#         assert plot_type == "line"
+#         plot_func = px.line
+
+#     fig = plot_func(
+#         plot_df.sort_values(by=xaxis),
+#         x = xaxis,
+#         y = "CAG_ABUND",
+#         color = None if color == "none" else color,
+#         facet_col = None if facet == "none" else facet
+#     )
+
+#     fig.update_layout(
+#         template="simple_white",
+#         yaxis_title="CAG {}".format(cag_id)
+#     )
+#     return fig
+
+
+# @app.callback(
+#     Output('cag-membership-table', 'data'),
+#     [
+#         Input('single-cag-selector', "value"),
+#     ])
+# def update_cag_membership_table(cag_id):
+    
+#     if cag_id is None or cag_id == "none":
+#         return gene_annot_df.head(
+#         ).to_dict(
+#             'records'
+#         )
+#     else:
+
+#         return gene_annot_df.query(
+#             "CAG == '{}'".format(cag_id)
+#         ).to_dict(
+#             'records'
+#         )
 
 if __name__ == '__main__':
 
