@@ -665,26 +665,26 @@ app.layout = html.Div(
         # #####################
         # # / CAG DETAIL CARD #
         # #####################
-        # ################
-        # # VOLCANO PLOT #
-        # ################
-        # card_wrapper(
-        #     "Association Screening",
-        #     [
-        #         graph_div("volcano", 'volcano-graph'), 
-        #         html.Div(
-        #             volcano_parameter_dropdown(
-        #                 "volcano-parameter-dropdown",
-        #             ) + volcano_pvalue_slider(
-        #                 "volcano-pvalue-slider",
-        #             ),
-        #             className="col-sm-4 my-auto",
-        #         )
-        #     ]
-        # ),
-        # ##################
-        # # / VOLCANO PLOT #
-        # ##################
+        ################
+        # VOLCANO PLOT #
+        ################
+        card_wrapper(
+            "Association Screening",
+            [
+                graph_div("volcano", 'volcano-graph'), 
+                html.Div(
+                    volcano_parameter_dropdown(
+                        "volcano-parameter-dropdown",
+                    ) + volcano_pvalue_slider(
+                        "volcano-pvalue-slider",
+                    ),
+                    className="col-sm-4 my-auto",
+                )
+            ]
+        ),
+        ##################
+        # / VOLCANO PLOT #
+        ##################
         # ###################
         # # SINGLE CAG PLOT #
         # ###################
@@ -1306,53 +1306,53 @@ def draw_ordination(
 #     fig = Go.figure([])
 #     return fig
 
-# ################
-# # VOLCANO PLOT #
-# ################
-# @app.callback(
-#     Output('volcano-graph', 'figure'),
-#     [
-#         Input('volcano-parameter-dropdown', 'value'),
-#         Input('volcano-pvalue-slider', 'value'),
-#     ])
-# def draw_volcano_plot(parameter, neg_log_pvalue_min):
+################
+# VOLCANO PLOT #
+################
+@app.callback(
+    Output('volcano-graph', 'figure'),
+    [
+        Input('volcano-parameter-dropdown', 'value'),
+        Input('volcano-pvalue-slider', 'value'),
+    ])
+def draw_volcano_plot(parameter, neg_log_pvalue_min):
 
-#     if corncob_df is None:
-#         return go.Figure()
+    if corncob_df is None:
+        return go.Figure()
 
-#     # Subset to just this parameter
-#     plot_df = corncob_df.query(
-#         "parameter == '{}'".format(parameter)
-#     ).query(
-#         "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
-#     )
+    # Subset to just this parameter
+    plot_df = corncob_df.query(
+        "parameter == '{}'".format(parameter)
+    ).query(
+        "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
+    )
 
-#     fig = go.Figure(
-#         data=go.Scattergl(
-#             x=plot_df["estimate"],
-#             y=plot_df["neg_log_pvalue"],
-#             ids=plot_df["CAG"].values,
-#             text=plot_df["CAG"].values,
-#             hovertemplate="CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}<extra></extra>",
-#             mode="markers",
-#             opacity=0.5,
-#         ),
-#     )
+    fig = go.Figure(
+        data=go.Scattergl(
+            x=plot_df["estimate"],
+            y=plot_df["neg_log_pvalue"],
+            ids=plot_df["CAG"].values,
+            text=plot_df["CAG"].values,
+            hovertemplate="CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}<extra></extra>",
+            mode="markers",
+            opacity=0.5,
+        ),
+    )
 
-#     fig.update_layout(
-#         xaxis_title="Estimated Coefficient",
-#         yaxis_title="p-value (-log10)",
-#         title={
-#             'text': "Estimated Associations",
-#             'y': 0.9,
-#             'x': 0.5, 
-#             'xanchor': 'center',
-#             'yanchor': 'top',
-#         },
-#         template="simple_white",
-#     )
+    fig.update_layout(
+        xaxis_title="Estimated Coefficient",
+        yaxis_title="p-value (-log10)",
+        title={
+            'text': "Estimated Associations",
+            'y': 0.9,
+            'x': 0.5, 
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
+        template="simple_white",
+    )
 
-#     return fig
+    return fig
 
 
 # ###################
