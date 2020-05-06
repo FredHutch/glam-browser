@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 
 import click
+from collections import defaultdict
 import dash
 import dash_table
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
-from collections import defaultdict
-import plotly.express as px
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
 from dash.dependencies import Input, Output
+import json
 import numpy as np
 import os
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 import seaborn as sns
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+from time import time
 
 # Read in data from the HDF5 defined in `HDF5_fp`
 hdf5_fp = os.getenv("HDF5_FP")
@@ -719,7 +721,9 @@ app.layout = html.Div(
                         default="on"
                     ),
                     className="col-sm-4 my-auto",
-                )
+                ),
+                html.Div(id='global-selected-cag', style={"display": "none"}),
+                html.Div(id='cag-summary-selected-cag', style={"display": "none"}),
             ]
         ),
         #######################
@@ -742,7 +746,8 @@ app.layout = html.Div(
                         label_text="FDR-BH adjustment"
                     ),
                     className="col-sm-4 my-auto",
-                )
+                ),
+                html.Div(id='volcano-selected-cag', style={"display": "none"}),
             ]
         ),
         ##################
@@ -963,6 +968,7 @@ def draw_richness(selected_metric, selected_type):
         Input('cag-summary-abundance-slider', 'value'),
         Input('cag-summary-nbinsx-slider', 'value'),
         Input('cag-summary-log', 'value'),
+        Input('cag-summary-selected-cag', 'children'),
     ])
 def draw_cag_summary_graph(
     metric_primary,
@@ -972,9 +978,9 @@ def draw_cag_summary_graph(
     prevalence_range,
     abundance_range,
     nbinsx,
-    log_scale
+    log_scale,
+    selected_cag_json,
 ):
-
     # Apply the filters
     plot_df = cag_summary_df.applymap(
         float
@@ -1038,6 +1044,15 @@ def draw_cag_summary_graph(
     if log_scale == "on":
         fig.update_yaxes(row=1, col=1, type="log")
 
+    # Parse the selected CAG data
+    if selected_cag_json is not None:
+        # Set the points which are selected in the scatter plot
+        selectedpoints = np.where(
+            plot_df["CAG"].values == json.loads(selected_cag_json)["id"]
+        )
+    else:
+        selectedpoints = None
+
     # Draw a scatter plot on the bottom plot
     fig.add_trace(
         go.Scattergl(
@@ -1049,6 +1064,7 @@ def draw_cag_summary_graph(
             hovertemplate="CAG %{id}<br>X-value: %{x}<br>Y-value: %{y}<extra></extra>",
             mode="markers",
             opacity=0.5,
+            selectedpoints=selectedpoints
         ),
         row=2,
         col=1
@@ -1073,6 +1089,46 @@ def draw_cag_summary_graph(
     )
 
     return fig
+
+@app.callback(
+    Output('cag-summary-selected-cag', 'children'),
+    [
+        Input('cag-summary-graph', 'clickData'),
+    ])
+def cag_summary_save_click_data(clickData):
+    """Only save the click data when a point in a scatter has been selected"""
+    if clickData is not None:
+        for point in clickData["points"]:
+            if "id" in point:
+                # Save the time of the event
+                point["time"] = time()
+                return json.dumps(point, indent=2)
+
+
+################
+# SELECTED CAG #
+################
+@app.callback(
+    Output('global-selected-cag', 'children'),
+    [
+        Input('cag-summary-selected-cag', 'children'),
+        Input('volcano-selected-cag', 'children'),
+    ])
+def save_global_selected_cag(cag_summary_click, volcano_click):
+    """Save the most recent click"""
+    output_time = None
+    output_dat = None
+
+    for click_json in [cag_summary_click, volcano_click]:
+        if click_json is None:
+            continue
+        click_dat = json.loads(click_json)
+        if output_time is None or click_dat["time"] > output_time:
+            output_time = click_dat["time"]
+            output_dat = click_dat
+
+    if output_dat is not None:
+        return json.dumps(output_dat, indent=2)
 
 
 ####################
@@ -1403,8 +1459,9 @@ def draw_ordination(
         Input('volcano-parameter-dropdown', 'value'),
         Input('volcano-pvalue-slider', 'value'),
         Input('volcano-fdr-radio', 'value'),
+        Input('cag-summary-selected-cag', 'children'),
     ])
-def draw_volcano_plot(parameter, neg_log_pvalue_min, fdr_on_off):
+def draw_volcano_plot(parameter, neg_log_pvalue_min, fdr_on_off, selected_cag_json):
 
     if corncob_df is None or neg_log_pvalue_min is None:
         return go.Figure()
@@ -1415,6 +1472,15 @@ def draw_volcano_plot(parameter, neg_log_pvalue_min, fdr_on_off):
     ).query(
         "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
     )
+
+    # Parse the selected CAG data
+    if selected_cag_json is not None:
+        # Set the points which are selected in the scatter plot
+        selectedpoints = np.where(
+            plot_df["CAG"].values == json.loads(selected_cag_json)["id"]
+        )
+    else:
+        selectedpoints = None
 
     if fdr_on_off == "off":
         plot_y = "neg_log_pvalue"
@@ -1434,6 +1500,7 @@ def draw_volcano_plot(parameter, neg_log_pvalue_min, fdr_on_off):
             hovertemplate=hovertemplate,
             mode="markers",
             opacity=0.5,
+            selectedpoints=selectedpoints,
         ),
     )
 
@@ -1451,6 +1518,21 @@ def draw_volcano_plot(parameter, neg_log_pvalue_min, fdr_on_off):
     )
 
     return fig
+
+
+@app.callback(
+    Output('volcano-selected-cag', 'children'),
+    [
+        Input('volcano-graph', 'clickData'),
+    ])
+def volcano_save_click_data(clickData):
+    """Only save the click data when a point in a scatter has been selected"""
+    if clickData is not None:
+        for point in clickData["points"]:
+            if "id" in point:
+                # Save the time of the event
+                point["time"] = time()
+                return json.dumps(point, indent=2)
 
 
 @app.callback(
@@ -1489,14 +1571,23 @@ def update_volcano_pvalue_slider_marks(parameter):
     ],
     [
         Input('cag-detail-tax-ngenes', 'value'),
+        Input('global-selected-cag', 'children'),
     ])
-def draw_cag_detail_tax(min_ngenes):
+def draw_cag_detail_tax(min_ngenes, selected_cag_json):
+
+    # Parse the selected CAG data
+    if selected_cag_json is not None:
+        # Set the points which are selected in the scatter plot
+        cag_id = json.loads(selected_cag_json)["id"]
+    else:
+        cag_id = 100
+
 
     # Read in the taxonomic annotations for this CAG
     cag_df = pd.read_hdf(
         hdf5_fp,
         "/annot/gene/all",
-        where="CAG == {}".format(100),
+        where="CAG == {}".format(cag_id),
         columns = ["gene", "tax_id"]
     )
 
@@ -1521,6 +1612,16 @@ def draw_cag_detail_tax(min_ngenes):
             parents=cag_tax_df["parent"],
             values=cag_tax_df["count"],
         )
+    )
+
+    fig.update_layout(
+        title={
+            'text': "CAG {}".format(cag_id),
+            'y': 0.9,
+            'x': 0.5, 
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
     )
 
     # Format the marks for the updated slider
