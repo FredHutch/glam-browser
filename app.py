@@ -166,12 +166,14 @@ def make_cag_tax_df(tax_id_list, ranks_to_keep=["phylum", "class", "order", "fam
         parent = taxonomy_df["parent"],
         rank = taxonomy_df["rank"],
     ).apply(
-        lambda c: c.apply(taxonomy_df["name"].get) if c.name in ["name", "parent"] else c
+        lambda c: c.apply(
+            lambda t: "{} ({})".format(taxonomy_df.loc[t, "name"], t)
+        ) if c.name in ["name", "parent"] else c
     )
 
     # Set the parent of the root as ""
     df.loc[
-        df["name"] == "root",
+        df["name"] == "root (0)",
         "parent"
     ] = ""
 
@@ -759,7 +761,16 @@ app.layout = html.Div(
                 ),
                 html.Div(
                     [
-                        graph_div("cag-detail-tax", 'cag-detail-tax-graph', className="col-sm-12"),
+                        graph_div("cag-detail-tax", 'cag-detail-tax-graph'),
+                        html.Div(
+                            basic_slider(
+                                "cag-detail-tax-ngenes",
+                                "Minimum Number of Genes",
+                                included=False,
+                                default_value=5,
+                            ),
+                            className="col-sm-4 my-auto"
+                        )
                     ],
                     className="row"
                 ),
@@ -1471,11 +1482,15 @@ def update_volcano_pvalue_slider_marks(parameter):
 # CAG DETAIL TAX #
 ##################
 @app.callback(
-    Output('cag-detail-tax-graph', 'figure'),
     [
-        Input('volcano-parameter-dropdown', 'value'),
+        Output('cag-detail-tax-graph', 'figure'),
+        Output('cag-detail-tax-ngenes', 'max'),
+        Output('cag-detail-tax-ngenes', 'marks'),
+    ],
+    [
+        Input('cag-detail-tax-ngenes', 'value'),
     ])
-def draw_cag_detail_tax(cag_id):
+def draw_cag_detail_tax(min_ngenes):
 
     # Read in the taxonomic annotations for this CAG
     cag_df = pd.read_hdf(
@@ -1494,9 +1509,11 @@ def draw_cag_detail_tax(cag_id):
         fig.update_layout(
             template="simple_white",
         )
-        return fig
+        return fig, 1, {}
 
-    cag_tax_df = cag_tax_df.query("count > 10")
+    # Filter by the number of genes
+    if (cag_tax_df["count"] >= min_ngenes).any():
+        cag_tax_df = cag_tax_df.query("count >= {}".format(min_ngenes))
 
     fig = go.Figure(
         data=go.Sunburst(
@@ -1505,7 +1522,18 @@ def draw_cag_detail_tax(cag_id):
             values=cag_tax_df["count"],
         )
     )
-    return fig
+
+    # Format the marks for the updated slider
+    marks = {
+        str(int(n)): str(int(n))
+        for n in [
+            1, 
+            int(cag_tax_df["count"].max() / 2),
+            cag_tax_df["count"].max(), 
+        ]
+    }
+
+    return fig, cag_tax_df["count"].max(), marks
 
 # ######################
 # # CAG DETAIL HEATMAP #
