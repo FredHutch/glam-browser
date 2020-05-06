@@ -23,7 +23,14 @@ assert os.path.exists(hdf5_fp), "Path does not exist: {}".format(hdf5_fp)
 with pd.HDFStore(hdf5_fp, "r") as store:
 
     # Table with summary of the entire experiment
-    experiment_df = pd.read_hdf(store, "/summary/experiment")
+    exp_metrics = pd.read_hdf(
+        store, "/summary/experiment"
+    ).set_index(
+        "variable"
+    )[
+        "value"
+    ]
+    print(exp_metrics)
 
     # Table for RICHNESS GRAPH
     richness_df = pd.read_hdf(store, "/summary/all")
@@ -51,11 +58,12 @@ richness_df = richness_df.assign(
 )
 
 # Round to 4 significant figures on the CAG summary metrics
+cag_summary_limits = cag_summary_df.describe()
 cag_summary_df = cag_summary_df.apply(
     lambda c: c.apply(
         lambda i: '{:g}'.format(float('{:.4g}'.format(i)))
     ) if c.name in [
-        "std_abundance", "prevalence", "mean_abundance", "entropy"
+        "std_abundance", "prevalence", "mean_abundance"
     ] else c
 )
 
@@ -108,6 +116,33 @@ def card_wrapper(card_title, card_body):
         ],
         className="card"
     )
+
+
+def exp_table_row(header1, value1, header2, value2, header_bg="#F4F6F6", value_bg="white", spacer_bg="white"):
+    return [     # Table Body
+        html.Tr([    # Row
+            html.Td(
+                header1,
+                style={"background-color": header_bg}
+            ),
+            html.Td(
+                value1,
+                style={"background-color": value_bg}
+            ),
+            html.Td(
+                "",
+                style={"background-color": spacer_bg}
+            ),
+            html.Td(
+                header2,
+                style={"background-color": header_bg}
+            ),
+            html.Td(
+                value2,
+                style={"background-color": value_bg}
+            ),
+        ]
+    )]
 
 
 def graph_div(anchor_id, graph_id, className="col-sm-8"):
@@ -419,6 +454,45 @@ app.layout = html.Div(
         ########
         # BODY #
         ########
+        ############################
+        # EXPERIMENT SUMMARY TABLE #
+        ############################
+        card_wrapper(
+            "Experiment",
+            [
+                html.Div(
+                    [
+                        dbc.Table([             # Table
+                            html.Tbody(
+                                exp_table_row(  # Wrapper for each row
+                                    "Total Reads",
+                                    "{:,}".format(exp_metrics["total_reads"]),
+                                    "Aligned Reads",
+                                    "{}%".format(round(
+                                        100 * exp_metrics["aligned_reads"] / exp_metrics["total_reads"],
+                                        1
+                                    ))
+                                ) + exp_table_row(
+                                    "Genes (#)",
+                                    "{:,}".format(exp_metrics["num_genes"]),
+                                    "CAGs (#)",
+                                    "{:,}".format(exp_metrics["num_cags"])
+                                ) + exp_table_row(
+                                    "Specimens (#)",
+                                    "{:,}".format(exp_metrics["num_samples"]),
+                                    "Formula",
+                                    "{}".format(exp_metrics["formula"])
+                                )
+                            )
+                        ], bordered=True, hover=True, responsive=True)
+                    ],
+                    className="col-sm-12 my-auto",
+                )
+            ]
+        ),
+        ##############################
+        # / EXPERIMENT SUMMARY TABLE #
+        ##############################        
         ##################
         # RICHNESS GRAPH #
         ##################
