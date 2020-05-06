@@ -55,6 +55,12 @@ with pd.HDFStore(hdf5_fp, "r") as store:
     # Taxonomy table
     taxonomy_df = pd.read_hdf(store, "/ref/taxonomy")
 
+    # Abundance of all genes
+    gene_abundance_df = pd.read_hdf(store, "/abund/gene/wide")
+    
+    # Abundance of all CAGs
+    cag_abundance_df = pd.read_hdf(store, "/abund/cag/wide")
+
 # Precompute some useful metrics
 
 # Precompute the proportion of reads which align
@@ -831,73 +837,41 @@ app.layout = html.Div(
         #####################
         # / CAG DETAIL CARD #
         #####################        
-        # ###################
-        # # SINGLE CAG PLOT #
-        # ###################
-        # card_wrapper(
-        #     "Individual CAG Abundance",
-        #     [
-        #         graph_div("single-cag", 'single-cag-graph'), 
-        #         html.Div(
-        #             [
-        #                 html.Label("CAG"),
-        #                 dcc.Dropdown(
-        #                     id="single-cag-selector",
-        #                     options=[
-        #                         {'label': 'CAG {}'.format(cag_id), 'value': str(cag_id)}
-        #                         for cag_id in cag_summary_df["CAG"].values
-        #                     ],
-        #                     placeholder="Select a CAG",
-        #                 ),
-        #                 html.Br(),
-        #             ] + metadata_field_dropdown(
-        #                 "single-cag-xaxis",
-        #                 label_text="X-axis",
-        #                 default_value=metadata_fields[0]
-        #             ) + plot_type_dropdown(
-        #                 "single-cag-plot-type",
-        #                 options = [
-        #                     {'label': 'Points', 'value': 'scatter'},
-        #                     {'label': 'Line', 'value': 'line'},
-        #                     {'label': 'Boxplot', 'value': 'boxplot'},
-        #                 ]
-        #             ) + metadata_field_dropdown(
-        #                 "single-cag-color",
-        #                 label_text="Color",
-        #             ) + metadata_field_dropdown(
-        #                 "single-cag-facet",
-        #                 label_text="Facet",
-        #             ),
-        #             className="col-sm-4 my-auto",
-        #         ),
-        #     ]
-        # ),
+        ###################
+        # SINGLE CAG PLOT #
+        ###################
+        card_wrapper(
+            "Individual CAG Abundance",
+            [
+                graph_div("single-cag", 'single-cag-graph'), 
+                html.Div(
+                    metadata_field_dropdown(
+                        "single-cag-xaxis",
+                        label_text="X-axis",
+                        default_value=metadata_fields[0]
+                    ) + plot_type_dropdown(
+                        "single-cag-plot-type",
+                        options = [
+                            {'label': 'Points', 'value': 'scatter'},
+                            {'label': 'Line', 'value': 'line'},
+                            {'label': 'Boxplot', 'value': 'boxplot'},
+                        ]
+                    ) + metadata_field_dropdown(
+                        "single-cag-color",
+                        label_text="Color",
+                    ) + metadata_field_dropdown(
+                        "single-cag-facet",
+                        label_text="Facet",
+                    ) + log_scale_radio_button(
+                        "single-cag-log"
+                    ),
+                    className="col-sm-4 my-auto",
+                ),
+            ]
+        ),
         #####################
         # / SINGLE CAG PLOT #
         #####################
-        # ########################
-        # # CAG MEMBERSHIP TABLE #
-        # ########################
-        # card_wrapper(
-        #     "CAG Membership",
-        #     [
-        #         html.A(id="cag-membership"),
-        #         dash_table.DataTable(
-        #             id='cag-membership-table',
-        #             columns=[
-        #                 {"name": i, "id": i}
-        #                 for i in gene_annot_df.columns
-        #                 if i not in ["CAG", "abundance", "prevalence"]
-        #             ],
-        #             page_current=0,
-        #             page_size=10,
-        #             page_action='custom'
-        #         )
-        #     ]
-        # ),
-        # ##########################
-        # # / CAG MEMBERSHIP TABLE #
-        # ##########################
     ],
     className="container"
 )
@@ -1703,54 +1677,60 @@ def draw_cag_detail_tax(min_ngenes, selected_cag_json):
 #     fig = Go.figure([])
 #     return fig
 
-# ###################
-# # SINGLE CAG PLOT #
-# ###################
-# @app.callback(
-#     Output('single-cag-graph', 'figure'),
-#     [
-#         Input('single-cag-selector', 'value'),
-#         Input('single-cag-xaxis', 'value'),
-#         Input('single-cag-plot-type', 'value'),
-#         Input('single-cag-color', 'value'),
-#         Input('single-cag-facet', 'value'),
-#     ])
-# def draw_single_cag_plot(cag_id, xaxis, plot_type, color, facet):
+###################
+# SINGLE CAG PLOT #
+###################
+@app.callback(
+    Output('single-cag-graph', 'figure'),
+    [
+        Input('global-selected-cag', 'children'),
+        Input('single-cag-xaxis', 'value'),
+        Input('single-cag-plot-type', 'value'),
+        Input('single-cag-color', 'value'),
+        Input('single-cag-facet', 'value'),
+        Input('single-cag-log', 'value'),
+    ])
+def draw_single_cag_plot(selected_cag_json, xaxis, plot_type, color, facet, log_scale):
 
-#     if cag_id is None or cag_id == "none":
-#         fig = go.Figure()
-#         fig.update_layout(
-#             template="simple_white",
-#         )
-#         return fig
+    # Parse the selected CAG data
+    if selected_cag_json is not None:
+        # Set the points which are selected in the scatter plot
+        cag_id = json.loads(selected_cag_json)["id"]
+    else:
+        # Default CAG to plot
+        cag_id = 100
 
-#     plot_df = manifest_df.assign(
-#         CAG_ABUND = cag_abundance_df.loc[int(cag_id)]
-#     )
+    plot_df = manifest_df.assign(
+        CAG_ABUND = cag_abundance_df.loc[int(cag_id)]
+    )
 
-#     if plot_type == "scatter":
-#         plot_func = px.scatter
+    if plot_type == "scatter":
+        plot_func = px.scatter
 
-#     elif plot_type == "boxplot":
-#         plot_func = px.box
+    elif plot_type == "boxplot":
+        plot_func = px.box
 
-#     else:
-#         assert plot_type == "line"
-#         plot_func = px.line
+    else:
+        assert plot_type == "line"
+        plot_func = px.line
 
-#     fig = plot_func(
-#         plot_df.sort_values(by=xaxis),
-#         x = xaxis,
-#         y = "CAG_ABUND",
-#         color = None if color == "none" else color,
-#         facet_col = None if facet == "none" else facet
-#     )
+    fig = plot_func(
+        plot_df.sort_values(by=xaxis),
+        x = xaxis,
+        y = "CAG_ABUND",
+        color = None if color == "none" else color,
+        facet_col = None if facet == "none" else facet
+    )
 
-#     fig.update_layout(
-#         template="simple_white",
-#         yaxis_title="CAG {}".format(cag_id)
-#     )
-#     return fig
+    # Apply the log transform
+    if log_scale == "on":
+        fig.update_yaxes(type="log")
+
+    fig.update_layout(
+        template="simple_white",
+        yaxis_title="CAG {}".format(cag_id)
+    )
+    return fig
 
 
 # @app.callback(
