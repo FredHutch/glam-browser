@@ -810,6 +810,7 @@ def draw_richness(selected_metric, selected_type):
             data=[
                 go.Histogram(
                     y=richness_df[selected_metric],
+                    hovertemplate="Range: %{y}<br>Count: %{x}<extra></extra>",
                 )
             ],
         )
@@ -902,6 +903,7 @@ def draw_cag_summary_graph(
             x=plot_df[metric_primary],
             histfunc="sum",
             nbinsx=nbinsx,
+            hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
         ),
         row=1,
         col=1
