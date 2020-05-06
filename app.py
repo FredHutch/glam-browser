@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import click
 from collections import defaultdict
 import dash
 import dash_table
@@ -15,7 +14,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
-import seaborn as sns
+from seaborn import color_palette
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from time import time
@@ -55,11 +54,11 @@ with pd.HDFStore(hdf5_fp, "r") as store:
     # Taxonomy table
     taxonomy_df = pd.read_hdf(store, "/ref/taxonomy")
 
-    # Abundance of all genes
-    gene_abundance_df = pd.read_hdf(store, "/abund/gene/wide")
-    
     # Abundance of all CAGs
-    cag_abundance_df = pd.read_hdf(store, "/abund/cag/wide")
+    cag_abundance_df = pd.read_hdf(
+        store, 
+        "/abund/cag/wide"
+    ).set_index("CAG")
 
 # Precompute some useful metrics
 
@@ -516,8 +515,7 @@ def log_scale_radio_button(id_string, default="off", label_text="Log Scale"):
                 {'label': 'Off', 'value': 'off'},
             ],
             value=default,
-        ),
-        html.Br()
+        )
     ]
 
 def nbins_slider(id_string):
@@ -785,23 +783,23 @@ app.layout = html.Div(
         ##################
         # / VOLCANO PLOT #
         ##################
-        ###################
-        # CAG DETAIL CARD #
-        ###################
+        #####################
+        # CAG TAXONOMY CARD #
+        #####################
         html.Div(
             [
                 html.Div(
                     [
-                        "CAG Details"
+                        "CAG Taxonomy"
                     ],
                     className="card-header"
                 ),
                 html.Div(
                     [
-                        graph_div("cag-detail-tax", 'cag-detail-tax-graph'),
+                        graph_div("cag-tax", 'cag-tax-graph'),
                         html.Div(
                             basic_slider(
-                                "cag-detail-tax-ngenes",
+                                "cag-tax-ngenes",
                                 "Minimum Number of Genes",
                                 included=False,
                                 default_value=5,
@@ -811,32 +809,12 @@ app.layout = html.Div(
                     ],
                     className="row"
                 ),
-                # html.Div(
-                #     [
-                #         # graph_div("cag-detail-heatmap", 'cag-detail-heatmap-graph'),
-                #         html.Div(
-                #             metadata_field_dropdown(
-                #                 "cag-detail-heatmap-color-primary",
-                #                 label_text="Color By (primary)",
-                #             ) + metadata_field_dropdown(
-                #                 "cag-detail-heatmap-color-secondary",
-                #                 label_text="Color By (secondary)",
-                #             ) + metadata_field_dropdown(
-                #                 "cag-detail-heatmap-color-tertiary",
-                #                 label_text="Color By (tertiary)",
-                #             ),
-                #             className="col-sm-4 my-auto",
-                #         )
-                #     ],
-                #     className="row"
-                # )
-
             ],
             className="card"
         ),
-        #####################
-        # / CAG DETAIL CARD #
-        #####################        
+        #######################
+        # / CAG TAXONOMY CARD #
+        #######################
         ###################
         # SINGLE CAG PLOT #
         ###################
@@ -1367,7 +1345,7 @@ def draw_ordination(
         # Here is the actual color map
         cmap = dict(zip(
             plot_df["METADATA_FLOAT"].drop_duplicates().sort_values().values,
-            sns.color_palette(
+            color_palette(
                 palette_name,
                 plot_df["METADATA_FLOAT"].unique().shape[0]
             ).as_hex()
@@ -1589,12 +1567,12 @@ def update_volcano_pvalue_slider_marks(parameter):
 ##################
 @app.callback(
     [
-        Output('cag-detail-tax-graph', 'figure'),
-        Output('cag-detail-tax-ngenes', 'max'),
-        Output('cag-detail-tax-ngenes', 'marks'),
+        Output('cag-tax-graph', 'figure'),
+        Output('cag-tax-ngenes', 'max'),
+        Output('cag-tax-ngenes', 'marks'),
     ],
     [
-        Input('cag-detail-tax-ngenes', 'value'),
+        Input('cag-tax-ngenes', 'value'),
         Input('global-selected-cag', 'children'),
     ])
 def draw_cag_detail_tax(min_ngenes, selected_cag_json):
@@ -1662,20 +1640,6 @@ def draw_cag_detail_tax(min_ngenes, selected_cag_json):
 
     return fig, cag_tax_df["count"].max(), marks
 
-# ######################
-# # CAG DETAIL HEATMAP #
-# ######################
-# @app.callback(
-#     Output('cag-detail-heatmap-graph', 'figure'),
-#     [
-#         Input('cag-detail-heatmap-color-primary', 'value'),
-#         Input('cag-detail-heatmap-color-secondary', 'value'),
-#         Input('cag-detail-heatmap-color-tertiary', 'value'),
-#     ])
-# def draw_cag_detail_heatmap():
-
-#     fig = Go.figure([])
-#     return fig
 
 ###################
 # SINGLE CAG PLOT #
@@ -1732,26 +1696,6 @@ def draw_single_cag_plot(selected_cag_json, xaxis, plot_type, color, facet, log_
     )
     return fig
 
-
-# @app.callback(
-#     Output('cag-membership-table', 'data'),
-#     [
-#         Input('single-cag-selector', "value"),
-#     ])
-# def update_cag_membership_table(cag_id):
-    
-#     if cag_id is None or cag_id == "none":
-#         return gene_annot_df.head(
-#         ).to_dict(
-#             'records'
-#         )
-#     else:
-
-#         return gene_annot_df.query(
-#             "CAG == '{}'".format(cag_id)
-#         ).to_dict(
-#             'records'
-#         )
 
 if __name__ == '__main__':
 
