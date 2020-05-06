@@ -298,44 +298,34 @@ def cag_size_slider(slider_id, label_text='CAG Size Filter'):
     ]
     
 
-def cag_prevalence_slider(slider_id, label_text='CAG Prevalence Filter'):
+def cag_metric_slider(slider_id, metric, label_text):
+    min_val = cag_summary_limits.loc["min", metric]
+    max_val = cag_summary_limits.loc["max", metric]
+    range_val = max_val - min_val
+    step_val = range_val / 5
     return [
         html.Label(label_text),
         dcc.RangeSlider(
             id=slider_id,
-            min=0,
-            max=1,
-            step=0.01,
+            min=min_val,
+            max=max_val,
+            step=step_val / 10.,
             marks={
-                "0": "0",
-                "0.5": "0.5",
-                "1": "1"
-            },
-            value=[0, 1]
-        ),
-        html.Br()
-    ]
-    
-
-def cag_abundance_slider(slider_id, label_text='CAG Abundance Filter'):
-    return [
-        html.Label(label_text),
-        dcc.RangeSlider(
-            id=slider_id,
-            min=0,
-            max=1,
-            step=0.001,
-            marks={
-                "0": "0",
-                "1": "1",
+                str(n): str(round(n, 2))
+                for n in np.arange(
+                    min_val,
+                    max_val,
+                    step_val
+                )
             },
             value=[
-                0, 
-                cag_summary_df["mean_abundance"].apply(float).max()
+                min_val,
+                max_val
             ]
         ),
         html.Br()
     ]
+    
 
 def cag_metric_dropdown(slider_id, label_text='Metric', default_value="size"):
     return [
@@ -345,6 +335,7 @@ def cag_metric_dropdown(slider_id, label_text='Metric', default_value="size"):
             options=[
                 {'label': 'CAG ID', 'value': 'CAG'},
                 {'label': 'Size', 'value': 'size'},
+                {'label': 'Entropy', 'value': 'entropy'},
                 {'label': 'Mean Abund.', 'value': 'mean_abundance'},
                 {'label': 'Prevalence', 'value': 'prevalence'},
                 {'label': 'Std. Abund', 'value': 'std_abundance'},
@@ -354,7 +345,7 @@ def cag_metric_dropdown(slider_id, label_text='Metric', default_value="size"):
         html.Br()
     ]
 
-def log_scale_radio_button(id_string):
+def log_scale_radio_button(id_string, default="off"):
     return [
         html.Br(),
         html.Label('Log Scale'),
@@ -364,7 +355,7 @@ def log_scale_radio_button(id_string):
                 {'label': 'On', 'value': 'on'},
                 {'label': 'Off', 'value': 'off'},
             ],
-            value='off',
+            value=default,
         ),
         html.Br()
     ]
@@ -459,28 +450,6 @@ app.layout = html.Div(
         ####################
         # / RICHNESS GRAPH #
         ####################        
-        ##################
-        # CAG SIZE GRAPH #
-        ##################
-        card_wrapper(
-            "CAG Size Summary",
-            [
-                graph_div("cag-size", 'cag-size-graph'),
-                html.Div(
-                    cag_size_slider(
-                        "cag-size-slider"
-                    ) + nbins_slider(
-                        "cag-nbinsx-slider"
-                    ) + log_scale_radio_button(
-                        "cag-size-log"
-                    ),
-                    className="col-sm-4 my-auto",
-                )
-            ]
-        ),
-        ####################
-        # / CAG SIZE GRAPH #
-        ####################
         ####################
         # ORDINATION GRAPH #
         ####################
@@ -536,65 +505,49 @@ app.layout = html.Div(
         ######################
         # / ORDINATION GRAPH #
         ######################
-        # #########################
-        # # CAG SUMMARY HISTOGRAM #
-        # #########################
-        # card_wrapper(
-        #     "CAG Summary Histogram",
-        #     [
-        #         graph_div("cag-summary-histogram", 'cag-summary-histogram-graph'),
-        #         html.Div(
-        #             cag_metric_dropdown(
-        #                 "cag-summary-histogram-metric-dropdown",
-        #                 default_value="size"
-        #             ) + cag_size_slider(
-        #                 "cag-summary-histogram-size-slider"
-        #             ) + cag_prevalence_slider(
-        #                 "cag-summary-histogram-prevalence-slider"
-        #             ) + cag_abundance_slider(
-        #                 "cag-summary-histogram-abundance-slider"
-        #             ) + nbins_slider(
-        #                 "cag-summary-histogram-nbinsx-slider"
-        #             ) + log_scale_radio_button(
-        #                 "cag-summary-histogram-log"
-        #             ),
-        #             className="col-sm-4 my-auto",
-        #         )
-        #     ]
-        # ),
-        # ###########################
-        # # / CAG SUMMARY HISTOGRAM #
-        # ###########################
-        # #######################
-        # # CAG SUMMARY SCATTER #
-        # #######################
-        # card_wrapper(
-        #     "CAG Summary Scatterplot",
-        #     [
-        #         graph_div("cag-summary-scatter", 'cag-summary-scatter-graph'), 
-        #         html.Div(
-        #             cag_metric_dropdown(
-        #                 "cag-summary-scatter-xaxis-dropdown",
-        #                 label_text="X-axis",
-        #                 default_value="size"
-        #             ) + cag_metric_dropdown(
-        #                 "cag-summary-scatter-yaxis-dropdown",
-        #                 label_text="Y-axis",
-        #                 default_value="mean_abundance"
-        #             ) + cag_size_slider(
-        #                 "cag-summary-scatter-size-slider"
-        #             ) + cag_prevalence_slider(
-        #                 "cag-summary-scatter-prevalence-slider"
-        #             ) + cag_abundance_slider(
-        #                 "cag-summary-scatter-abundance-slider"
-        #             ),
-        #             className="col-sm-4 my-auto",
-        #         )
-        #     ]
-        # ),
-        #########################
-        # / CAG SUMMARY SCATTER #
-        #########################
+        #####################
+        # CAG SUMMARY GRAPH #
+        #####################
+        card_wrapper(
+            "CAG Summary",
+            [
+                graph_div("cag-summary", 'cag-summary-graph'),
+                html.Div(
+                    cag_metric_dropdown(
+                        "cag-summary-metric-primary",
+                        default_value="size",
+                        label_text="Primary Metric (x-axis)",
+                    ) + cag_metric_dropdown(
+                        "cag-summary-metric-secondary",
+                        default_value="entropy",
+                        label_text="Secondary Metric (y-axis)",
+                    ) + cag_size_slider(
+                        "cag-summary-size-slider"
+                    ) + cag_metric_slider(
+                        "cag-summary-entropy-slider",
+                        "entropy",
+                        "CAG Entropy Filter",
+                    ) + cag_metric_slider(
+                        "cag-summary-prevalence-slider",
+                        "prevalence",
+                        "CAG Prevalence Filter"
+                    ) + cag_metric_slider(
+                        "cag-summary-abundance-slider",
+                        "mean_abundance",
+                        "CAG Abundance Filter",
+                    ) + nbins_slider(
+                        "cag-summary-nbinsx-slider"
+                    ) + log_scale_radio_button(
+                        "cag-summary-log",
+                        default="on"
+                    ),
+                    className="col-sm-4 my-auto",
+                )
+            ]
+        ),
+        #######################
+        # / CAG SUMMARY GRAPH #
+        #######################
         # ###################
         # # CAG DETAIL CARD #
         # ###################
@@ -806,47 +759,126 @@ def draw_richness(selected_metric, selected_type):
     return fig
 
 
-##################
-# CAG SIZE GRAPH #
-##################
+#####################
+# CAG SUMMARY GRAPH #
+#####################
 @app.callback(
-    Output('cag-size-graph', 'figure'),
+    Output('cag-summary-graph', 'figure'),
     [
-        Input('cag-size-slider', 'value'),
-        Input('cag-nbinsx-slider', 'value'),
-        Input('cag-size-log', 'value'),
+        Input('cag-summary-metric-primary', 'value'),
+        Input('cag-summary-metric-secondary', 'value'),
+        Input('cag-summary-size-slider', 'value'),
+        Input('cag-summary-entropy-slider', 'value'),
+        Input('cag-summary-prevalence-slider', 'value'),
+        Input('cag-summary-abundance-slider', 'value'),
+        Input('cag-summary-nbinsx-slider', 'value'),
+        Input('cag-summary-log', 'value'),
     ])
-def draw_cag_size(selected_range, nbinsx, log_scale):
+def draw_cag_summary_graph(
+    metric_primary,
+    metric_secondary,
+    size_range,
+    entropy_range,
+    prevalence_range,
+    abundance_range,
+    nbinsx,
+    log_scale
+):
 
-    plot_vals = cag_size_log[
-        (cag_size_log >= selected_range[0]) & 
-        (cag_size_log <= selected_range[1])
-    ]
-
-    fig = go.Figure(
-        data=[
-            go.Histogram(
-                x=plot_vals,
-                histfunc="sum",
-                nbinsx=nbinsx,
-            )
-        ],
+    # Apply the filters
+    plot_df = cag_summary_df.applymap(
+        float
+    ).query(
+        "size >= {}".format(10**size_range[0])
+    ).query(
+        "size <= {}".format(10**size_range[1])
+    ).query(
+        "prevalence >= {}".format(prevalence_range[0])
+    ).query(
+        "prevalence <= {}".format(prevalence_range[1])
+    ).query(
+        "mean_abundance >= {}".format(abundance_range[0])
+    ).query(
+        "mean_abundance <= {}".format(abundance_range[1])
+    ).query(
+        "entropy >= {}".format(entropy_range[0])
+    ).query(
+        "entropy <= {}".format(entropy_range[1])
+    ).apply(
+        lambda c: c.apply(np.log10) if c.name == "size" else c
     )
 
-    if log_scale == "on":
-        fig.update_layout(yaxis_type="log")
+    axis_names = {
+        "CAG": "CAG ID",
+        "size": "Number of Genes (log10)",
+        "mean_abundance": "Mean Abundance",
+        "std_abundance": "Std. Abundance",
+        "prevalence": "Prevalence",
+        "entropy": "Entropy",
+    }
 
+    # Make a plot with two panels, one on top of the other, sharing the x-axis
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True
+    )
+
+    # Draw a histogram on the top panel
+    fig.add_trace(
+        go.Histogram(
+            x=plot_df[metric_primary],
+            histfunc="sum",
+            nbinsx=nbinsx,
+        ),
+        row=1,
+        col=1
+    )
+    # Label the x-axis of the histogram
+    fig.update_xaxes(
+        row=1, col=1,
+        title_text = axis_names[metric_primary]
+    )
+    # Label the y-axis of the histogram
+    fig.update_yaxes(
+        row=1, col=1,
+        title_text = "Number of CAGs"
+    )
+
+    # Apply the log transform
+    if log_scale == "on":
+        fig.update_yaxes(row=1, col=1, type="log")
+
+    # Draw a scatter plot on the bottom plot
+    fig.add_trace(
+        go.Scattergl(
+            x=plot_df[metric_primary],
+            y=plot_df[metric_secondary],
+            ids=plot_df["CAG"].values,
+            text=plot_df["CAG"].values,
+            marker_color="blue",
+            hovertemplate="CAG %{id}<br>X-value: %{x}<br>Y-value: %{y}<extra></extra>",
+            mode="markers",
+            opacity=0.5,
+        ),
+        row=2,
+        col=1
+    )
+    # Label the x-axis of the scatter plot
+    fig.update_xaxes(
+        row=2, col=1,
+        title_text=axis_names[metric_primary]
+    )
+    # Label the y-axis of the scatter plot
+    fig.update_yaxes(
+        row=2, col=1,
+        title_text=axis_names[metric_secondary]
+    )
+
+    # Set the style of the entire plot
     fig.update_layout(
-        title={
-            'text': "CAG Size",
-            'y': 0.9,
-            'x': 0.5, 
-            'xanchor': 'center',
-            'yanchor': 'top'
-        },
-        xaxis_title="CAG Size (log10 number of genes per CAG)",
-        yaxis_title="Number of Genes (per bin)", 
-        template="simple_white"
+        template="simple_white",
+        showlegend=False,
+        height=800,
+        width=600,
     )
 
     return fig
@@ -992,6 +1024,7 @@ def draw_ordination(
         fig.add_trace(
             go.Histogram(
                 x=plot_df[plot_df.columns.values[primary_pc - 1]],
+                hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
             ),
             row=1, col=1
         )
@@ -1169,142 +1202,6 @@ def draw_ordination(
 
     return fig
 
-# #########################
-# # CAG SUMMARY HISTOGRAM #
-# #########################
-# @app.callback(
-#     Output('cag-summary-histogram-graph', 'figure'),
-#     [
-#         Input('cag-summary-histogram-metric-dropdown', 'value'),
-#         Input('cag-summary-histogram-size-slider', 'value'),
-#         Input('cag-summary-histogram-prevalence-slider', 'value'),
-#         Input('cag-summary-histogram-abundance-slider', 'value'),
-#         Input('cag-summary-histogram-nbinsx-slider', 'value'),
-#         Input('cag-summary-histogram-log', 'value'),
-#     ])
-# def draw_cag_summary_histogram(metric, size_range, prevalence_range, abundance_range, nbinsx, log_scale):
-
-#     # Apply the filters
-#     plot_df = cag_summary_df.applymap(
-#         float
-#     ).query(
-#         "size >= {}".format(10**size_range[0])
-#     ).query(
-#         "size <= {}".format(10**size_range[1])
-#     ).query(
-#         "prevalence >= {}".format(prevalence_range[0])
-#     ).query(
-#         "prevalence <= {}".format(prevalence_range[1])
-#     ).query(
-#         "mean_abundance >= {}".format(abundance_range[0])
-#     ).query(
-#         "mean_abundance <= {}".format(abundance_range[1])
-#     ).apply(
-#         lambda c: c.apply(np.log10) if c.name == "size" else c
-#     )
-
-#     axis_names = {
-#         "CAG": "CAG ID",
-#         "size": "Number of Genes (log10)",
-#         "mean_abundance": "Mean Abundance",
-#         "std_abundance": "Std. Abundance",
-#         "prevalence": "Prevalence",
-#     }
-
-#     fig = go.Figure(
-#         data=[
-#             go.Histogram(
-#                 x=plot_df[metric],
-#                 nbinsx=nbinsx,
-#             )
-#         ],
-#     )
-
-#     if log_scale == "on":
-#         fig.update_layout(yaxis_type="log")
-
-#     fig.update_layout(
-#         xaxis_title=axis_names.get(metric, metric),
-#         yaxis_title="Number of CAGs",
-#         title={
-#             'text': "CAG Summary Histogram",
-#             'y': 0.9,
-#             'x': 0.5, 
-#             'xanchor': 'center',
-#             'yanchor': 'top',
-#         },
-#         template="simple_white"
-#     )
-
-#     return fig
-
-
-# #######################
-# # CAG SUMMARY SCATTER #
-# #######################
-# @app.callback(
-#     Output('cag-summary-scatter-graph', 'figure'),
-#     [
-#         Input('cag-summary-scatter-xaxis-dropdown', 'value'),
-#         Input('cag-summary-scatter-yaxis-dropdown', 'value'),
-#         Input('cag-summary-scatter-size-slider', 'value'),
-#         Input('cag-summary-scatter-prevalence-slider', 'value'),
-#         Input('cag-summary-scatter-abundance-slider', 'value'),
-#     ])
-# def draw_cag_summary_scatter(xaxis, yaxis, size_range, prevalence_range, abundance_range):
-
-#     # Apply the filters
-#     plot_df = cag_summary_df.applymap(
-#         float
-#     ).query(
-#         "size >= {}".format(10**size_range[0])
-#     ).query(
-#         "size <= {}".format(10**size_range[1])
-#     ).query(
-#         "prevalence >= {}".format(prevalence_range[0])
-#     ).query(
-#         "prevalence <= {}".format(prevalence_range[1])
-#     ).query(
-#         "mean_abundance >= {}".format(abundance_range[0])
-#     ).query(
-#         "mean_abundance <= {}".format(abundance_range[1])
-#     ).apply(
-#         lambda c: c.apply(np.log10) if c.name == "size" else c
-#     )
-
-#     axis_names = {
-#         "CAG": "CAG ID",
-#         "size": "Number of Genes (log10)",
-#         "mean_abundance": "Mean Abundance",
-#         "std_abundance": "Std. Abundance",
-#         "prevalence": "Prevalence",
-#     }
-
-#     fig = go.Figure(
-#         data=go.Scattergl(
-#             x=plot_df[xaxis],
-#             y=plot_df[yaxis],
-#             ids=plot_df["CAG"].values,
-#             text=plot_df["CAG"].values,
-#             hovertemplate="CAG %{id}<br>X-value: %{x}<br>Y-value: %{y}",
-#             mode="markers",
-#         ),
-#     )
-
-#     fig.update_layout(
-#         xaxis_title=axis_names.get(xaxis, xaxis),
-#         yaxis_title=axis_names.get(yaxis, yaxis),
-#         title={
-#             'text': "CAG Summary Scatterplot",
-#             'y': 0.9,
-#             'x': 0.5, 
-#             'xanchor': 'center',
-#             'yanchor': 'top',
-#         },
-#         template="simple_white"
-#     )
-
-#     return fig
 
 # ##################
 # # CAG DETAIL TAX #
