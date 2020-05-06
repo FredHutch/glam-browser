@@ -80,9 +80,10 @@ metadata_fields = [n for n in manifest_df.columns.values if n not in ["R1", "R2"
 
 # Calculate the -log10(p_value)
 corncob_df = corncob_df.assign(
-    neg_log_pvalue = corncob_df["p_value"].apply(np.log10) * -1
+    neg_log_pvalue = corncob_df["p_value"].apply(np.log10) * -1,
+    neg_log_qvalue = corncob_df["q_value"].apply(np.log10) * -1,
 )
-max_neg_log_pvalue = corncob_df["neg_log_pvalue"].max()
+max_neg_log_pvalue = corncob_df.groupby("parameter")["neg_log_pvalue"].max()
 
 # external CSS stylesheets
 external_stylesheets = [
@@ -276,6 +277,11 @@ def volcano_parameter_dropdown(
         ).tolist(
         )
 
+        if len(parameter_list) > 1:
+            default_value = parameter_list[1]
+        else:
+            default_value = parameter_list[0]
+
         return [
             html.Label(label_text),
             dcc.Dropdown(
@@ -284,29 +290,21 @@ def volcano_parameter_dropdown(
                     {'label': l, 'value': l}
                     for l in parameter_list
                 ],
-                value=parameter_list[0]
+                value=default_value
             ),
             html.Br(),
         ]
 
 
 def volcano_pvalue_slider(slider_id, label_text='P-Value Filter'):
+    """This slider is missing the max and marks, which will be updated by a callback."""
     return [
         html.Label(label_text),
         dcc.Slider(
             id=slider_id,
             min=0,
-            max=max_neg_log_pvalue,
             step=0.1,
-            marks={
-                str(int(n)): str(int(n))
-                for n in np.arange(
-                    0,
-                    max_neg_log_pvalue,
-                    max(1, int(max_neg_log_pvalue / 5))
-                )
-            },
-            value=1
+            value=1,
         ),
         html.Br()
     ]
@@ -379,10 +377,10 @@ def cag_metric_dropdown(slider_id, label_text='Metric', default_value="size"):
         html.Br()
     ]
 
-def log_scale_radio_button(id_string, default="off"):
+def log_scale_radio_button(id_string, default="off", label_text="Log Scale"):
     return [
         html.Br(),
-        html.Label('Log Scale'),
+        html.Label(label_text),
         dcc.RadioItems(
             id=id_string,
             options=[
@@ -676,6 +674,9 @@ app.layout = html.Div(
                         "volcano-parameter-dropdown",
                     ) + volcano_pvalue_slider(
                         "volcano-pvalue-slider",
+                    ) + log_scale_radio_button(
+                        "volcano-fdr-radio",
+                        label_text="FDR-BH adjustment"
                     ),
                     className="col-sm-4 my-auto",
                 )
@@ -1313,10 +1314,11 @@ def draw_ordination(
     [
         Input('volcano-parameter-dropdown', 'value'),
         Input('volcano-pvalue-slider', 'value'),
+        Input('volcano-fdr-radio', 'value'),
     ])
-def draw_volcano_plot(parameter, neg_log_pvalue_min):
+def draw_volcano_plot(parameter, neg_log_pvalue_min, fdr_on_off):
 
-    if corncob_df is None:
+    if corncob_df is None or neg_log_pvalue_min is None:
         return go.Figure()
 
     # Subset to just this parameter
@@ -1326,13 +1328,22 @@ def draw_volcano_plot(parameter, neg_log_pvalue_min):
         "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
     )
 
+    if fdr_on_off == "off":
+        plot_y = "neg_log_pvalue"
+        hovertemplate = "CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}<extra></extra>"
+        yaxis_title = "p-value (-log10)"
+    else:
+        plot_y = "neg_log_qvalue"
+        hovertemplate = "CAG %{id}<br>Estimate: %{x}<br>q-value (-log10): %{y}<extra></extra>"
+        yaxis_title = "q-value (-log10)"
+
     fig = go.Figure(
         data=go.Scattergl(
             x=plot_df["estimate"],
-            y=plot_df["neg_log_pvalue"],
+            y=plot_df[plot_y],
             ids=plot_df["CAG"].values,
             text=plot_df["CAG"].values,
-            hovertemplate="CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}<extra></extra>",
+            hovertemplate=hovertemplate,
             mode="markers",
             opacity=0.5,
         ),
@@ -1340,7 +1351,7 @@ def draw_volcano_plot(parameter, neg_log_pvalue_min):
 
     fig.update_layout(
         xaxis_title="Estimated Coefficient",
-        yaxis_title="p-value (-log10)",
+        yaxis_title=yaxis_title,
         title={
             'text': "Estimated Associations",
             'y': 0.9,
@@ -1352,6 +1363,31 @@ def draw_volcano_plot(parameter, neg_log_pvalue_min):
     )
 
     return fig
+
+
+@app.callback(
+    Output('volcano-pvalue-slider', 'max'),
+    [
+        Input('volcano-parameter-dropdown', 'value'),
+    ])
+def update_volcano_pvalue_slider_max(parameter):
+    return max_neg_log_pvalue[parameter]
+
+
+@app.callback(
+    Output('volcano-pvalue-slider', 'marks'),
+    [
+        Input('volcano-parameter-dropdown', 'value'),
+    ])
+def update_volcano_pvalue_slider_marks(parameter):
+    return {
+        str(int(n)): str(int(n))
+        for n in np.arange(
+            0,
+            max_neg_log_pvalue[parameter],
+            max(1, int(max_neg_log_pvalue[parameter] / 5))
+        )
+    }
 
 
 # ###################
