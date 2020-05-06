@@ -147,7 +147,8 @@ def make_cag_tax_df(tax_id_list, ranks_to_keep=["phylum", "class", "order", "fam
     # Iterate over each terminal leaf
     for tax_id, n_genes in tax_id_list.apply(int).value_counts().items():
 
-        if tax_id == 0:
+        # Skip taxa which aren't in the taxonomy
+        if tax_id not in taxonomy_df.index.values:
             continue
 
         # Walk up the tree from the leaf to the root
@@ -162,27 +163,20 @@ def make_cag_tax_df(tax_id_list, ranks_to_keep=["phylum", "class", "order", "fam
     # Make a DataFrame
     df = pd.DataFrame({"count": counts})
 
-    # Add the name and parent
+    # Add the name, parent, rank
     df = df.assign(
-        name = df.index.values,
-        parent = taxonomy_df["parent"],
+        tax_id = df.index.values,
+        parent_tax_id = taxonomy_df["parent"],
         rank = taxonomy_df["rank"],
-    ).apply(
-        lambda c: c.apply(
-            lambda t: "{} ({})".format(taxonomy_df.loc[t, "name"], t)
-        ) if c.name in ["name", "parent"] else c
     )
 
     # Set the parent of the root as ""
-    df.loc[
-        df["name"] == "root (0)",
-        "parent"
-    ] = ""
+    df.loc[0, "parent"] = ""
 
     # Remove any taxa which aren't at the right rank (but keep the root)
     df = df.assign(
         to_remove = df.apply(
-            lambda r: r["rank"] not in (ranks_to_keep) and r["name"] != "root",
+            lambda r: r["rank"] not in (ranks_to_keep) and r["tax_id"] != 0,
             axis=1
         )
     )
@@ -196,12 +190,32 @@ def make_cag_tax_df(tax_id_list, ranks_to_keep=["phylum", "class", "order", "fam
         df = df.drop(
             index=ix_to_remove
         ).replace(to_replace={
-            "parent": {
-                df.loc[ix_to_remove, "name"]: df.loc[ix_to_remove, "parent"]
+            "parent_tax_id": {
+                df.loc[ix_to_remove, "tax_id"]: df.loc[ix_to_remove, "parent_tax_id"]
             }
         })
 
-    return df.drop(columns="to_remove")
+    # Make a dict linking the tax ID with the taxon name
+    tax_names = taxonomy_df["name"].reindex(index=df.index)
+
+    # Count up the frequency of each name
+    tax_names_vc = tax_names.value_counts()
+
+    # Identify any repeated names
+    repeated_names = tax_names_vc.index.values[tax_names_vc.values > 1]
+
+    # Make each name unique by adding the tax ID (if needed)
+    for n in repeated_names:
+        for tax_id in tax_names.index.values[tax_names == n]:
+            tax_names.loc[tax_id] = "{} ({})".format(n, tax_id)
+
+    # Add this nicely formatted name to the output to replace the tax IDs
+    df = df.assign(
+        name = df["tax_id"].apply(lambda t: tax_names.get(t, "")),
+        parent = df["parent_tax_id"].apply(lambda t: tax_names.get(t, "")),
+    )
+
+    return df.reindex(columns=["name", "parent", "count"])
 
 ###############################
 # REUSABLE DISPLAY COMPONENTS #
@@ -1580,6 +1594,7 @@ def draw_cag_detail_tax(min_ngenes, selected_cag_json):
         # Set the points which are selected in the scatter plot
         cag_id = json.loads(selected_cag_json)["id"]
     else:
+        # Default CAG to plot
         cag_id = 100
 
 
@@ -1593,7 +1608,7 @@ def draw_cag_detail_tax(min_ngenes, selected_cag_json):
 
     # Format the DataFrame as needed to make a go.Sunburst
     cag_tax_df = make_cag_tax_df(cag_df["tax_id"])
-
+    
     # If no assignments were made, just show an empty plot
     if cag_tax_df is None:
         fig = go.Figure(data=[])
@@ -1611,6 +1626,7 @@ def draw_cag_detail_tax(min_ngenes, selected_cag_json):
             labels=cag_tax_df["name"],
             parents=cag_tax_df["parent"],
             values=cag_tax_df["count"],
+            branchvalues="total",
         )
     )
 
