@@ -833,6 +833,7 @@ app.layout = html.Div(
                             {'label': 'Points', 'value': 'scatter'},
                             {'label': 'Line', 'value': 'line'},
                             {'label': 'Boxplot', 'value': 'boxplot'},
+                            {'label': 'Stripplot', 'value': 'strip'},
                         ]
                     ) + metadata_field_dropdown(
                         "single-cag-color",
@@ -1673,6 +1674,9 @@ def draw_single_cag_plot(selected_cag_json, xaxis, plot_type, color, facet, log_
 
     elif plot_type == "boxplot":
         plot_func = px.box
+
+    elif plot_type == "strip":
+        plot_func = px.strip
 
     else:
         assert plot_type == "line"
