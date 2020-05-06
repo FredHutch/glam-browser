@@ -6,6 +6,7 @@ import dash_table
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
+from collections import defaultdict
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
@@ -49,6 +50,9 @@ with pd.HDFStore(hdf5_fp, "r") as store:
     # Corncob results (for volcano plot)
     corncob_df = pd.read_hdf(store, "/stats/cag/corncob")
 
+    # Taxonomy table
+    taxonomy_df = pd.read_hdf(store, "/ref/taxonomy")
+
 # Precompute some useful metrics
 
 # Precompute the proportion of reads which align
@@ -85,6 +89,11 @@ corncob_df = corncob_df.assign(
 )
 max_neg_log_pvalue = corncob_df.groupby("parameter")["neg_log_pvalue"].max()
 
+# Format the parent tax ID as an integer
+taxonomy_df = taxonomy_df.apply(
+    lambda c: c.fillna(0).apply(float).apply(int) if c.name in ["parent", "tax_id"] else c,
+).set_index("tax_id")
+
 # external CSS stylesheets
 external_stylesheets = [
     {
@@ -94,6 +103,101 @@ external_stylesheets = [
         'crossorigin': 'anonymous'
     }
 ]
+
+##################
+# HELPER METHODS #
+##################
+def path_to_root(tax_id, max_steps=100):
+    """Yield a list with all of the taxa above this one."""
+
+    visited = set([])
+
+    for _ in range(max_steps):
+
+        # Yield this taxon
+        yield tax_id
+
+        # Add to the path we have visited
+        visited.add(tax_id)
+
+        # Get the parent of this taxon
+        parent_id = taxonomy_df.loc[tax_id, "parent"]
+    
+        # If the chain has ended, stop
+        if parent_id in visited or parent_id == 0:
+            break
+
+        # Otherwise, keep walking up
+        tax_id = parent_id
+
+
+def make_cag_tax_df(tax_id_list, ranks_to_keep=["phylum", "class", "order", "family", "genus", "species"]):
+    """Return a nicely formatted taxonomy table from a list of tax IDs."""
+
+    # We will construct a table with all of the taxa in the tree, containing
+    # The name of that taxon
+    # The rank of that taxon
+    # The number of genes found at that taxon or in its decendents
+    # The name of the parent of that taxon
+
+    counts = defaultdict(int)
+
+    # Iterate over each terminal leaf
+    for tax_id, n_genes in tax_id_list.apply(int).value_counts().items():
+
+        if tax_id == 0:
+            continue
+
+        # Walk up the tree from the leaf to the root
+        for anc_tax_id in path_to_root(tax_id):
+
+            # Add to the sum for every node we visit along the way
+            counts[anc_tax_id] += n_genes
+
+    if len(counts) == 0:
+        return
+
+    # Make a DataFrame
+    df = pd.DataFrame({"count": counts})
+
+    # Add the name and parent
+    df = df.assign(
+        name = df.index.values,
+        parent = taxonomy_df["parent"],
+        rank = taxonomy_df["rank"],
+    ).apply(
+        lambda c: c.apply(taxonomy_df["name"].get) if c.name in ["name", "parent"] else c
+    )
+
+    # Set the parent of the root as ""
+    df.loc[
+        df["name"] == "root",
+        "parent"
+    ] = ""
+
+    # Remove any taxa which aren't at the right rank (but keep the root)
+    df = df.assign(
+        to_remove = df.apply(
+            lambda r: r["rank"] not in (ranks_to_keep) and r["name"] != "root",
+            axis=1
+        )
+    )
+
+    # Remove all of the taxa which aren't at the right rank
+    while df["to_remove"].any():
+        ix_to_remove = df.index.values[df["to_remove"]][0]
+
+        # Drop this row from the filtered table
+        # Also update any rows which include this taxon as a parent
+        df = df.drop(
+            index=ix_to_remove
+        ).replace(to_replace={
+            "parent": {
+                df.loc[ix_to_remove, "name"]: df.loc[ix_to_remove, "parent"]
+            }
+        })
+
+    return df.drop(columns="to_remove")
 
 ###############################
 # REUSABLE DISPLAY COMPONENTS #
@@ -619,49 +723,6 @@ app.layout = html.Div(
         #######################
         # / CAG SUMMARY GRAPH #
         #######################
-        # ###################
-        # # CAG DETAIL CARD #
-        # ###################
-        # html.Div(
-        #     [
-        #         html.Div(
-        #             [
-        #                 "CAG Details"
-        #             ],
-        #             className="card-header"
-        #         ),
-        #         html.Div(
-        #             [
-        #                 graph_div("cag-detail-tax", 'cag-detail-tax-graph', className="col-sm-12"), 
-        #             ],
-        #             className="row"
-        #         ),
-        #         html.Div(
-        #             [
-        #                 graph_div("cag-detail-heatmap", 'cag-detail-heatmap-graph'), 
-        #                 html.Div(
-        #                     metadata_field_dropdown(
-        #                         "cag-detail-heatmap-color-primary",
-        #                         label_text="Color By (primary)",
-        #                     ) + metadata_field_dropdown(
-        #                         "cag-detail-heatmap-color-secondary",
-        #                         label_text="Color By (secondary)",
-        #                     ) + metadata_field_dropdown(
-        #                         "cag-detail-heatmap-color-tertiary",
-        #                         label_text="Color By (tertiary)",
-        #                     ),
-        #                     className="col-sm-4 my-auto",
-        #                 )
-        #             ],
-        #             className="row"
-        #         )
-
-        #     ],
-        #     className="card"
-        # ),
-        # #####################
-        # # / CAG DETAIL CARD #
-        # #####################
         ################
         # VOLCANO PLOT #
         ################
@@ -685,6 +746,49 @@ app.layout = html.Div(
         ##################
         # / VOLCANO PLOT #
         ##################
+        ###################
+        # CAG DETAIL CARD #
+        ###################
+        html.Div(
+            [
+                html.Div(
+                    [
+                        "CAG Details"
+                    ],
+                    className="card-header"
+                ),
+                html.Div(
+                    [
+                        graph_div("cag-detail-tax", 'cag-detail-tax-graph', className="col-sm-12"),
+                    ],
+                    className="row"
+                ),
+                # html.Div(
+                #     [
+                #         # graph_div("cag-detail-heatmap", 'cag-detail-heatmap-graph'),
+                #         html.Div(
+                #             metadata_field_dropdown(
+                #                 "cag-detail-heatmap-color-primary",
+                #                 label_text="Color By (primary)",
+                #             ) + metadata_field_dropdown(
+                #                 "cag-detail-heatmap-color-secondary",
+                #                 label_text="Color By (secondary)",
+                #             ) + metadata_field_dropdown(
+                #                 "cag-detail-heatmap-color-tertiary",
+                #                 label_text="Color By (tertiary)",
+                #             ),
+                #             className="col-sm-4 my-auto",
+                #         )
+                #     ],
+                #     className="row"
+                # )
+
+            ],
+            className="card"
+        ),
+        #####################
+        # / CAG DETAIL CARD #
+        #####################        
         # ###################
         # # SINGLE CAG PLOT #
         # ###################
@@ -1279,33 +1383,6 @@ def draw_ordination(
     return fig
 
 
-# ##################
-# # CAG DETAIL TAX #
-# ##################
-# @app.callback(
-#     Output('cag-detail-tax-graph', 'figure'),
-#     [
-#     ])
-# def draw_cag_detail_tax():
-
-#     fig = Go.figure([])
-#     return fig
-
-# ######################
-# # CAG DETAIL HEATMAP #
-# ######################
-# @app.callback(
-#     Output('cag-detail-heatmap-graph', 'figure'),
-#     [
-#         Input('cag-detail-heatmap-color-primary', 'value'),
-#         Input('cag-detail-heatmap-color-secondary', 'value'),
-#         Input('cag-detail-heatmap-color-tertiary', 'value'),
-#     ])
-# def draw_cag_detail_heatmap():
-
-#     fig = Go.figure([])
-#     return fig
-
 ################
 # VOLCANO PLOT #
 ################
@@ -1389,6 +1466,61 @@ def update_volcano_pvalue_slider_marks(parameter):
         )
     }
 
+
+##################
+# CAG DETAIL TAX #
+##################
+@app.callback(
+    Output('cag-detail-tax-graph', 'figure'),
+    [
+        Input('volcano-parameter-dropdown', 'value'),
+    ])
+def draw_cag_detail_tax(cag_id):
+
+    # Read in the taxonomic annotations for this CAG
+    cag_df = pd.read_hdf(
+        hdf5_fp,
+        "/annot/gene/all",
+        where="CAG == {}".format(100),
+        columns = ["gene", "tax_id"]
+    )
+
+    # Format the DataFrame as needed to make a go.Sunburst
+    cag_tax_df = make_cag_tax_df(cag_df["tax_id"])
+
+    # If no assignments were made, just show an empty plot
+    if cag_tax_df is None:
+        fig = go.Figure(data=[])
+        fig.update_layout(
+            template="simple_white",
+        )
+        return fig
+
+    cag_tax_df = cag_tax_df.query("count > 10")
+
+    fig = go.Figure(
+        data=go.Sunburst(
+            labels=cag_tax_df["name"],
+            parents=cag_tax_df["parent"],
+            values=cag_tax_df["count"],
+        )
+    )
+    return fig
+
+# ######################
+# # CAG DETAIL HEATMAP #
+# ######################
+# @app.callback(
+#     Output('cag-detail-heatmap-graph', 'figure'),
+#     [
+#         Input('cag-detail-heatmap-color-primary', 'value'),
+#         Input('cag-detail-heatmap-color-secondary', 'value'),
+#         Input('cag-detail-heatmap-color-tertiary', 'value'),
+#     ])
+# def draw_cag_detail_heatmap():
+
+#     fig = Go.figure([])
+#     return fig
 
 # ###################
 # # SINGLE CAG PLOT #
