@@ -30,7 +30,6 @@ with pd.HDFStore(hdf5_fp, "r") as store:
     )[
         "value"
     ]
-    print(exp_metrics)
 
     # Table for RICHNESS GRAPH
     richness_df = pd.read_hdf(store, "/summary/all")
