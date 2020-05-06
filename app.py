@@ -506,7 +506,7 @@ def log_scale_radio_button(id_string, default="off", label_text="Log Scale"):
         dcc.RadioItems(
             id=id_string,
             options=[
-                {'label': 'On', 'value': 'on'},
+                {'label': 'On ', 'value': 'on'},
                 {'label': 'Off', 'value': 'off'},
             ],
             value=default,
@@ -704,7 +704,18 @@ app.layout = html.Div(
         card_wrapper(
             "CAG Summary",
             [
-                graph_div("cag-summary", 'cag-summary-graph'),
+                html.Div(
+                    [
+                        html.A(id="cag-summary"),
+                        dcc.Graph(
+                            id='cag-summary-graph-hist'
+                        ),
+                        dcc.Graph(
+                            id='cag-summary-graph-scatter'
+                        ),
+                    ],
+                    className="col-sm-8 my-auto",
+                ),
                 html.Div(
                     cag_metric_dropdown(
                         "cag-summary-metric-primary",
@@ -732,7 +743,8 @@ app.layout = html.Div(
                         "cag-summary-nbinsx-slider"
                     ) + log_scale_radio_button(
                         "cag-summary-log",
-                        default="on"
+                        default="on",
+                        label_text="Histogram Log Scale"
                     ),
                     className="col-sm-4 my-auto",
                 ),
@@ -953,13 +965,6 @@ def draw_richness(selected_metric, selected_type):
         )
 
     fig.update_layout(
-        title={
-            'text': "Gene Analysis Summary",
-            'y': 0.9,
-            'x': 0.5, 
-            'xanchor': 'center',
-            'yanchor': 'top'
-        },
         yaxis_range=[0, richness_df[selected_metric].max() * 1.05],
         yaxis_title=metric_names[selected_metric], 
         template="simple_white"
@@ -972,7 +977,83 @@ def draw_richness(selected_metric, selected_type):
 # CAG SUMMARY GRAPH #
 #####################
 @app.callback(
-    Output('cag-summary-graph', 'figure'),
+    Output('cag-summary-graph-hist', 'figure'),
+    [
+        Input('cag-summary-metric-primary', 'value'),
+        Input('cag-summary-size-slider', 'value'),
+        Input('cag-summary-entropy-slider', 'value'),
+        Input('cag-summary-prevalence-slider', 'value'),
+        Input('cag-summary-abundance-slider', 'value'),
+        Input('cag-summary-nbinsx-slider', 'value'),
+        Input('cag-summary-log', 'value'),
+    ])
+def draw_cag_summary_graph_hist(
+    metric_primary,
+    size_range,
+    entropy_range,
+    prevalence_range,
+    abundance_range,
+    nbinsx,
+    log_scale,
+):
+    # Apply the filters
+    plot_df = cag_summary_df.applymap(
+        float
+    ).query(
+        "size >= {}".format(10**size_range[0])
+    ).query(
+        "size <= {}".format(10**size_range[1])
+    ).query(
+        "prevalence >= {}".format(prevalence_range[0])
+    ).query(
+        "prevalence <= {}".format(prevalence_range[1])
+    ).query(
+        "mean_abundance >= {}".format(abundance_range[0])
+    ).query(
+        "mean_abundance <= {}".format(abundance_range[1])
+    ).query(
+        "entropy >= {}".format(entropy_range[0])
+    ).query(
+        "entropy <= {}".format(entropy_range[1])
+    ).apply(
+        lambda c: c.apply(np.log10) if c.name == "size" else c
+    )
+
+    axis_names = {
+        "CAG": "CAG ID",
+        "size": "Number of Genes (log10)",
+        "mean_abundance": "Mean Abundance",
+        "std_abundance": "Std. Abundance",
+        "prevalence": "Prevalence",
+        "entropy": "Entropy",
+    }
+
+    # Draw a histogram
+    fig = go.Figure(
+        go.Histogram(
+            x=plot_df[metric_primary],
+            histfunc="sum",
+            nbinsx=nbinsx,
+            hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
+        ),
+    )
+    fig.update_layout(
+        xaxis_title=axis_names[metric_primary],
+        yaxis_title="Number of CAGs",
+        template="simple_white",
+        height=400,
+        width=600,
+    )
+
+    # Apply the log transform
+    if log_scale == "on":
+        fig.update_yaxes(type="log")
+
+    return fig
+
+
+@app.callback(
+    Output('cag-summary-graph-scatter', 'figure'),
     [
         Input('cag-summary-metric-primary', 'value'),
         Input('cag-summary-metric-secondary', 'value'),
@@ -980,19 +1061,15 @@ def draw_richness(selected_metric, selected_type):
         Input('cag-summary-entropy-slider', 'value'),
         Input('cag-summary-prevalence-slider', 'value'),
         Input('cag-summary-abundance-slider', 'value'),
-        Input('cag-summary-nbinsx-slider', 'value'),
-        Input('cag-summary-log', 'value'),
-        Input('cag-summary-selected-cag', 'children'),
+        Input('global-selected-cag', 'children'),
     ])
-def draw_cag_summary_graph(
+def draw_cag_summary_graph_scatter(
     metric_primary,
     metric_secondary,
     size_range,
     entropy_range,
     prevalence_range,
     abundance_range,
-    nbinsx,
-    log_scale,
     selected_cag_json,
 ):
     # Apply the filters
@@ -1027,37 +1104,6 @@ def draw_cag_summary_graph(
         "entropy": "Entropy",
     }
 
-    # Make a plot with two panels, one on top of the other, sharing the x-axis
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True
-    )
-
-    # Draw a histogram on the top panel
-    fig.add_trace(
-        go.Histogram(
-            x=plot_df[metric_primary],
-            histfunc="sum",
-            nbinsx=nbinsx,
-            hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
-        ),
-        row=1,
-        col=1
-    )
-    # Label the x-axis of the histogram
-    fig.update_xaxes(
-        row=1, col=1,
-        title_text = axis_names[metric_primary]
-    )
-    # Label the y-axis of the histogram
-    fig.update_yaxes(
-        row=1, col=1,
-        title_text = "Number of CAGs"
-    )
-
-    # Apply the log transform
-    if log_scale == "on":
-        fig.update_yaxes(row=1, col=1, type="log")
-
     # Parse the selected CAG data
     if selected_cag_json is not None:
         # Set the points which are selected in the scatter plot
@@ -1067,8 +1113,8 @@ def draw_cag_summary_graph(
     else:
         selectedpoints = None
 
-    # Draw a scatter plot on the bottom plot
-    fig.add_trace(
+    # Draw a scatter plot
+    fig = go.Figure(
         go.Scattergl(
             x=plot_df[metric_primary],
             y=plot_df[metric_secondary],
@@ -1079,26 +1125,16 @@ def draw_cag_summary_graph(
             mode="markers",
             opacity=0.5,
             selectedpoints=selectedpoints
-        ),
-        row=2,
-        col=1
-    )
-    # Label the x-axis of the scatter plot
-    fig.update_xaxes(
-        row=2, col=1,
-        title_text=axis_names[metric_primary]
-    )
-    # Label the y-axis of the scatter plot
-    fig.update_yaxes(
-        row=2, col=1,
-        title_text=axis_names[metric_secondary]
+        )
     )
 
     # Set the style of the entire plot
     fig.update_layout(
+        xaxis_title=axis_names[metric_primary],
+        yaxis_title=axis_names[metric_secondary],
         template="simple_white",
         showlegend=False,
-        height=800,
+        height=400,
         width=600,
     )
 
@@ -1107,7 +1143,7 @@ def draw_cag_summary_graph(
 @app.callback(
     Output('cag-summary-selected-cag', 'children'),
     [
-        Input('cag-summary-graph', 'clickData'),
+        Input('cag-summary-graph-scatter', 'clickData'),
     ])
 def cag_summary_save_click_data(clickData):
     """Only save the click data when a point in a scatter has been selected"""
@@ -1473,7 +1509,7 @@ def draw_ordination(
         Input('volcano-parameter-dropdown', 'value'),
         Input('volcano-pvalue-slider', 'value'),
         Input('volcano-fdr-radio', 'value'),
-        Input('cag-summary-selected-cag', 'children'),
+        Input('global-selected-cag', 'children'),
     ])
 def draw_volcano_plot(parameter, neg_log_pvalue_min, fdr_on_off, selected_cag_json):
 
