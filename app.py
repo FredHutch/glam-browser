@@ -40,7 +40,7 @@ with pd.HDFStore(hdf5_fp, "r") as store:
     cag_summary_df = pd.read_hdf(store, "/annot/cag/all")
 
     # Specimen metadata table (manifest provided by user)
-    manifest_df = pd.read_hdf(store, "/manifest")
+    manifest_df = pd.read_hdf(store, "/manifest").set_index("specimen")
 
     # Pairwise distance tables
     distance_df_dict = {
@@ -83,9 +83,6 @@ cag_size_min = cag_size_log.min()
 cag_size_max = cag_size_log.max()
 cag_size_range = cag_size_max - cag_size_min
 
-# Set index on manifest
-manifest_df.set_index("specimen", inplace=True)
-
 # Metadata fields found in the manifest
 metadata_fields = [n for n in manifest_df.columns.values if n not in ["R1", "R2", "I1", "I2"]]
 
@@ -114,6 +111,18 @@ external_stylesheets = [
 ##################
 # HELPER METHODS #
 ##################
+def parse_manifest_json(manifest_json):
+    """Parse the filtered manifest stored in the browser."""
+    if manifest_json is None:
+        # Return the full table from the HDF5 if nothing is stored in the browser
+        return manifest_df
+    else:
+        # Otherwise, return the table stored in the browser
+        return pd.DataFrame(
+            json.loads(manifest_json)
+        ).set_index("specimen")
+
+
 def path_to_root(tax_id, max_steps=100):
     """Yield a list with all of the taxa above this one."""
 
@@ -851,6 +860,76 @@ app.layout = html.Div(
         #####################
         # / SINGLE CAG PLOT #
         #####################
+        ##################
+        # MANIFEST TABLE #
+        ##################
+        card_wrapper(
+            "Manifest",
+            [
+                html.Div( # Hidden div to store the list of rows selected by the user
+                    [], 
+                    id="manifest-rows-selected",
+                    style={"display": "none"},
+                ),
+                html.Div( # Hidden div to store the filtered manifest
+                    [], 
+                    id="manifest-filtered",
+                    style={"display": "none"},
+                ),
+                html.Div([], className="col-sm-1"),
+                html.Div(
+                    [
+                        dash_table.DataTable(
+                            id='manifest-table',
+                            columns=[
+                                {"name": "Specimen", "id": "specimen"}
+                            ] + [
+                                {"name": i, "id": i}
+                                for i in manifest_df.columns
+                            ],
+                            data=manifest_df.reset_index(
+                            ).to_dict('records'),
+                            row_selectable='multi',
+                            style_table={
+                                'minWidth': '100%',
+                            },
+                            style_header={
+                                "backgroundColor": "rgb(2,21,70)",
+                                "color": "white",
+                                "textAlign": "center",
+                            },
+                            page_action='native',
+                            page_size= 20,
+                            filter_action='native',
+                            sort_action='native',
+                            hidden_columns=[],
+                            selected_rows=np.arange(0, manifest_df.shape[0]),
+                            css=[{"selector": ".show-hide", "rule": "display: none"}],
+                        ),
+                        html.Br(),
+                        html.Label("Show / Hide Columns"),
+                        dcc.Dropdown(
+                            id="manifest-table-select-columns",
+                            options=[
+                                {
+                                    "label": n,
+                                    "value": n
+                                }
+                                for n in manifest_df.columns.values
+                            ],
+                            value=[i for i in manifest_df.columns.values],
+                            multi=True,
+                        ),
+                        html.Br(),
+                    ],
+                    className="col-sm-10 my-auto",
+                ),
+                html.Div([], className="col-sm-1"),
+            ]
+        ),
+        ####################
+        # / MANIFEST TABLE #
+        ####################
     ],
     className="container"
 )
@@ -871,10 +950,21 @@ layout = go.Layout(
     [
         Input('richness-metric-dropdown', 'value'),
         Input('richness-type-dropdown', 'value'),
+        Input('manifest-filtered', 'children'),
     ])
-def draw_richness(selected_metric, selected_type):
+def draw_richness(selected_metric, selected_type, manifest_json):
     assert selected_type in ["hist", "scatter"]
     assert selected_metric in richness_df.columns.values, (selected_metric, richness_df.columns.values)
+
+    # Get the filtered manifest from the browser
+    plot_manifest_df = parse_manifest_json(manifest_json)
+
+    # Subset the richness table based on the filtered manifest
+    plot_richness_df = richness_df.loc[
+        richness_df["specimen"].isin(
+            plot_manifest_df.index.values
+        )
+    ]
 
     metric_names = {
         "prop_reads_aligned": "Prop. Reads Aligned",
@@ -890,16 +980,16 @@ def draw_richness(selected_metric, selected_type):
             
         fig = go.Figure(
             data=go.Scatter(
-                x=richness_df["n_reads"],
-                y=richness_df[selected_metric],
-                text=richness_df["specimen"],
+                x=plot_richness_df["n_reads"],
+                y=plot_richness_df[selected_metric],
+                text=plot_richness_df["specimen"],
                 hovertemplate=hovertemplate,
                 mode="markers",
             ),
         )
         fig.update_layout(
             xaxis_title="Number of Reads",
-            xaxis_range=[0, richness_df["n_reads"].max() * 1.05],
+            xaxis_range=[0, plot_richness_df["n_reads"].max() * 1.05],
         )
 
     else:
@@ -908,7 +998,7 @@ def draw_richness(selected_metric, selected_type):
         fig = go.Figure(
             data=[
                 go.Histogram(
-                    y=richness_df[selected_metric],
+                    y=plot_richness_df[selected_metric],
                     hovertemplate="Range: %{y}<br>Count: %{x}<extra></extra>",
                 )
             ],
@@ -918,7 +1008,7 @@ def draw_richness(selected_metric, selected_type):
         )
 
     fig.update_layout(
-        yaxis_range=[0, richness_df[selected_metric].max() * 1.05],
+        yaxis_range=[0, plot_richness_df[selected_metric].max() * 1.05],
         yaxis_title=metric_names[selected_metric], 
         template="simple_white"
     )
@@ -1230,6 +1320,7 @@ def show_hide_ordination_perplexity(algorithm):
         Input('ordination-secondary-pc', 'value'),
         Input('ordination-tsne-perplexity', 'value'),
         Input('ordination-metadata', 'value'),
+        Input('manifest-filtered', 'children'),
     ])
 def draw_ordination(
     algorithm, 
@@ -1238,21 +1329,33 @@ def draw_ordination(
     secondary_pc,
     perplexity,
     metadata,
+    manifest_json,
 ):
     """Perform ordination and make the display plots."""
+
+    # Get the filtered manifest from the browser
+    plot_manifest_df = parse_manifest_json(manifest_json)
 
     assert metric in distance_df_dict, "Distance metric not found: %s" % metric
 
     if algorithm == "pca":
         plot_df = run_pca(
-            distance_df_dict[metric]
+            distance_df_dict[
+                metric
+            ].reindex(
+                index=plot_manifest_df.index
+            )
         )
 
     else:
         assert algorithm == "tsne", "Algorithm not found: %s" % algorithm
 
         plot_df = run_tsne(
-            distance_df_dict[metric],
+            distance_df_dict[
+                metric
+            ].reindex(
+                index=plot_manifest_df.index
+            ),
             perplexity=perplexity
         )
 
@@ -1300,7 +1403,7 @@ def draw_ordination(
 
         # Add the specified metadata to the DataFrame
         plot_df = plot_df.assign(
-            METADATA = manifest_df[metadata]
+            METADATA = plot_manifest_df[metadata]
         ).rename(columns={
             "METADATA": metadata
         })
@@ -1654,8 +1757,20 @@ def draw_cag_detail_tax(min_ngenes, selected_cag_json):
         Input('single-cag-color', 'value'),
         Input('single-cag-facet', 'value'),
         Input('single-cag-log', 'value'),
+        Input('manifest-filtered', 'children'),
     ])
-def draw_single_cag_plot(selected_cag_json, xaxis, plot_type, color, facet, log_scale):
+def draw_single_cag_plot(
+    selected_cag_json, 
+    xaxis, 
+    plot_type, 
+    color, 
+    facet, 
+    log_scale,
+    manifest_json
+):
+
+    # Get the filtered manifest from the browser
+    plot_manifest_df = parse_manifest_json(manifest_json)
 
     # Parse the selected CAG data
     if selected_cag_json is not None:
@@ -1665,7 +1780,7 @@ def draw_single_cag_plot(selected_cag_json, xaxis, plot_type, color, facet, log_
         # Default CAG to plot
         cag_id = 100
 
-    plot_df = manifest_df.assign(
+    plot_df = plot_manifest_df.assign(
         CAG_ABUND = cag_abundance_df.loc[int(cag_id)]
     )
 
@@ -1700,6 +1815,44 @@ def draw_single_cag_plot(selected_cag_json, xaxis, plot_type, color, facet, log_
     )
     return fig
 
+@app.callback(
+    Output('manifest-rows-selected', 'children'),
+    [
+        Input('manifest-table', 'selected_rows'),
+    ])
+def manifest_save_rows_selected(selected_rows):
+    """Save the list of selected rows to a hidden div."""
+    return json.dumps(selected_rows, indent=2)
+
+@app.callback(
+    Output('manifest-filtered', 'children'),
+    [
+        Input('manifest-rows-selected', 'children'),
+    ])
+def manifest_save_filtered(selected_rows_json):
+    """Save the filtered manifest to a hidden div.."""
+
+    # Parse the list of indexes which we should save
+    selected_rows = json.loads(selected_rows_json)
+
+    # Filter down the manifest table and save as JSON
+    return manifest_df.reset_index(
+    ).reindex(
+        index=selected_rows
+    ).to_json(date_format='iso', orient='records')
+
+@app.callback(
+    Output('manifest-table', 'hidden_columns'),
+    [
+        Input('manifest-table-select-columns', 'value'),
+    ])
+def manifest_update_columns_selected(selected_columns):
+    """Allow the user to hide selected columns in the manifest table."""
+    return [
+        n
+        for n in manifest_df.columns.values
+        if n not in selected_columns
+    ]
 
 if __name__ == '__main__':
 
