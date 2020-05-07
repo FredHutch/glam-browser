@@ -4,3 +4,5 @@ seaborn
 plotly
 dash
 dash_bootstrap_components
+tables
+scikit-learn
