@@ -1857,5 +1857,6 @@ def manifest_update_columns_selected(selected_columns):
 if __name__ == '__main__':
 
     app.run_server(
-        debug=True
+        host='0.0.0.0',
+        port=8050,
     )
