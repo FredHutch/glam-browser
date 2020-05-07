@@ -8,39 +8,56 @@ tool ([link](https://github.org/golob-minot/geneshot)).
 
 The GLAM Browser displays:
 
-  * Table of CAG associations (output from corncob)
-  * Volcano plot (estimated coefficient vs. -log10(p-value))
-  * Table of genes found in a selected CAG
-  * Customizable display of CAG abundance across samples
+  * Summary of specimens by the number of genes detected and reads aligned
+  * Description of CAG metrics including size, entropy, etc.
+  * Summary of user-defined association testing
+  * Taxonomic summary for selected CAGs
+  * Customizable abundance display for selected CAGs
 
-### Running the GLAM Browser
+The input to the Browser is the single results HDF5 file output by `geneshot`.
 
-First, build the Docker image for the GLAM Browser:
+## Running the GLAM Browser
 
-```#!/bin/bash
-docker build . -t glam
-```
+The GLAM Browser can be run in a few different ways. Depending on your preferred method, you will have to make sure to make the input data accessible in a compatible manner.
 
-To run the app, you need to point it to a directory which contains the needed HDF5
-files using the `DATA_DIR` environment variable in the container. This requires two
-steps:
+### Run Locally with Docker
 
-  1. Mount your local data folder to the container
-  2. Point the app to read data from that mounted folder
+The most straightforward for a user to run the GLAM Browser is to run a Docker container on your local computer. The two things to think about are that (1) the Docker container needs to be able to access your input data (with a combination of mounting the folder and setting the `HDF5_FP` environment variable inside the container), and (2) it also needs to be able to expose the port (`8050`) which the app is hosted on.
 
-You can set this to any path on your system, but for the example we will use `$PWD/data/`.
-
-```#!/bin/bash
-docker run -v $PWD/data:/share/data -e DATA_DIR=/share/data -p 3838:7777 glam
-```
-
-The app should be accessible on the 3838 port, at `localhost:3838`.
-
-#### Development Mode
-
-If you would like to run a version of the app which you are actively editing, such
-as a copy in the `$PWD/app` folder, then use the following command.
+1. Check for the latest tagged Docker image at [Quay](https://quay.io/repository/fhcrc-microbiome/glam?tab=tags). We use `latest` in the example below.
+2. Find the absolute path to your input HDF5 on your local filesystem. In this example we will assume that the file is found at `/path/to/folder/containing/data/results.hdf5`
+3. Set up [Docker Desktop](https://www.docker.com/products/docker-desktop) on your computer
+4. Run the Docker container as follows:
 
 ```#!/bin/bash
-docker run -v $PWD/data:/share/data -e DATA_DIR=/share/data -v $PWD/app:/share/app -e APP_DIR=/share/app -p 3838:7777 glam
+
+docker run -it -v /path/to/folder/containing/data/:/share --env HDF5_FP=/share/results.hdf5 -p 8050:8050 quay.io/fhcrc-microbiome/glam:latest
 ```
+
+You can now access the app at `127.0.0.1:8050` in your browser.
+
+Explanation of flags:
+
+* `-it`: Run in interactive mode (issuing Control+C to close)
+* `-v`: Mount the data-containing folder to `/share` in the container
+* `--env`: Set an environment variable in the container
+* `-p`: Expose the port used by GLAM
+
+### Run Locally from Source
+
+You can also run the app by:
+
+1. Cloning the GitHub repo locally
+2. Setting up a Python3 virtual environment
+3. Installing the Python requirements `pip3 install -r requirements.txt`
+4. Running the app with the following command
+
+```#!/bin/bash
+HDF5_FP=/path/to/folder/containing/data/results.hdf5 python3 app.py
+```
+
+Because of the challenges of establishing a common working environment, this local run option is less preferred than using Docker.
+
+### Web Deployment
+
+The GLAM Browser is set up as a Dash app, and can be deployed as such following the instructions laid out [in the Dash documentation.](https://dash.plotly.com/deployment)
