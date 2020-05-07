@@ -66,28 +66,28 @@ The GLAM Browser is set up as a Dash app, and can be deployed as such following 
 
 The number of genes detected for each sample is displayed as a scatter plot or histogram, as well as the proportion of reads which align uniquely to a single gene. Individual specimens can be masked from this plot (as well as any plot showing specimens) using the interactive manifest table at the bottom of GLAM.
 
-![Gene Detection](https://github.com/FredHutch/glam-browser/blob/master/assets/richness_example.png)
+![Gene Detection](https://github.com/FredHutch/glam-browser/blob/master/assets/richness_example.png?raw=true)
 
 The similarity of samples is displayed as PCA or t-SNE plots, with options to overlay user-defined metadata.
 
-![Ordination](https://github.com/FredHutch/glam-browser/blob/master/assets/ordination_example.png)
+![Ordination](https://github.com/FredHutch/glam-browser/blob/master/assets/ordination_example.png?raw=true)
 
 The characteristics of CAGs, including size, entropy, etc., are displayed as a scatter plot or histogram. Clicking on any point in this scatter plot will 'select' a CAG in multiple plots in GLAM.
 
-![CAG Summary](https://github.com/FredHutch/glam-browser/blob/master/assets/cag_summary_example.png)
+![CAG Summary](https://github.com/FredHutch/glam-browser/blob/master/assets/cag_summary_example.png?raw=true)
 
 If the user provided a `--formula` when running `geneshot`, the results of that association analysis will be presented as a volcano plot. Clicking on any point in this scatter plot will 'select' a CAG in multiple plots in GLAM. Note that masking specimens in the manifest table will _not_ change the data in this plot.
 
-![Volcano](https://github.com/FredHutch/glam-browser/blob/master/assets/volcano_example.png)
+![Volcano](https://github.com/FredHutch/glam-browser/blob/master/assets/volcano_example.png?raw=true)
 
 The distribution of taxonomic annotations across genes is shown for the selected CAG.
 
-![Taxonomy](https://github.com/FredHutch/glam-browser/blob/master/assets/taxonomy_example.png)
+![Taxonomy](https://github.com/FredHutch/glam-browser/blob/master/assets/taxonomy_example.png?raw=true)
 
 The abundance of a single CAG across samples can be displayed in many different ways, including overlaid metadata provided by the user in the manifest.
 
-![Single CAG](https://github.com/FredHutch/glam-browser/blob/master/assets/single_cag_example.png)
+![Single CAG](https://github.com/FredHutch/glam-browser/blob/master/assets/single_cag_example.png?raw=true)
 
 The complete list of specimens in the manifest is provided as an interactive table. The user can filter and sort the table in a fairly complete manner. Crucially, by deselecting the checkbox on any row, that specimen is temporarily masked from all of the other displays in GLAM.
 
-![Manifest](https://github.com/FredHutch/glam-browser/blob/master/assets/manifest_example.png)
+![Manifest](https://github.com/FredHutch/glam-browser/blob/master/assets/manifest_example.png?raw=true)
