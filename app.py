@@ -53,6 +53,7 @@ with pd.HDFStore(hdf5_fp, "r") as store:
         corncob_df = pd.read_hdf(store, "/stats/cag/corncob")
     except KeyError:
         corncob_df = None
+        max_neg_log_pvalue = 1
 
     # Taxonomy table
     taxonomy_df = pd.read_hdf(store, "/ref/taxonomy")
