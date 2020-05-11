@@ -43,6 +43,25 @@ Explanation of flags:
 * `--env`: Set an environment variable in the container
 * `-p`: Expose the port used by GLAM
 
+### Run Locally with Singularity
+
+It is common for researchers to not have access to a computing system which provides access to Docker 'containers' (or 'images') as well as a generous amount of memory and storage. Instead, many HPC systems are now providing access to 'containers' using Singularity, which has the strong benefit of not needing to be run as root (which would be a security flaw for a shared HPC).
+
+If you do happen to have access to Singularity, that is sufficient for running GLAM. The command I use (tested with Singularity 3.5.3) is:
+
+```#!/bin/bash
+
+SINGULARITY_CACHEDIR=$PWD/cache/ SINGULARITYENV_HDF5_FP=/share/$1 singularity run --bind $PWD:/share docker://quay.io/fhcrc-microbiome/glam:latest python3 /home/dash/app.py
+
+```
+
+Explained:
+
+* `SINGULARITY_CACHEDIR`: Sets the directory where Singularity container files are written
+* `SINGULARITYENV_HDF5_FP`: Sets the path to the geneshot results HDF5 of interest
+* `--bind $PWD:/share`: Mounts the local directory as `/share` inside the container
+* `quay.io/fhcrc-microbiome/glam:latest`: Docker container to be run from Singularity. Replace `latest` with any tag of interest if you want to run a specific version of GLAM.
+
 ### Run Locally from Source
 
 You can also run the app by:
