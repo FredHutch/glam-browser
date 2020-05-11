@@ -49,7 +49,10 @@ with pd.HDFStore(hdf5_fp, "r") as store:
     }
 
     # Corncob results (for volcano plot)
-    corncob_df = pd.read_hdf(store, "/stats/cag/corncob")
+    try:
+        corncob_df = pd.read_hdf(store, "/stats/cag/corncob")
+    except KeyError:
+        corncob_df = None
 
     # Taxonomy table
     taxonomy_df = pd.read_hdf(store, "/ref/taxonomy")
