@@ -90,11 +90,12 @@ cag_size_range = cag_size_max - cag_size_min
 metadata_fields = [n for n in manifest_df.columns.values if n not in ["R1", "R2", "I1", "I2"]]
 
 # Calculate the -log10(p_value)
-corncob_df = corncob_df.assign(
-    neg_log_pvalue = corncob_df["p_value"].apply(np.log10) * -1,
-    neg_log_qvalue = corncob_df["q_value"].apply(np.log10) * -1,
-)
-max_neg_log_pvalue = corncob_df.groupby("parameter")["neg_log_pvalue"].max()
+if corncob_df is not None:
+    corncob_df = corncob_df.assign(
+        neg_log_pvalue = corncob_df["p_value"].apply(np.log10) * -1,
+        neg_log_qvalue = corncob_df["q_value"].apply(np.log10) * -1,
+    )
+    max_neg_log_pvalue = corncob_df.groupby("parameter")["neg_log_pvalue"].max()
 
 # Format the parent tax ID as an integer
 taxonomy_df = taxonomy_df.apply(
