@@ -47,6 +47,8 @@ Explanation of flags:
 
 It is common for researchers to not have access to a computing system which provides access to Docker 'containers' (or 'images') as well as a generous amount of memory and storage. Instead, many HPC systems are now providing access to 'containers' using Singularity, which has the strong benefit of not needing to be run as root (which would be a security flaw for a shared HPC).
 
+NOTE: If you are running Singularity at Fred Hutch, do not use the shared `rhino` system, instead use `grabnode` to log into a dedicated worker node.
+
 If you do happen to have access to Singularity, that is sufficient for running GLAM. The command I use (tested with Singularity 3.5.3) is:
 
 ```#!/bin/bash
@@ -61,6 +63,8 @@ Explained:
 * `SINGULARITYENV_HDF5_FP`: Sets the path to the geneshot results HDF5 of interest
 * `--bind $PWD:/share`: Mounts the local directory as `/share` inside the container
 * `quay.io/fhcrc-microbiome/glam:latest`: Docker container to be run from Singularity. Replace `latest` with any tag of interest if you want to run a specific version of GLAM.
+
+Once GLAM has started, you will be able to access it from a web browser with the name of the compute node with `:8050`. For example, if I am logged into `gizmof13` when running the command above, then I can point my browser to `gizmof13:8050` to access the browser.
 
 ### Run Locally from Source
 
