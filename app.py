@@ -1788,6 +1788,22 @@ def draw_single_cag_plot(
         CAG_ABUND = cag_abundance_df.loc[int(cag_id)]
     )
 
+    # Make a list of the columns needed for plotting
+    columns_for_plotting = [xaxis, "CAG_ABUND"]
+    if color != "none":
+        columns_for_plotting.append(color)
+    if facet != "none":
+        columns_for_plotting.append(facet)
+
+    # Drop any samples which are missing the required data
+    plot_df = plot_df.reindex(
+        columns=columns_for_plotting
+    ).dropna()
+
+    # Protect against completely missing data with an empty plot
+    if plot_df.shape[0] == 0 or (plot_df["CAG_ABUND"] > 0).sum() == 0:
+        return go.Figure()
+
     if plot_type == "scatter":
         plot_func = px.scatter
 
