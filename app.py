@@ -1804,6 +1804,18 @@ def draw_single_cag_plot(
     if plot_df.shape[0] == 0 or (plot_df["CAG_ABUND"] > 0).sum() == 0:
         return go.Figure()
 
+    # For plotting on a log scale, replace zero values with the minimum
+    if log_scale == "on":
+        min_value = plot_df.query("CAG_ABUND > 0")["CAG_ABUND"].min() / 2
+        plot_df.replace(
+            to_replace = {
+                "CAG_ABUND": {
+                    0, min_value
+                }
+            },
+            inplace=True
+        )
+
     if plot_type == "scatter":
         plot_func = px.scatter
 
