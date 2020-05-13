@@ -40,3 +40,6 @@ vignettes/*.pdf
 
 # Virtual environment
 venv/
+
+# Python files
+helpers/__pycache__/
