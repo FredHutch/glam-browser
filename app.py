@@ -503,6 +503,7 @@ def experiment_summary_card_callback(selected_dataset):
     [
         Input('richness-metric-dropdown', 'value'),
         Input('richness-type-dropdown', 'value'),
+        Input('richness-log-x', 'value'),
         Input('manifest-filtered', 'children'),
     ],
     [State("selected-dataset", "children")],
@@ -510,6 +511,7 @@ def experiment_summary_card_callback(selected_dataset):
 def richness_graph_callback(
     selected_metric, 
     selected_type, 
+    log_x,
     manifest_json,
     selected_dataset, 
 ):
@@ -521,6 +523,7 @@ def richness_graph_callback(
             richness(fp),
             selected_metric,
             selected_type,
+            log_x,
             manifest_json,
             manifest(fp)
         )

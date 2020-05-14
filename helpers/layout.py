@@ -166,6 +166,9 @@ def richness_card():
                         html.Br(),
                     ] + plot_type_dropdown(
                         "richness-type-dropdown"
+                    ) + log_scale_radio_button(
+                        "richness-log-x",
+                        label_text="Number of Reads - Log Scale"
                     ),
                         align="center",
                         width=4,

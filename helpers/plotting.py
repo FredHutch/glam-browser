@@ -32,6 +32,7 @@ def update_richness_graph(
     richness_df,
     selected_metric,
     selected_type,
+    log_x,
     manifest_json,
     full_manifest_df,
 ):
@@ -68,10 +69,18 @@ def update_richness_graph(
                 mode="markers",
             ),
         )
+
         fig.update_layout(
             xaxis_title="Number of Reads",
-            xaxis_range=[0, plot_richness_df["n_reads"].max() * 1.05],
         )
+        if log_x == "on":
+            fig.update_layout(
+                xaxis_type="log",
+            )
+        else:
+            fig.update_layout(
+                xaxis_range=[0, plot_richness_df["n_reads"].max() * 1.05],
+            )
 
     else:
         assert selected_type == "hist"
