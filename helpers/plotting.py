@@ -692,11 +692,8 @@ def draw_single_cag_graph(
     if log_scale == "on":
         min_value = plot_df.query("CAG_ABUND > 0")["CAG_ABUND"].min() / 2
         plot_df.replace(
-            to_replace = {
-                "CAG_ABUND": {
-                    0, min_value
-                }
-            },
+            to_replace = {"CAG_ABUND": 0},
+            value = min_value,
             inplace=True
         )
 
