@@ -681,7 +681,11 @@ def draw_single_cag_graph(
     )
     if plot_df.shape[0] == 0 or (plot_df["CAG_ABUND"] > 0).sum() == 0:
         return empty_fig
-    if xaxis == color or xaxis == facet or color == facet:
+    if xaxis == color and xaxis != "none":
+        return empty_fig
+    if xaxis == facet and xaxis != "none":
+        return empty_fig
+    if color == facet and color != "none":
         return empty_fig
 
     # For plotting on a log scale, replace zero values with the minimum
