@@ -79,6 +79,29 @@ DATA_FOLDER=/path/to/folder/containing/data/ python3 app.py
 
 Because of the challenges of establishing a common working environment, this local run option is less preferred than using Docker.
 
+## Naming and Describing Datasets
+
+The GLAM Browser natively displays the results from multiple datasets. To allow the user to describe and name those datasets in a completely flexible manner, the user can add a `manifest.json` file to the data directory (right next to the geneshot output files) which contains some descriptions they might find useful. The format of that manifest is as follows:
+
+```json
+{
+    "page_title": "Title at the top of the page",
+    "page_description": "Text with more room to describe the collection of data which is found in this folder.",
+    "contents": [
+        {
+            "fp": "name-of-file-within-folder.hdf5",
+            "name": "Short name for dataset",
+            "description": "Longer description of this dataset."
+        },
+        {
+            "fp": "name-of-second-file-within-folder.hdf5",
+            "name": "Short name for second dataset",
+            "description": "Longer description of this second dataset."
+        }
+    ]
+}
+```
+
 ### Web Deployment
 
 The GLAM Browser is set up as a Dash app, and can be deployed as such following the instructions laid out [in the Dash documentation.](https://dash.plotly.com/deployment)
