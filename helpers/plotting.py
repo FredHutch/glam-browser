@@ -547,9 +547,9 @@ def draw_cag_heatmap(
     # Sort the manifest by the indicated fields
     if len(metadata_selected) > 0:
         plot_manifest_df = plot_manifest_df.sort_values(
-            by=metadata_selected[::-1],
+            by=metadata_selected,
         ).reindex(
-            columns=metadata_selected,
+            columns=metadata_selected[::-1],
         )
     
     # Subset the CAG abundances to just those selected samples
@@ -578,6 +578,11 @@ def draw_cag_heatmap(
     # Set the template for hover text in the CAG abundance heatmap
     hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (log10): %{z}<extra></extra>"
 
+    # Set the figure width
+    figure_width = 800
+    # Set the figure height
+    figure_height = 800
+
     # If the manifest fields have been selected, make two subplots
     # with linked heatmaps showing the metadata for each specimen
     # Otherwise, just plot the CAGs as rows and specimens as columns
@@ -592,17 +597,29 @@ def draw_cag_heatmap(
                 x=["- {}".format(i) for i in cag_abund_df.columns.values],
                 colorbar={"title": "Abundance (log10)"},
                 colorscale='Bluered_r',
-                hovertemplate=hovertemplate
-            )
+                hovertemplate=hovertemplate,
+            ),
         )
-
-        return fig
 
     else:
 
         # Make a plot with two panels, one on top of the other, sharing the x-axis
+
+        # The relative height of the subplots will be set dynamically
+        metadata_height = max(
+            0.1,
+            min(
+                0.5,
+                len(metadata_selected) / 20.
+            ),
+        )
         fig = make_subplots(
-            rows=2, cols=1, shared_xaxes=True
+            rows=2, cols=1, shared_xaxes=True,
+            row_heights=[
+                metadata_height,
+                1 - metadata_height
+            ],
+            vertical_spacing=0.01
         )
 
         # Plot the metadata on the top
@@ -617,7 +634,7 @@ def draw_cag_heatmap(
                 x=["- {}".format(i) for i in plot_manifest_df.columns.values],
                 colorscale='Viridis',
                 showscale=False,
-                hovertemplate="Specimen: %{x}<br>Label: %{y}<br>Value: %{text}<extra></extra>"
+                hovertemplate="Specimen: %{x}<br>Label: %{y}<br>Value: %{text}<extra></extra>",
             ),
             row=1,
             col=1
@@ -631,14 +648,17 @@ def draw_cag_heatmap(
                 x=["- {}".format(i) for i in cag_abund_df.columns.values],
                 colorbar={"title": "Abundance (log10)"},
                 colorscale='Bluered_r',
-                hovertemplate=hovertemplate
+                hovertemplate=hovertemplate,
             ),
             row=2,
             col=1
         )
 
-
-        return fig
+    fig.update_layout(
+        width=figure_width,
+        height=figure_height,
+    )
+    return fig
 
 #################
 # VOLCANO GRAPH #
