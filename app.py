@@ -722,12 +722,16 @@ def cag_summary_save_click_data(clickData):
     [
         Input('cag-heatmap-cag-dropdown', 'value'),
         Input('cag-heatmap-metadata-dropdown', 'value'),
+        Input('cag-heatmap-abundance-metric', 'value'),
+        Input('cag-heatmap-cluster', 'value'),
         Input('manifest-filtered', 'children'),
     ],
     [State("selected-dataset", "children")])
 def heatmap_graph_callback(
     cags_selected,
     metadata_selected,
+    abundance_metric,
+    cluster_by,
     manifest_json,
     selected_dataset,
 ):
@@ -750,6 +754,8 @@ def heatmap_graph_callback(
     return draw_cag_heatmap(
         cag_abund_df,
         metadata_selected,
+        abundance_metric,
+        cluster_by,
         manifest_json,
         manifest(fp)
     )

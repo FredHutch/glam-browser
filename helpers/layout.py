@@ -340,6 +340,7 @@ def cag_heatmap_card():
                     ),
                     dbc.Col(
                         [
+                            html.Label("Display CAGs"),
                             dcc.Dropdown(
                                 id="cag-heatmap-cag-dropdown",
                                 options=[],
@@ -347,6 +348,7 @@ def cag_heatmap_card():
                                 multi=True
                             ),
                             html.Br(),
+                            html.Label("Display Metadata"),
                             dcc.Dropdown(
                                 id="cag-heatmap-metadata-dropdown",
                                 options=[],
@@ -357,7 +359,28 @@ def cag_heatmap_card():
                                 children=[-1],
                                 id="cag-heatmap-selected-dataset",
                                 style={"display": "none"}
-                            )
+                            ),
+                            html.Br(),
+                            html.Label("Abundance Metric"),
+                            dcc.Dropdown(
+                                id='cag-heatmap-abundance-metric',
+                                options=[
+                                    {'label': 'Rel. Abund. (log10)', 'value': 'log10'},
+                                    {'label': 'Rel. Abund. (log10) (z-score)', 'value': 'zscore'},
+                                    {'label': 'Rel. Abund.', 'value': 'raw'},
+                                ],
+                                value="log10",
+                            ),
+                            html.Br(),
+                            html.Label("Group Specimens"),
+                            dcc.Dropdown(
+                                id='cag-heatmap-cluster',
+                                options=[
+                                    {'label': 'By CAG Abundances', 'value': 'cag'},
+                                    {'label': 'By Metadata', 'value': 'metadata'},
+                                ],
+                                value="log10",
+                            ),
                         ],
                         width=4,
                         align="center"

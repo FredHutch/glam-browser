@@ -7,6 +7,9 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+from scipy.cluster.hierarchy import linkage
+from scipy.cluster.hierarchy import leaves_list
+from scipy.stats import zscore
 from seaborn import color_palette
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -538,6 +541,8 @@ def draw_cag_summary_graph_scatter(
 def draw_cag_heatmap(
     cag_abund_df,
     metadata_selected,
+    abundance_metric,
+    cluster_by,
     manifest_json,
     full_manifest_df,
 ):
@@ -557,23 +562,46 @@ def draw_cag_heatmap(
         index=plot_manifest_df.index
     )
 
+    if abundance_metric in ["log10", "zscore"]:
+        # Transform to log10 relative abundance
+
+        # First find the lowest non-zero value
+        lowest_value = cag_abund_df.apply(
+            lambda c: c[c > 0].min()
+        ).min()
+
+        # Now transform and set the floor
+        cag_abund_df = cag_abund_df.clip(
+            lower=lowest_value
+        ).applymap(
+            np.log10
+        ).applymap(
+            lambda i: round(i, 1)
+        )
+    
+    if abundance_metric == "zscore":
+        # Transform into the Z-score per-sample
+        cag_abund_df = (cag_abund_df - cag_abund_df.mean()) / cag_abund_df.std()
+
+    # If selected, cluster the specimens by CAG abundance
+    if cluster_by == "cag":
+        cag_abund_df = cag_abund_df.reindex(
+            index=cag_abund_df.index.values[
+                leaves_list(
+                    linkage(
+                        cag_abund_df,
+                        method="ward"
+                    )
+                )
+            ]
+        )
+        plot_manifest_df = plot_manifest_df.reindex(
+            index=cag_abund_df.index
+        )
+
     # Make the specimens columns and CAGs rows
     cag_abund_df = cag_abund_df.T
     plot_manifest_df = plot_manifest_df.T
-
-    # To make into a log scale, find the lowest non-zero value
-    lowest_value = cag_abund_df.apply(
-        lambda c: c[c > 0].min()
-    ).min()
-
-    # Now transform and set the floor
-    cag_abund_df = cag_abund_df.clip(
-        lower=lowest_value
-    ).applymap(
-        np.log10
-    ).applymap(
-        lambda i: round(i, 1)
-    )
 
     # Set the template for hover text in the CAG abundance heatmap
     hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (log10): %{z}<extra></extra>"
@@ -619,7 +647,7 @@ def draw_cag_heatmap(
                 metadata_height,
                 1 - metadata_height
             ],
-            vertical_spacing=0.01
+            vertical_spacing=0.01,
         )
 
         # Plot the metadata on the top
