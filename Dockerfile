@@ -8,9 +8,10 @@ RUN apt update && \
 RUN useradd -u 5555 -m -d /home/dash -c "dash user" dash
 ADD system/. /home/dash/system/
 ADD app.py /home/dash/
+ADD redis.conf /home/dash/
 ADD helpers/ /home/dash/helpers/
 RUN chown -R dash:dash /home/dash 
 WORKDIR /home/dash
 EXPOSE 8050
 ENV DATA_FOLDER=/share
-CMD redis-server & python3 /home/dash/app.py
+CMD redis-server /home/dash/redis.conf & python3 /home/dash/app.py
