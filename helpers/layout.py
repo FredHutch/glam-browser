@@ -854,7 +854,8 @@ def nbins_slider(id_string):
                 "20": "20",
                 "100": "100",
             },
-            value=20
+            value=20,
+            included=False,
         ),
         html.Br()
     ]
