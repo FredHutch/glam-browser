@@ -15,20 +15,22 @@ from helpers.layout import dataset_summary_card
 from helpers.layout import experiment_summary_card
 from helpers.layout import update_experiment_summary_card
 from helpers.layout import richness_card
+from helpers.layout import ordination_card
+from helpers.layout import cag_summary_card
+from helpers.layout import cag_heatmap_card
+from helpers.layout import volcano_card
+from helpers.layout import taxonomy_card
 from helpers.plotting import update_richness_graph
 from helpers.plotting import run_pca
 from helpers.plotting import run_tsne
 from helpers.plotting import update_ordination_graph
 from helpers.plotting import draw_cag_summary_graph_hist
 from helpers.plotting import draw_cag_summary_graph_scatter
+from helpers.plotting import draw_cag_heatmap
 from helpers.plotting import draw_volcano_graph
 from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
 from helpers.plotting import parse_manifest_json
-from helpers.layout import ordination_card
-from helpers.layout import cag_summary_card
-from helpers.layout import volcano_card
-from helpers.layout import taxonomy_card
 from helpers.taxonomy import make_cag_tax_df
 from helpers.layout import single_cag_card
 from helpers.layout import manifest_card
@@ -173,6 +175,8 @@ def read_cag_abundance(fp, cag_id):
         fp,
         "/abund/cag/wide",
         where="CAG == {}".format(cag_id),
+    ).set_index(
+        "CAG"
     ).loc[cag_id]
 
 
@@ -239,6 +243,7 @@ app.layout = html.Div(
                 richness_card(),
                 ordination_card(),
                 cag_summary_card(),
+                cag_heatmap_card(),
                 volcano_card(),
                 taxonomy_card(),
                 single_cag_card(),
@@ -707,6 +712,116 @@ def cag_summary_save_click_data(clickData):
 ################################
 # / CAG SUMMARY CARD CALLBACKS #
 ################################
+
+
+#########################
+# CAG HEATMAP CALLBACKS #
+#########################
+@app.callback(
+    Output('cag-heatmap-graph', 'figure'),
+    [
+        Input('cag-heatmap-cag-dropdown', 'value'),
+        Input('cag-heatmap-metadata-dropdown', 'value'),
+        Input('manifest-filtered', 'children'),
+    ],
+    [State("selected-dataset", "children")])
+def heatmap_graph_callback(
+    cags_selected,
+    metadata_selected,
+    manifest_json,
+    selected_dataset,
+):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return go.Figure()
+    
+    if len(cags_selected) == 0:
+        return go.Figure()
+
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Get the abundance of the selected CAGs
+    cag_abund_df = pd.DataFrame({
+        cag_id: read_cag_abundance(fp, cag_id)
+        for cag_id in cags_selected
+    })
+
+    # Draw the figure
+    return draw_cag_heatmap(
+        cag_abund_df,
+        metadata_selected,
+        manifest_json,
+        manifest(fp)
+    )
+
+@app.callback(
+    [
+        Output('cag-heatmap-cag-dropdown', value)
+        for value in ['options', 'value']
+    ],
+    [
+        Input("selected-dataset", "children"),
+    ])
+def update_heatmap_cag_dropdown(
+    selected_dataset,
+):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return [], []
+
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Get the list of all CAGs
+    cag_id_list = cag_summary(fp).index.values
+
+    # Get the list of CAGs
+    options = [
+        {
+            "label": "CAG {}".format(cag_id),
+            "value": cag_id
+        }
+        for cag_id in cag_id_list
+    ]
+
+    # By default, display the first 5
+    value = cag_id_list[:5]
+
+    return options, value
+
+@app.callback(
+    [
+        Output('cag-heatmap-metadata-dropdown', value)
+        for value in ['options', 'value']
+    ],
+    [
+        Input("selected-dataset", "children"),
+    ])
+def update_heatmap_cag_dropdown(
+    selected_dataset,
+):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return [], []
+
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Get the list of all metadata
+    options = [
+        {
+            "label": f,
+            "value": f
+        }
+        for f in metadata_fields(fp)
+    ]
+
+    # By default, display none
+    value = []
+
+    return options, value
+
+###########################
+# / CAG HEATMAP CALLBACKS #
+###########################
 
 
 #####################

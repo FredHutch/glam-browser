@@ -321,6 +321,50 @@ def cag_summary_card():
 ######################
 
 
+####################
+# CAG HEATMAP CARD #
+####################
+def cag_heatmap_card():
+    return html.Div([
+        html.Br(),
+        dbc.Card([
+            dbc.CardHeader("CAG Abundance Heatmap"),
+            dbc.CardBody([
+                dbc.Row([
+                    dbc.Col(
+                        dbc.Spinner(dcc.Graph(
+                            id='cag-heatmap-graph'
+                        )),
+                        width=8,
+                        align="center"
+                    ),
+                    dbc.Col(
+                        [
+                            dcc.Dropdown(
+                                id="cag-heatmap-cag-dropdown",
+                                options=[],
+                                value=[],
+                                multi=True
+                            ),
+                            dcc.Dropdown(
+                                id="cag-heatmap-metadata-dropdown",
+                                options=[],
+                                value=[],
+                                multi=True
+                            ),
+                        ],
+                        width=4,
+                        align="center"
+                    )
+                ])
+            ]),
+        ])
+    ])
+######################
+# / CAG HEATMAP CARD #
+######################
+
+
 ################
 # VOLCANO PLOT #
 ################
@@ -746,7 +790,7 @@ def log_scale_radio_button(id_string, default="off", label_text="Log Scale"):
         dcc.RadioItems(
             id=id_string,
             options=[
-                {'label': 'On ', 'value': 'on'},
+                {'label': 'On   ', 'value': 'on'},
                 {'label': 'Off', 'value': 'off'},
             ],
             value=default,

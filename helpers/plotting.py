@@ -531,6 +531,66 @@ def draw_cag_summary_graph_scatter(
 
     return fig
 
+
+###############
+# CAG HEATMAP #
+###############
+def draw_cag_heatmap(
+    cag_abund_df,
+    metadata_selected,
+    manifest_json,
+    full_manifest_df,
+):
+    # Get the filtered manifest from the browser
+    plot_manifest_df = parse_manifest_json(manifest_json, full_manifest_df)
+
+    # Sort the manifest by the indicated fields
+    if len(metadata_selected) > 0:
+        plot_manifest_df.sort_values(
+            by=metadata_selected[::-1],
+            inplace=True
+        )
+    
+    # Subset the CAG abundances to just those selected samples
+    cag_abund_df = cag_abund_df.reindex(
+        index=plot_manifest_df.index
+    )
+
+    # Make the specimens columns and CAGs rows
+    cag_abund_df = cag_abund_df.T
+    plot_manifest_df = plot_manifest_df.T
+
+    # To make into a log scale, find the lowest non-zero value
+    lowest_value = cag_abund_df.apply(
+        lambda c: c[c > 0].min()
+    ).min()
+
+    # Now transform and set the floor
+    cag_abund_df = cag_abund_df.clip(
+        lower=lowest_value
+    ).applymap(
+        np.log10
+    )
+
+    # If the manifest fields have been selected, make two subplots
+    # with linked heatmaps showing the metadata for each specimen
+    # Otherwise, just plot the CAGs as rows and specimens as columns
+
+    fig = px.imshow(
+        cag_abund_df,
+        labels = {
+            "x": "Specimen",
+            "y": "CAG",
+            "color": "Abundance (log10)",
+        },
+        x=cag_abund_df.columns.values,
+        y=cag_abund_df.index.values,
+        width=800,
+        height=400
+    )
+
+    return fig
+
 #################
 # VOLCANO GRAPH #
 #################
