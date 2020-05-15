@@ -10,6 +10,7 @@ dash-renderer==1.4.0
 dash-table==4.6.2
 tables
 scikit-learn
+scikit-bio
 redis
 redis-server
 Flask==1.1.2

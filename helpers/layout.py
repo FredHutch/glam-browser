@@ -238,7 +238,11 @@ def ordination_card():
                         included=False,
                     ) + metadata_field_dropdown(
                         "ordination-metadata"
-                    ),
+                    ) + [
+                        html.Div(
+                            id="ordination-anosim-results"
+                        )
+                    ],
                         width=4,
                         align="center"
                     )

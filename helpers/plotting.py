@@ -4,6 +4,7 @@ import json
 import numpy as np
 import os
 import pandas as pd
+import dash_core_components as dcc
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
@@ -11,6 +12,7 @@ from scipy.cluster.hierarchy import linkage
 from scipy.cluster.hierarchy import leaves_list
 from scipy.stats import zscore
 from seaborn import color_palette
+from skbio.stats.distance import permanova, DistanceMatrix, anosim
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
@@ -389,6 +391,45 @@ def update_ordination_graph(
     )
 
     return fig
+
+def print_anosim(
+    distances_df,
+    metadata,
+    manifest_json,
+    full_manifest_df,
+):
+    """Run anosim and return a Markdown summary."""
+
+    # Get the filtered manifest from the browser
+    plot_manifest_df = parse_manifest_json(manifest_json, full_manifest_df)
+
+    # Remove any samples with NaN for this field
+    samples_to_analyze = plot_manifest_df[metadata].dropna().index.values
+
+    # Filter down the distance matrix and run permanova
+    r = anosim(
+        DistanceMatrix(
+            distances_df.reindex(
+                index=samples_to_analyze,
+                columns=samples_to_analyze,
+            ).values
+        ),
+        plot_manifest_df[metadata].reindex(index=samples_to_analyze)
+    )
+
+    return dcc.Markdown("""
+        _ANOSIM_ ([ref](http://scikit-bio.org/docs/0.2.3/generated/generated/skbio.stats.distance.anosim.html)):
+
+        * R: {:.2} (Range: -1 to 1)
+        * p: {:.2E}
+        * Sample size: {:,}
+        * Number of groups: {:,}
+        """.format(
+            r["test statistic"],
+            r["p-value"],
+            int(r["sample size"]),
+            int(r["number of groups"]),
+        ))
 
 
 ####################

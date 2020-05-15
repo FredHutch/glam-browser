@@ -24,6 +24,7 @@ from helpers.plotting import update_richness_graph
 from helpers.plotting import run_pca
 from helpers.plotting import run_tsne
 from helpers.plotting import update_ordination_graph
+from helpers.plotting import print_anosim
 from helpers.plotting import draw_cag_summary_graph_hist
 from helpers.plotting import draw_cag_summary_graph_scatter
 from helpers.plotting import draw_cag_heatmap
@@ -624,6 +625,34 @@ def ordination_graph_callback(
             manifest_json,
             manifest(fp),
         )
+@app.callback(
+    Output('ordination-anosim-results', 'children'),
+    [
+        Input('ordination-metric', 'value'),
+        Input({'type': 'metadata-field-dropdown', 'name': 'ordination-metadata'}, 'value'),
+        Input('manifest-filtered', 'children'),
+        Input("selected-dataset", "children")
+    ])
+def ordination_anosim_callback(
+    metric,
+    metadata,
+    manifest_json,
+    selected_dataset,
+):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return dcc.Markdown("")
+    elif metadata == "none":
+        return dcc.Markdown("")
+    else:
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        return print_anosim(
+            distances(fp, metric),
+            metadata,
+            manifest_json,
+            manifest(fp),
+        )
+
 ###############################
 # / ORDINATION CARD CALLBACKS #
 ###############################
@@ -1303,5 +1332,4 @@ if __name__ == '__main__':
     app.run_server(
         host='0.0.0.0',
         port=8050,
-        debug=True,
     )
