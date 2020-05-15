@@ -570,6 +570,8 @@ def draw_cag_heatmap(
         lower=lowest_value
     ).applymap(
         np.log10
+    ).applymap(
+        lambda i: round(i, 1)
     )
 
     # If the manifest fields have been selected, make two subplots
@@ -577,16 +579,18 @@ def draw_cag_heatmap(
     # Otherwise, just plot the CAGs as rows and specimens as columns
 
     fig = px.imshow(
-        cag_abund_df,
+        cag_abund_df.values,
+        y=["CAG {} -".format(i) for i in cag_abund_df.index.values],
+        x=["- {}".format(i) for i in cag_abund_df.columns.values],
         labels = {
             "x": "Specimen",
             "y": "CAG",
             "color": "Abundance (log10)",
         },
-        x=cag_abund_df.columns.values,
-        y=cag_abund_df.index.values,
+        color_continuous_scale='Bluered_r',
         width=800,
-        height=400
+        height=400,
+        aspect="auto",
     )
 
     return fig
