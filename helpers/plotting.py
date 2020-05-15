@@ -844,7 +844,10 @@ def draw_metadata_heatmap_panel(
 ):
     return go.Heatmap(
         z=plot_manifest_df.apply(
-            lambda r: r.apply(dict(zip(r.unique(), np.arange(0, 1, 1 / r.unique().shape[0]))).get),
+            lambda r: r.apply(dict(zip(
+                r.drop_duplicates().sort_values(), 
+                np.arange(0, 1, 1 / r.unique().shape[0]))).get
+            ),
             axis=1
         ).values,
         text=plot_manifest_df.values,
