@@ -161,6 +161,18 @@ def taxonomy(fp):
     return hdf5_taxonomy(fp)
 
 @cache.memoize()
+def cag_taxonomy(cag_id, fp):
+    # Skip if there is no taxonomy
+    if taxonomy(fp) is None:
+        return None
+
+    # Read in the taxonomic annotations for this CAG
+    cag_df = read_cag_annotations(fp, cag_id)
+
+    # Format the DataFrame as needed to make a go.Sunburst
+    return make_cag_tax_df(cag_df["tax_id"], taxonomy(fp))
+
+@cache.memoize()
 def read_cag_annotations(fp, cag_id):
     return hdf5_get_item(
         fp,
@@ -724,6 +736,7 @@ def cag_summary_save_click_data(clickData):
         Input('cag-heatmap-metadata-dropdown', 'value'),
         Input('cag-heatmap-abundance-metric', 'value'),
         Input('cag-heatmap-cluster', 'value'),
+        Input('cag-heatmap-taxa-rank', 'value'),
         Input('manifest-filtered', 'children'),
     ],
     [State("selected-dataset", "children")])
@@ -732,6 +745,7 @@ def heatmap_graph_callback(
     metadata_selected,
     abundance_metric,
     cluster_by,
+    taxa_rank,
     manifest_json,
     selected_dataset,
 ):
@@ -750,14 +764,22 @@ def heatmap_graph_callback(
         for cag_id in cags_selected
     })
 
+    # Get the taxonomic hits for the selected CAGs
+    cag_tax_dict = {
+        cag_id: cag_taxonomy(cag_id, fp)
+        for cag_id in cags_selected
+    }
+
     # Draw the figure
     return draw_cag_heatmap(
         cag_abund_df,
         metadata_selected,
         abundance_metric,
         cluster_by,
+        taxa_rank,
         manifest_json,
-        manifest(fp)
+        manifest(fp),
+        cag_tax_dict,
     )
 
 @app.callback(
@@ -1030,11 +1052,8 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, selected_cag_json):
         # Default CAG to plot
         cag_id = 1000
 
-    # Read in the taxonomic annotations for this CAG
-    cag_df = read_cag_annotations(fp, cag_id)
-
     # Format the DataFrame as needed to make a go.Sunburst
-    cag_tax_df = make_cag_tax_df(cag_df["tax_id"], taxonomy(fp))
+    cag_tax_df = cag_taxonomy(cag_id, fp)
 
     return draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes)
 ###########################

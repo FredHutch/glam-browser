@@ -438,7 +438,7 @@ def draw_cag_summary_graph_hist(
     fig = go.Figure(
         go.Histogram(
             x=plot_df[metric_primary],
-            histfunc="sum",
+            histfunc="count",
             nbinsx=nbinsx,
             hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
         ),
@@ -543,8 +543,10 @@ def draw_cag_heatmap(
     metadata_selected,
     abundance_metric,
     cluster_by,
+    taxa_rank,
     manifest_json,
     full_manifest_df,
+    cag_tax_dict,
 ):
     # Get the filtered manifest from the browser
     plot_manifest_df = parse_manifest_json(manifest_json, full_manifest_df)
@@ -603,83 +605,47 @@ def draw_cag_heatmap(
     cag_abund_df = cag_abund_df.T
     plot_manifest_df = plot_manifest_df.T
 
-    # Set the template for hover text in the CAG abundance heatmap
-    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (log10): %{z}<extra></extra>"
-
     # Set the figure width
     figure_width = 800
     # Set the figure height
     figure_height = 800
 
-    # If the manifest fields have been selected, make two subplots
-    # with linked heatmaps showing the metadata for each specimen
-    # Otherwise, just plot the CAGs as rows and specimens as columns
+    # Depending on whether metadata or taxonomic information has
+    # been provided, the plot will be set up in different ways
+    # Metadata - & taxonomic annotations - : single plot
+    # Metadata + & taxonomic annotations - : two plots, metadata on top of abund
+    # Metadata - & taxonomic annotations + : two plots, tax to the right of abund
+    # Metadata + & taxonomic annotations + : three plots, combining tax and metadata
 
-    # If no metadata has been selected, return a simple plot
-    if len(metadata_selected) == 0:
+    has_metadata = len(metadata_selected) > 0
+    has_taxonomy = (taxa_rank != "none") & any(df is not None for _, df in cag_tax_dict.items())
+
+    if has_metadata is False and has_taxonomy is False:
 
         fig = go.Figure(
-            data=go.Heatmap(
-                z=cag_abund_df.values,
-                y=["CAG {} -".format(i) for i in cag_abund_df.index.values],
-                x=["- {}".format(i) for i in cag_abund_df.columns.values],
-                colorbar={"title": "Abundance (log10)"},
-                colorscale='Bluered_r',
-                hovertemplate=hovertemplate,
-            ),
+            data=draw_cag_abund_heatmap_panel(cag_abund_df),
+        )
+
+    elif has_metadata is False and has_taxonomy:
+
+        fig = draw_cag_abund_heatmap_with_tax(
+            cag_abund_df, cag_tax_dict, taxa_rank
+        )
+
+    elif has_metadata and has_taxonomy is False:
+
+        fig = draw_cag_abund_heatmap_with_metadata(
+            cag_abund_df, plot_manifest_df, metadata_selected
         )
 
     else:
 
-        # Make a plot with two panels, one on top of the other, sharing the x-axis
-
-        # The relative height of the subplots will be set dynamically
-        metadata_height = max(
-            0.1,
-            min(
-                0.5,
-                len(metadata_selected) / 20.
-            ),
-        )
-        fig = make_subplots(
-            rows=2, cols=1, shared_xaxes=True,
-            row_heights=[
-                metadata_height,
-                1 - metadata_height
-            ],
-            vertical_spacing=0.01,
-        )
-
-        # Plot the metadata on the top
-        fig.add_trace(
-            go.Heatmap(
-                z=plot_manifest_df.apply(
-                    lambda r: r.apply(dict(zip(r.unique(), np.arange(0, 1, 1 / r.unique().shape[0]))).get),
-                    axis=1
-                ).values,
-                text=plot_manifest_df.values,
-                y=["{}".format(i) for i in plot_manifest_df.index.values],
-                x=["- {}".format(i) for i in plot_manifest_df.columns.values],
-                colorscale='Viridis',
-                showscale=False,
-                hovertemplate="Specimen: %{x}<br>Label: %{y}<br>Value: %{text}<extra></extra>",
-            ),
-            row=1,
-            col=1
-        )
-
-        # Plot the abundances on the bottom
-        fig.add_trace(
-            go.Heatmap(
-                z=cag_abund_df.values,
-                y=["CAG {} -".format(i) for i in cag_abund_df.index.values],
-                x=["- {}".format(i) for i in cag_abund_df.columns.values],
-                colorbar={"title": "Abundance (log10)"},
-                colorscale='Bluered_r',
-                hovertemplate=hovertemplate,
-            ),
-            row=2,
-            col=1
+        fig = draw_cag_abund_heatmap_with_metadata_and_tax(
+            cag_abund_df, 
+            plot_manifest_df, 
+            metadata_selected, 
+            cag_tax_dict, 
+            taxa_rank,
         )
 
     fig.update_layout(
@@ -687,6 +653,220 @@ def draw_cag_heatmap(
         height=figure_height,
     )
     return fig
+
+
+def draw_cag_abund_heatmap_with_tax(
+    cag_abund_df, 
+    cag_tax_dict,
+    taxa_rank
+):
+
+    # Make a plot with two panels, side-by-side, sharing the y-axis
+
+    # The taxa plot will be very small
+    fig = make_subplots(
+        rows=1, cols=2, shared_yaxes=True,
+        column_widths=[
+            0.95, 0.05
+        ],
+        horizontal_spacing=0.005,
+    )
+
+    # Plot the abundances on the left
+    fig.add_trace(
+        draw_cag_abund_heatmap_panel(cag_abund_df), row=1, col=1
+    )
+
+    # Plot the taxonomic annotations on the right
+    fig.add_trace(
+        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank), row=1, col=2
+    )
+
+    return fig
+
+def draw_cag_abund_heatmap_with_metadata(
+    cag_abund_df, 
+    plot_manifest_df, 
+    metadata_selected
+):
+
+    # Make a plot with two panels, one on top of the other, sharing the x-axis
+
+    # The relative height of the subplots will be set dynamically
+    metadata_height = max(
+        0.1,
+        min(
+            0.5,
+            len(metadata_selected) / 20.
+        ),
+    )
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True,
+        row_heights=[
+            metadata_height,
+            1 - metadata_height
+        ],
+        vertical_spacing=0.01,
+    )
+
+    # Plot the metadata on the top
+    fig.add_trace(
+        draw_metadata_heatmap_panel(plot_manifest_df), row=1, col=1
+    )
+
+    # Plot the abundances on the bottom
+    fig.add_trace(
+        draw_cag_abund_heatmap_panel(cag_abund_df), row=2, col=1
+    )
+
+    return fig
+
+def draw_cag_abund_heatmap_with_metadata_and_tax(
+    cag_abund_df, 
+    plot_manifest_df, 
+    metadata_selected, 
+    cag_tax_dict, 
+    taxa_rank,
+):
+
+    # Make a plot with four panels:
+    # metadata - blank
+    # cag-abun - taxon
+
+    # The relative height of the subplots will be set dynamically
+    metadata_height = max(
+        0.1,
+        min(
+            0.5,
+            len(metadata_selected) / 20.
+        ),
+    )
+
+    fig = make_subplots(
+        rows=2, 
+        cols=2, 
+        shared_xaxes=True,
+        shared_yaxes=True,
+        row_heights=[
+            metadata_height,
+            1 - metadata_height
+        ],
+        vertical_spacing=0.01,
+        column_widths=[
+            0.95, 0.05
+        ],
+        horizontal_spacing=0.005,
+    )
+
+    # Plot the abundances on the bottom-left
+    fig.add_trace(
+        draw_cag_abund_heatmap_panel(cag_abund_df), row=2, col=1
+    )
+
+    # Plot the taxonomic annotations on the bottom-right
+    fig.add_trace(
+        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank), row=2, col=2
+    )
+
+    # Plot the metadata on the top-left
+    fig.add_trace(
+        draw_metadata_heatmap_panel(plot_manifest_df), row=1, col=1
+    )
+
+    return fig
+
+def draw_cag_abund_taxon_panel(
+    cag_tax_dict, 
+    taxa_rank
+):
+
+    # For each CAG, pick out the top hit
+    summary_df = pd.DataFrame([
+        summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank)
+        for cag_id, cag_tax_df in cag_tax_dict.items()
+    ])
+
+    # Format the taxa name as a scalar for the color value
+    summary_df = summary_df.assign(
+        name_scalar = summary_df["name"].apply(
+            dict(zip(
+                summary_df["name"].unique(),
+                range(summary_df["name"].unique().shape[0])
+            )).get
+        )
+    )
+
+    return go.Heatmap(
+        x=[taxa_rank],
+        y=["CAG {} -".format(i) for i in summary_df["CAG"].values],
+        z=summary_df.reindex(columns=["name_scalar"]).values,
+        text=summary_df.reindex(columns=["label"]).values,
+        showscale=False,
+        colorscale='Viridis',
+        hovertemplate="%{y}<br>%{text}<extra></extra>"
+    )
+
+
+def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
+    """Helper function to summarize the top hit at a given rank."""
+
+    # If there are no hits at this level, return None
+    if cag_tax_df is None or ((cag_tax_df["rank"] == taxa_rank).sum() == 0):
+        return {
+            "CAG": cag_id,
+            "name": 'none',
+            "label": "No genes assigned at this level"
+        }
+
+    # Filter down to this rank
+    df = cag_tax_df.query("rank == '{}'".format(taxa_rank))
+
+    # Sort by 'consistent' hits
+    df.sort_values(by="consistent", inplace=True, ascending=False)
+
+    # Return the top hit
+    return {
+        "CAG": cag_id,
+        "name": df["name"].values[0],
+        "label": "{}<br>{:,} genes assigned at the {} level or above<br>{:,} genes consistent with {}".format(
+            df["name"].values[0],
+            int(df["count"].values[0]),
+            taxa_rank,
+            int(df["consistent"].values[0]),
+            df["name"].values[0],
+        )
+    }
+
+
+def draw_metadata_heatmap_panel(
+    plot_manifest_df,
+    hovertemplate="Specimen: %{x}<br>Label: %{y}<br>Value: %{text}<extra></extra>",
+):
+    return go.Heatmap(
+        z=plot_manifest_df.apply(
+            lambda r: r.apply(dict(zip(r.unique(), np.arange(0, 1, 1 / r.unique().shape[0]))).get),
+            axis=1
+        ).values,
+        text=plot_manifest_df.values,
+        y=["{}".format(i) for i in plot_manifest_df.index.values],
+        x=["- {}".format(i) for i in plot_manifest_df.columns.values],
+        colorscale='Viridis',
+        showscale=False,
+        hovertemplate=hovertemplate,
+    )
+
+def draw_cag_abund_heatmap_panel(
+    cag_abund_df,
+    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (log10): %{z}<extra></extra>",
+):
+    return go.Heatmap(
+        z=cag_abund_df.values,
+        y=["CAG {} -".format(i) for i in cag_abund_df.index.values],
+        x=["- {}".format(i) for i in cag_abund_df.columns.values],
+        colorbar={"title": "Abundance (log10)"},
+        colorscale='Bluered_r',
+        hovertemplate=hovertemplate,
+    )
 
 #################
 # VOLCANO GRAPH #

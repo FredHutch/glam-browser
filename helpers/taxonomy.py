@@ -10,9 +10,6 @@ def path_to_root(tax_id, taxonomy_df, max_steps=100):
 
     for _ in range(max_steps):
 
-        # Yield this taxon
-        yield tax_id
-
         # Add to the path we have visited
         visited.add(tax_id)
 
@@ -26,6 +23,8 @@ def path_to_root(tax_id, taxonomy_df, max_steps=100):
         # Otherwise, keep walking up
         tax_id = parent_id
 
+    return visited
+
 
 def make_cag_tax_df(tax_id_list, taxonomy_df, ranks_to_keep=["phylum", "class", "order", "family", "genus", "species"]):
     """Return a nicely formatted taxonomy table from a list of tax IDs."""
@@ -33,10 +32,25 @@ def make_cag_tax_df(tax_id_list, taxonomy_df, ranks_to_keep=["phylum", "class", 
     # We will construct a table with all of the taxa in the tree, containing
     # The name of that taxon
     # The rank of that taxon
-    # The number of genes found at that taxon or in its decendents
     # The name of the parent of that taxon
 
+    # The number of genes found at that taxon or in its decendents
     counts = defaultdict(int)
+
+    # The 'consistent_counts' are the number of hits to taxa which
+    # are consistent with this taxa, either above or below it in the taxonomy
+    consistent_counts = {
+        tax_id: 0
+        for tax_id in tax_id_list.apply(int).unique()
+        if tax_id in taxonomy_df.index.values
+    }
+
+    # Get the ancestors of every observed taxa
+    ancestors = {
+        tax_id: path_to_root(tax_id, taxonomy_df)
+        for tax_id in tax_id_list.apply(int).unique()
+        if tax_id in taxonomy_df.index.values
+    }
 
     # Iterate over each terminal leaf
     for tax_id, n_genes in tax_id_list.apply(int).value_counts().items():
@@ -46,16 +60,32 @@ def make_cag_tax_df(tax_id_list, taxonomy_df, ranks_to_keep=["phylum", "class", 
             continue
 
         # Walk up the tree from the leaf to the root
-        for anc_tax_id in path_to_root(tax_id, taxonomy_df):
+        for anc_tax_id in ancestors[tax_id]:
 
             # Add to the sum for every node we visit along the way
             counts[anc_tax_id] += n_genes
+
+        # Iterate over every observed taxon and add to the
+        # 'consistent_counts' if it is an ancestor or descendent
+        # of this taxon
+        for other_tax_id, other_taxon_ancestors in ancestors.items():
+            if other_tax_id == tax_id:
+                consistent_counts[other_tax_id] += n_genes
+            elif tax_id in other_taxon_ancestors:
+                consistent_counts[other_tax_id] += n_genes
+            elif other_tax_id in ancestors[tax_id]:
+                consistent_counts[other_tax_id] += n_genes
 
     if len(counts) == 0:
         return
 
     # Make a DataFrame
-    df = pd.DataFrame({"count": counts})
+    df = pd.DataFrame({
+        "count": counts,
+        "consistent": consistent_counts,
+    }).fillna(
+        0
+    )
 
     # Add the name, parent, rank
     df = df.assign(
@@ -109,4 +139,4 @@ def make_cag_tax_df(tax_id_list, taxonomy_df, ranks_to_keep=["phylum", "class", 
         parent=df["parent_tax_id"].apply(lambda t: tax_names.get(t, "")),
     )
 
-    return df.reindex(columns=["name", "parent", "count"])
+    return df.reindex(columns=["name", "parent", "count", "consistent", "rank"])

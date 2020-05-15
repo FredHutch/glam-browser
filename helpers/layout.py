@@ -376,10 +376,24 @@ def cag_heatmap_card():
                             dcc.Dropdown(
                                 id='cag-heatmap-cluster',
                                 options=[
-                                    {'label': 'By CAG Abundances', 'value': 'cag'},
                                     {'label': 'By Metadata', 'value': 'metadata'},
+                                    {'label': 'By CAG Abundances', 'value': 'cag'},
                                 ],
-                                value="log10",
+                                value="metadata",
+                            ),
+                            html.Br(),
+                            html.Label("Show Taxonomy"),
+                            dcc.Dropdown(
+                                id='cag-heatmap-taxa-rank',
+                                options=[
+                                    {'label': 'None', 'value': 'none'},
+                                    {'label': 'Species', 'value': 'species'},
+                                    {'label': 'Genus', 'value': 'genus'},
+                                    {'label': 'Family', 'value': 'family'},
+                                    {'label': 'Class', 'value': 'class'},
+                                    {'label': 'Phylum,', 'value': 'Phylum'},
+                                ],
+                                value="none",
                             ),
                         ],
                         width=4,
