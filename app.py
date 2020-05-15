@@ -756,17 +756,44 @@ def heatmap_graph_callback(
 
 @app.callback(
     [
-        Output('cag-heatmap-cag-dropdown', value)
+        Output('cag-heatmap-metadata-dropdown', value)
         for value in ['options', 'value']
     ],
     [
         Input("selected-dataset", "children"),
     ])
-def update_heatmap_cag_dropdown(
+def update_heatmap_metadata_dropdown(
     selected_dataset,
 ):
+    """When a new dataset is selected, fill in the available metadata."""
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
         return [], []
+
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Get the list of all metadata
+    options = [
+        {
+            "label": f,
+            "value": f
+        }
+        for f in metadata_fields(fp)
+    ]
+
+    return options, []
+
+@app.callback(
+    Output('cag-heatmap-cag-dropdown', 'options'),
+    [
+        Input("selected-dataset", "children"),
+    ])
+def update_heatmap_cag_dropdown_options(
+    selected_dataset,
+):
+    """When a new dataset is selected, fill in the names of all the CAGs as options."""
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return []
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -783,41 +810,62 @@ def update_heatmap_cag_dropdown(
         for cag_id in cag_id_list
     ]
 
-    # By default, display the first 5
-    value = cag_id_list[:5]
-
-    return options, value
+    return options
 
 @app.callback(
     [
-        Output('cag-heatmap-metadata-dropdown', value)
-        for value in ['options', 'value']
+        Output("cag-heatmap-selected-dataset", "children"),
+        Output('cag-heatmap-cag-dropdown', 'value'),
     ],
     [
         Input("selected-dataset", "children"),
+        Input('global-selected-cag', 'children'),
+    ],
+    [
+        State("cag-heatmap-selected-dataset", "children"),
+        State("cag-heatmap-cag-dropdown", "value"),
     ])
-def update_heatmap_cag_dropdown(
+def update_heatmap_cag_dropdown_value(
     selected_dataset,
+    clicked_cag_json,
+    cag_heatmap_selected_dataset,
+    cags_in_dropdown,
 ):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return [], []
+    # The logic for this callback is a bit involved
+    # If a new dataset has been selected, we want to clear the selected values
+    # However, if a new CAG has been clicked (global-selected-cag), then add that to the list
 
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
+    # At the same time, we need to update cag-heatmap-selected-dataset to figure out
+    # whether selected-dataset has changed or not
 
-    # Get the list of all metadata
-    options = [
-        {
-            "label": f,
-            "value": f
-        }
-        for f in metadata_fields(fp)
-    ]
+    # If a new dataset is selected, remove all selected values
+    if isinstance(selected_dataset, list):
+        selected_dataset = selected_dataset[0]
+    selected_dataset = int(selected_dataset)
 
-    # By default, display none
-    value = []
+    if isinstance(cag_heatmap_selected_dataset, list):
+        cag_heatmap_selected_dataset = cag_heatmap_selected_dataset[0]
+    cag_heatmap_selected_dataset = int(cag_heatmap_selected_dataset)
 
-    return options, value
+    # A new dataset has been selected
+    if cag_heatmap_selected_dataset != selected_dataset:
+        
+        # Get the path to the indicated HDF5
+        fp = page_data["contents"][selected_dataset]["fp"]
+
+        # With a new dataset, select the first five CAGs
+        return [selected_dataset], cag_summary(fp).index.values[:5]
+
+    else:
+        # Reaching this point in the function, a new dataset has _not_ been selected
+        # That means that a new CAG has been clicked on somewhere in the display
+        if clicked_cag_json is not None:
+            # Add the clicked point to the list of selected CAGs in the heatmap
+            cags_in_dropdown.append(
+                json.loads(clicked_cag_json)["id"]
+            )
+        return [selected_dataset], cags_in_dropdown
+
 
 ###########################
 # / CAG HEATMAP CALLBACKS #
@@ -1230,4 +1278,5 @@ if __name__ == '__main__':
     app.run_server(
         host='0.0.0.0',
         port=8050,
+        debug=True,
     )

@@ -346,12 +346,18 @@ def cag_heatmap_card():
                                 value=[],
                                 multi=True
                             ),
+                            html.Br(),
                             dcc.Dropdown(
                                 id="cag-heatmap-metadata-dropdown",
                                 options=[],
                                 value=[],
                                 multi=True
                             ),
+                            html.Div(
+                                children=[-1],
+                                id="cag-heatmap-selected-dataset",
+                                style={"display": "none"}
+                            )
                         ],
                         width=4,
                         align="center"
