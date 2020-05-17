@@ -143,12 +143,6 @@ def hdf5_cag_summary(fp):
     return hdf5_get_item(fp, "/annot/cag/all", index_col="CAG", f=hdf5_cag_summary_f)
 
 def hdf5_cag_summary_f(df):
-    # return df.apply(
-    #     lambda c: c.apply(
-    #         lambda i: '{:g}'.format(float('{:.4g}'.format(i)))
-    #     ) if c.name in [
-    #         "std_abundance", "prevalence", "mean_abundance"
-    #     ] else c
     return df.assign(
         size_log10=df["size"].apply(np.log10)
     )

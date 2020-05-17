@@ -671,7 +671,8 @@ def ordination_anosim_callback(
         Input({"name": 'cag-summary-prevalence-slider', "type": "cag-metric-slider", "metric": "prevalence"}, 'value'),
         Input({"name": 'cag-summary-abundance-slider', "type": "cag-metric-slider", "metric": "mean_abundance"}, 'value'),
         Input('cag-summary-nbinsx-slider', 'value'),
-        Input('cag-summary-log', 'value'),
+        Input('cag-summary-histogram-log', 'value'),
+        Input('cag-summary-histogram-metric', 'value'),
     ])
 def cag_summary_graph_hist_callback(
     selected_dataset,
@@ -682,6 +683,7 @@ def cag_summary_graph_hist_callback(
     abundance_range,
     nbinsx,
     log_scale,
+    hist_metric,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
         return go.Figure()
@@ -697,6 +699,7 @@ def cag_summary_graph_hist_callback(
             abundance_range,
             nbinsx,
             log_scale,
+            hist_metric,
         )
 
 @app.callback(

@@ -277,8 +277,35 @@ def cag_summary_card():
                         width=8,
                         align="center"
                     ),
-                    dbc.Col(
-                        cag_metric_dropdown(
+                    dbc.Col([
+                        html.Br(),
+                        html.Label("Histogram Display"),
+                        dcc.Dropdown(
+                            id='cag-summary-histogram-metric',
+                            options=[
+                                {'label': 'Number of genes', 'value': 'genes'},
+                                {'label': 'Number of CAGs', 'value': 'cags'},
+                            ],
+                            value="genes",
+                        ),
+                        html.Br(),
+                        html.Label("Histogram Log Scale"),
+                        dcc.Dropdown(
+                            id='cag-summary-histogram-log',
+                            options=[
+                                {'label': 'On', 'value': 'on'},
+                                {'label': 'Off', 'value': 'off'},
+                            ],
+                            value="on",
+                        ),
+                        html.Br(),
+                        html.Div(id='global-selected-cag',
+                                    style={"display": "none"}),
+                        html.Div(id='cag-summary-selected-cag',
+                                    style={"display": "none"}),
+                        ] + nbins_slider(
+                            "cag-summary-nbinsx-slider"
+                        ) + cag_metric_dropdown(
                             "cag-summary-metric-primary",
                             default_value="size",
                             label_text="Primary Metric (x-axis)",
@@ -300,19 +327,7 @@ def cag_summary_card():
                             "cag-summary-abundance-slider",
                             "mean_abundance",
                             "CAG Abundance Filter",
-                        ) + nbins_slider(
-                            "cag-summary-nbinsx-slider"
-                        ) + log_scale_radio_button(
-                            "cag-summary-log",
-                            default="on",
-                            label_text="Histogram Log Scale"
-                        ) + [
-                            html.Div(id='global-selected-cag',
-                                     style={"display": "none"}),
-                            html.Div(id='cag-summary-selected-cag',
-                                     style={"display": "none"}),
-
-                        ],
+                        ),
                         width=4,
                         align="center"
                     )

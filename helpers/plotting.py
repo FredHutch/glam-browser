@@ -444,6 +444,7 @@ def draw_cag_summary_graph_hist(
     abundance_range,
     nbinsx,
     log_scale,
+    metric,
 ):
     # Apply the filters
     plot_df = cag_summary_df.query(
@@ -462,8 +463,8 @@ def draw_cag_summary_graph_hist(
         "entropy >= {}".format(entropy_range[0])
     ).query(
         "entropy <= {}".format(entropy_range[1])
-    ).apply(
-        lambda c: c.apply(np.log10) if c.name == "size" else c
+    ).assign(
+        CAGs = 1
     )
 
     axis_names = {
@@ -476,17 +477,23 @@ def draw_cag_summary_graph_hist(
     }
 
     # Draw a histogram
-    fig = go.Figure(
-        go.Histogram(
-            x=plot_df[metric_primary],
-            histfunc="count",
-            nbinsx=nbinsx,
-            hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
-        ),
+    fig = px.histogram(
+        plot_df,
+        x=metric_primary if metric_primary != "size" else "size_log10",
+        y="CAGs" if metric == "cags" else "size",
+        histfunc="sum",
+        nbins=nbinsx,
     )
+
+    if metric == "cags":
+        ylabel = "Total number of CAGs per bin"
+
+    else:
+        ylabel = "Total number of genes per bin"
+
     fig.update_layout(
         xaxis_title=axis_names[metric_primary],
-        yaxis_title="Number of CAGs",
+        yaxis_title=ylabel,
         template="simple_white",
         height=400,
         width=600,
@@ -601,7 +608,7 @@ def draw_cag_heatmap(
         )
     
     # Subset the CAG abundances to just those selected samples
-    cag_abund_df = cag_abund_df.reindex(
+    plot_df = cag_abund_df.reindex(
         index=plot_manifest_df.index
     )
 
@@ -609,12 +616,12 @@ def draw_cag_heatmap(
         # Transform to log10 relative abundance
 
         # First find the lowest non-zero value
-        lowest_value = cag_abund_df.apply(
+        lowest_value = plot_df.apply(
             lambda c: c[c > 0].min()
         ).min()
 
         # Now transform and set the floor
-        cag_abund_df = cag_abund_df.clip(
+        plot_df = plot_df.clip(
             lower=lowest_value
         ).applymap(
             np.log10
@@ -624,26 +631,26 @@ def draw_cag_heatmap(
     
     if abundance_metric == "zscore":
         # Transform into the Z-score per-sample
-        cag_abund_df = (cag_abund_df - cag_abund_df.mean()) / cag_abund_df.std()
+        plot_df = (plot_df - plot_df.mean()) / plot_df.std()
 
     # If selected, cluster the specimens by CAG abundance
     if cluster_by == "cag":
-        cag_abund_df = cag_abund_df.reindex(
-            index=cag_abund_df.index.values[
+        plot_df = plot_df.reindex(
+            index=plot_df.index.values[
                 leaves_list(
                     linkage(
-                        cag_abund_df,
+                        plot_df,
                         method="ward"
                     )
                 )
             ]
         )
         plot_manifest_df = plot_manifest_df.reindex(
-            index=cag_abund_df.index
+            index=plot_df.index
         )
 
     # Make the specimens columns and CAGs rows
-    cag_abund_df = cag_abund_df.T
+    plot_df = plot_df.T
     plot_manifest_df = plot_manifest_df.T
 
     # Set the figure width
@@ -664,25 +671,25 @@ def draw_cag_heatmap(
     if has_metadata is False and has_taxonomy is False:
 
         fig = go.Figure(
-            data=draw_cag_abund_heatmap_panel(cag_abund_df),
+            data=draw_cag_abund_heatmap_panel(plot_df),
         )
 
     elif has_metadata is False and has_taxonomy:
 
         fig = draw_cag_abund_heatmap_with_tax(
-            cag_abund_df, cag_tax_dict, taxa_rank
+            plot_df, cag_tax_dict, taxa_rank
         )
 
     elif has_metadata and has_taxonomy is False:
 
         fig = draw_cag_abund_heatmap_with_metadata(
-            cag_abund_df, plot_manifest_df, metadata_selected
+            plot_df, plot_manifest_df, metadata_selected
         )
 
     else:
 
         fig = draw_cag_abund_heatmap_with_metadata_and_tax(
-            cag_abund_df, 
+            plot_df, 
             plot_manifest_df, 
             metadata_selected, 
             cag_tax_dict, 
