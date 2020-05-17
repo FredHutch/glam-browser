@@ -876,11 +876,13 @@ def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
     return {
         "CAG": cag_id,
         "name": df["name"].values[0],
-        "label": "{}<br>{:,} genes assigned at the {} level or above<br>{:,} genes consistent with {}".format(
+        "label": "{}<br>{:,} / {:,} genes assigned at the {} level or above<br>{:,} / {:,} genes consistent with {}".format(
             df["name"].values[0],
             int(df["count"].values[0]),
+            df["total"].values[0],
             taxa_rank,
             int(df["consistent"].values[0]),
+            df["total"].values[0],
             df["name"].values[0],
         )
     }
