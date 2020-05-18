@@ -21,6 +21,8 @@ from helpers.layout import cag_summary_card
 from helpers.layout import cag_heatmap_card
 from helpers.layout import volcano_card
 from helpers.layout import taxonomy_card
+from helpers.layout import single_cag_card
+from helpers.layout import manifest_card
 from helpers.plotting import update_richness_graph
 from helpers.plotting import run_pca
 from helpers.plotting import run_tsne
@@ -36,8 +38,6 @@ from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
 from helpers.plotting import parse_manifest_json
 from helpers.taxonomy import make_cag_tax_df
-from helpers.layout import single_cag_card
-from helpers.layout import manifest_card
 from flask_caching import Cache
 import dash
 import dash_bootstrap_components as dbc
