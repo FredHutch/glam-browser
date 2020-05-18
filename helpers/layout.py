@@ -182,6 +182,63 @@ def richness_card():
 ###################
 
 
+######################
+# SINGLE SAMPLE CARD #
+######################
+def single_sample_card():
+    return html.Div([
+        html.Br(),
+        dbc.Card([
+            dbc.CardHeader("Single Sample Display"),
+            dbc.CardBody([
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Spinner(dcc.Graph(
+                            id="single-sample-graph"
+                        ))
+                    ],
+                        align="center",
+                        width=8,
+                    ),
+                    dbc.Col([
+                        html.Label('Select Sample'),
+                        dcc.Dropdown(
+                            id="single-sample-primary-dropdown",
+                            options=[
+                                {'label': 'None', 'value': 'none'}
+                            ],
+                        ),
+                        html.Br(),
+                        html.Label('Compare Against'),
+                        dcc.Dropdown(
+                            id="single-sample-secondary-dropdown",
+                            options=[
+                                {'label': 'CAG Size', 'value': 'cag_size'}
+                            ],
+                        ),
+                        html.Br(),
+                        html.Label('Display Metric'),
+                        dcc.Dropdown(
+                            id="single-sample-metric",
+                            options=[
+                                {'label': 'Relative Abundance', 'value': 'prop'},
+                                {'label': 'Centered Log-Ratio', 'value': 'clr'},
+                            ],
+                            value="prop"
+                        ),
+                    ],
+                        align="center",
+                        width=4,
+                    )
+                ])
+            ])
+        ])
+    ])
+########################
+# / SINGLE SAMPLE CARD #
+########################
+
+
 ###################
 # ORDINATION CARD #
 ###################

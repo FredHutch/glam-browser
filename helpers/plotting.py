@@ -112,6 +112,159 @@ def update_richness_graph(
     return fig
 
 
+#######################
+# SINGLE SAMPLE GRAPH #
+#######################
+def plot_sample_vs_cag_size(
+    sample_abund_df,
+    sample_name,
+    cag_summary_df,
+    display_metric,
+):
+    # Set up the DataFrame for plotting
+    plot_df = cag_summary_df.reindex(
+        columns=["size", "size_log10"]
+    ).assign(
+        prop=sample_abund_df[sample_name]
+    ).query(
+        "prop > 0"
+    )
+    if display_metric == "clr":
+        # Calculate the CLR
+        clr = plot_df["prop"].apply(np.log10)
+        clr = clr - clr.mean()
+
+        # Round to 2 decimals
+        clr = clr.apply(lambda v: round(v, 2))
+
+        # Add to the DataFrame
+        plot_df = plot_df.assign(
+            clr = clr
+        )
+    else:
+        # Round the proportional abundance to 4 decimals
+        plot_df = plot_df.apply(
+            lambda c: c.apply(lambda v: round(v, 2)) if c.name == "prop" else c
+        )
+
+    # Reset the index to put CAG into a columns
+    plot_df = plot_df.reset_index()
+
+    # Rename the columns
+    column_names = {
+        "size": "Number of Genes",
+        "clr": "Relative Abundance (Centered Log-Ratio)",
+        "prop": "Relative Abundance (Proportion)"
+    }
+    plot_df = plot_df.rename(
+        columns=column_names
+    ).reindex(
+        columns=["CAG", "Number of Genes", column_names[display_metric]]
+    )
+
+    # Make the plot
+    fig = px.scatter(
+        plot_df,
+        x="Number of Genes",
+        y=column_names[display_metric],
+        hover_data=["CAG", "Number of Genes", column_names[display_metric]]
+    )
+
+    # Set the display theme
+    fig.update_layout(
+        showlegend=False,
+        template="simple_white",
+        height=500,
+        title={
+            'text': sample_name,
+            'y': 0.9,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
+    )
+    # Log scale the CAG size (horizontal) axis
+    fig.update_xaxes(type="log")
+
+    return fig
+
+def calc_clr(v):
+    """Calculate the CLR for a vector of abundances."""
+    # Index of non-zero values
+    ix = (v > 0)
+
+    # Lowest non-zero value
+    min_val = v[ix].min()
+
+    # Geometric mean
+    gmean_val = v[ix].apply(np.log10).mean()
+
+    # Compute the CLR
+    return v.clip(lower=min_val).apply(np.log10) - gmean_val
+
+def plot_samples_pairwise(
+    primary_sample_abund_df,
+    primary_sample_name,
+    secondary_sample_abund_df,
+    secondary_sample_name,
+    display_metric,
+    cag_summary_df,
+):
+    # Make an abundance DataFrame to plot
+    plot_df = pd.DataFrame({
+        "primary": primary_sample_abund_df[primary_sample_name],
+        "secondary": secondary_sample_abund_df[secondary_sample_name],
+    })
+    # Mask CAGs that are zero in both samples
+    plot_df = plot_df.assign(
+        max_val = plot_df.max(axis=1)
+    ).query(
+        "max_val > 0"
+    ).drop(
+        columns="max_val"
+    )
+
+    # If required, calculate the CLR
+    if display_metric == "clr":
+        
+        plot_df = plot_df.apply(calc_clr)
+
+    # Round the proportional abundance to 2 (clr) or 4 (prop) decimals
+    plot_df = plot_df.apply(
+        lambda c: c.apply(lambda v: round(v, 2 if display_metric == "clr" else 4))
+    )
+
+    # Add the CAG size
+    plot_df = plot_df.assign(
+        SIZE = cag_summary_df["size"]
+    ).rename(columns={
+        "SIZE": "Number of Genes",
+    })
+
+    # Reset the index to put the CAG label into a column
+    plot_df = plot_df.reset_index()
+
+    # Make the plot
+    fig = px.scatter(
+        plot_df,
+        x="primary",
+        y="secondary",
+        labels=dict(
+            primary="Abundance in {}".format(primary_sample_name),
+            secondary="Abundance in {}".format(secondary_sample_name),
+        ),
+        hover_data=plot_df.columns.values,
+    )
+
+    # Set the display theme
+    fig.update_layout(
+        showlegend=False,
+        template="simple_white",
+        height=500,
+    )
+
+    return fig
+
 ####################
 # ORDINATION GRAPH #
 ####################

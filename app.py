@@ -15,6 +15,7 @@ from helpers.layout import dataset_summary_card
 from helpers.layout import experiment_summary_card
 from helpers.layout import update_experiment_summary_card
 from helpers.layout import richness_card
+from helpers.layout import single_sample_card
 from helpers.layout import ordination_card
 from helpers.layout import cag_summary_card
 from helpers.layout import cag_heatmap_card
@@ -25,6 +26,8 @@ from helpers.plotting import run_pca
 from helpers.plotting import run_tsne
 from helpers.plotting import update_ordination_graph
 from helpers.plotting import print_anosim
+from helpers.plotting import plot_sample_vs_cag_size
+from helpers.plotting import plot_samples_pairwise
 from helpers.plotting import draw_cag_summary_graph_hist
 from helpers.plotting import draw_cag_summary_graph_scatter
 from helpers.plotting import draw_cag_heatmap
@@ -142,6 +145,16 @@ def richness(fp):
     return hdf5_richness(fp)
 
 @cache.memoize()
+def sample_abund(fp, sample_name):
+    return hdf5_get_item(
+        fp,
+        "/abund/cag/wide",
+        columns=["CAG", sample_name],
+    ).set_index(
+        "CAG"
+    )
+
+@cache.memoize()
 def cag_summary(fp):
     return hdf5_cag_summary(fp)
 
@@ -254,6 +267,7 @@ app.layout = html.Div(
                 # Cards for each of the plotted components
                 experiment_summary_card(),
                 richness_card(),
+                single_sample_card(),
                 ordination_card(),
                 cag_summary_card(),
                 cag_heatmap_card(),
@@ -548,6 +562,111 @@ def richness_graph_callback(
 ############################
 # / RICHNESS CARD CALLBACK #
 ############################
+
+
+###############################
+# SINGLE SAMPLE CARD CALLBACK #
+###############################
+@app.callback(
+    Output("single-sample-graph", 'figure'),
+    [
+        Input('single-sample-primary-dropdown', 'value'),
+        Input('single-sample-secondary-dropdown', 'value'),
+        Input('single-sample-metric', 'value'),
+    ],
+    [State("selected-dataset", "children")],
+)
+def single_sample_graph_callback(
+    primary_sample, 
+    secondary_sample, 
+    display_metric,
+    selected_dataset, 
+):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return go.Figure()
+    elif primary_sample == "none" or display_metric is None:
+        return go.Figure()
+    else:
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        if secondary_sample == "cag_size":
+            return plot_sample_vs_cag_size(
+                sample_abund(fp, primary_sample),
+                primary_sample,
+                cag_summary(fp),
+                display_metric,
+            )
+        else:
+            return plot_samples_pairwise(
+                sample_abund(fp, primary_sample),
+                primary_sample,
+                sample_abund(fp, secondary_sample),
+                secondary_sample,
+                display_metric,
+                cag_summary(fp),
+            )
+
+@app.callback(
+    [
+        Output("single-sample-primary-dropdown", value)
+        for value in ["options", "value"]
+    ],
+    [
+        Input("selected-dataset", "children"),
+    ],
+)
+def update_single_sample_primary_dropdown(
+    selected_dataset, 
+):
+    options = [
+        {'label': 'None', 'value': 'none'}
+    ]
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return [options, "none"]
+    else:
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        options = [
+            {
+                "label": n,
+                "value": n
+            }
+            for n in manifest(fp).index.values
+        ]
+        return [options, manifest(fp).index.values[0]]
+
+@app.callback(
+    [
+        Output("single-sample-secondary-dropdown", value)
+        for value in ["options", "value"]
+    ],
+    [
+        Input("selected-dataset", "children"),
+    ],
+)
+def update_single_sample_primary_dropdown(
+    selected_dataset, 
+):
+    options = [
+        {'label': 'CAG Size', 'value': 'cag_size'}
+    ]
+    value = "cag_size"
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return [options, value]
+    else:
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        options.extend([
+            {
+                "label": n,
+                "value": n
+            }
+            for n in manifest(fp).index.values
+        ])
+        return [options, value]
+#################################
+# / SINGLE SAMPLE CARD CALLBACK #
+#################################
 
 
 #############################
