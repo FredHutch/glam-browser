@@ -45,6 +45,7 @@ def parse_directory(folder_path):
             for i in manifest["contents"]:
                 assert "fp" in i
                 i["fp"] = os.path.join(folder_path, i["fp"])
+                assert os.path.exists(i["fp"]), "File not found: {}".format(i["fp"])
                 if "name" not in i:
                     i["name"] = i["fp"].split("/")[-1]
                 page_data["contents"].append(i)

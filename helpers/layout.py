@@ -609,6 +609,45 @@ def single_cag_card():
 #####################
 
 
+###############
+# GENOME CARD #
+###############
+def genome_card():
+    return html.Div([
+        html.Br(),
+        dbc.Card([
+            dbc.CardHeader("Genome Similarity"),
+            dbc.CardBody([
+                dbc.Row([
+                    dbc.Col(
+                        dbc.Spinner(dcc.Graph(
+                            id="genome-heatmap-graph"
+                        )),
+                        width=8,
+                        align="center",
+                    ),
+                    dbc.Col(
+                        [
+                            html.Label("Select CAG(s)"),
+                            dcc.Dropdown(
+                                id="genome-heatmap-cag-dropdown",
+                                options=[{"label": "None", "value": "none"}],
+                                value=[],
+                                multi=False,
+                            ),
+                        ],
+                        width=4,
+                        align="center",
+                    )
+                ])
+            ])
+        ])
+    ], id="genome-card", style={"display": "none"})
+#################
+# / GENOME CARD #
+#################
+
+
 #################
 # MANIFEST CARD #
 #################

@@ -1070,7 +1070,7 @@ def draw_cag_abund_heatmap_panel(
         y=["CAG {} -".format(i) for i in cag_abund_df.index.values],
         x=["- {}".format(i) for i in cag_abund_df.columns.values],
         colorbar={"title": "Abundance (log10)"},
-        colorscale='Bluered_r',
+        colorscale='blues',
         hovertemplate=hovertemplate,
     )
 
@@ -1268,5 +1268,118 @@ def draw_single_cag_graph(
     fig.update_layout(
         template="simple_white",
         yaxis_title="CAG {}".format(cag_id)
+    )
+    return fig
+
+##################
+# GENOME HEATMAP #
+##################
+def plot_genome_heatmap(genome_df, selected_cag, genome_manifest_df, cag_summary_df):
+    # Figure out which CAGs to plot
+    cags_to_plot = pd.Series({
+        cag_id: cag_df["containment"].max()
+        for cag_id, cag_df in genome_df.query(
+            "n_genes >= 10"
+        ).groupby(
+            "CAG"
+        )
+    }).sort_values(
+        ascending=False
+    ).head(
+        10
+    ).index.values
+
+    # Format as a list
+    cags_to_plot = [cag_id for cag_id in cags_to_plot]
+
+    # Make sure to plot the selected CAG
+    if selected_cag not in cags_to_plot:
+        cags_to_plot = cags_to_plot[:-1]
+        cags_to_plot.append(selected_cag)
+
+    # Make the DataFrame to plot
+    plot_df = genome_df.pivot_table(
+        index="genome",
+        columns="CAG",
+        values="cag_prop"
+    ).reindex(
+        columns=cags_to_plot
+    ).fillna(
+        0
+    )
+
+    # Sort the rows and columns with linkage clustering
+    plot_df = plot_df.reindex(
+        index=plot_df.index.values[
+            leaves_list(linkage(
+                plot_df,
+                method="ward"
+            ))
+        ],
+        columns=plot_df.columns.values[
+            leaves_list(linkage(
+                plot_df.T,
+                method="ward"
+            ))
+        ],
+    )
+
+
+    # Make the text display
+    text_df = pd.DataFrame({
+        cag_id: {
+            genome_id: "CAG Prop.: {} - Genome Prop.: {} - Genome bps: {:,} - Num. Genes: {:,}".format(
+                round(cag_genome_df["cag_prop"].values[0], 2),
+                round(cag_genome_df["genome_prop"].values[0], 4),
+                int(cag_genome_df["genome_bases"].values[0]),
+                int(cag_genome_df["n_genes"].values[0]),
+            )
+            for genome_id, cag_genome_df in cag_df.groupby("genome")
+        }
+        for cag_id, cag_df in genome_df.groupby("CAG")
+        if cag_id in cags_to_plot
+    }).reindex(
+        index=plot_df.index,
+        columns=plot_df.columns
+    )
+
+    # Get the genome names
+    genome_names = genome_manifest_df.set_index(
+        "id"
+    )[
+        "name"
+    ].reindex(
+        index=plot_df.index
+    ).tolist()
+
+    # Format the CAG labels to include sizes
+    cag_names = [
+        "CAG {} ({:,} genes)".format(
+            cag_id,
+            cag_summary_df.loc[cag_id, "size"]
+        )
+        for cag_id in plot_df.columns.values
+    ]
+
+    # Set the hover text format
+    hovertemplate = "%{x}<br>Genome: %{y}<br>%{text}<extra></extra>"
+
+    fig = go.Figure(
+        go.Heatmap(
+            text=text_df.values,
+            z=plot_df.values,
+            y=genome_names,
+            x=cag_names,
+            colorbar={"title": "Proportion of CAG"},
+            colorscale='blues',
+            hovertemplate=hovertemplate,
+            zmin=0.,
+            zmax=1.,
+        )
+    )
+
+    fig.update_layout(
+        width=700,
+        height=700,
     )
     return fig

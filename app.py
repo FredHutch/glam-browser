@@ -22,6 +22,7 @@ from helpers.layout import cag_heatmap_card
 from helpers.layout import volcano_card
 from helpers.layout import taxonomy_card
 from helpers.layout import single_cag_card
+from helpers.layout import genome_card
 from helpers.layout import manifest_card
 from helpers.plotting import update_richness_graph
 from helpers.plotting import run_pca
@@ -36,6 +37,7 @@ from helpers.plotting import draw_cag_heatmap
 from helpers.plotting import draw_volcano_graph
 from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
+from helpers.plotting import plot_genome_heatmap
 from helpers.plotting import parse_manifest_json
 from helpers.taxonomy import make_cag_tax_df
 from flask_caching import Cache
@@ -231,6 +233,40 @@ def max_neg_log_pvalue(fp):
             "parameter"
         )["neg_log_pvalue"].max()
 
+
+#########################################
+# CACHE FUNCTIONS FOR GENOME ALIGNMENTS #
+#########################################
+@cache.memoize()
+def genome_manifest(fp):
+    return hdf5_get_item(
+        fp,
+        "/genomes/manifest",
+    )
+
+@cache.memoize()
+def genomes_by_cag(fp, cag_id):
+    print("Reading genomes aligning to CAG {}".format(cag_id))
+    return hdf5_get_item(
+        fp,
+        "/genomes/cags/containment",
+        where="CAG == {}".format(cag_id),
+        timeout=120,
+    )
+
+@cache.memoize()
+def cags_by_genome(fp, genome_id):
+    print("Reading CAGs aligning to genome {}".format(genome_id))
+    return hdf5_get_item(
+        fp,
+        "/genomes/cags/containment",
+        where="genome == '{}'".format(genome_id)
+    )
+
+@cache.memoize()
+def has_genome_alignments(fp):
+    return genome_manifest(fp) is not None
+
 ##########################
 # SET UP THE PAGE LAYOUT #
 ##########################
@@ -274,6 +310,7 @@ app.layout = html.Div(
                 volcano_card(),
                 taxonomy_card(),
                 single_cag_card(),
+                genome_card(),
                 manifest_card(),
             ],
             id="detail-display",
@@ -644,7 +681,7 @@ def update_single_sample_primary_dropdown(
         Input("selected-dataset", "children"),
     ],
 )
-def update_single_sample_primary_dropdown(
+def update_single_sample_secondary_dropdown(
     selected_dataset, 
 ):
     options = [
@@ -916,10 +953,13 @@ def heatmap_graph_callback(
     })
 
     # Get the taxonomic hits for the selected CAGs
-    cag_tax_dict = {
-        cag_id: cag_taxonomy(cag_id, fp)
-        for cag_id in cags_selected
-    }
+    if taxa_rank != "none":
+        cag_tax_dict = {
+            cag_id: cag_taxonomy(cag_id, fp)
+            for cag_id in cags_selected
+        }
+    else:
+        cag_tax_dict = {}
 
     # Draw the figure
     return draw_cag_heatmap(
@@ -963,7 +1003,10 @@ def update_heatmap_metadata_dropdown(
     return options, []
 
 @app.callback(
-    Output('cag-heatmap-cag-dropdown', 'options'),
+    [
+        Output(element, 'options')
+        for element in ['cag-heatmap-cag-dropdown', 'genome-heatmap-cag-dropdown']
+    ],
     [
         Input("selected-dataset", "children"),
     ])
@@ -972,7 +1015,7 @@ def update_heatmap_cag_dropdown_options(
 ):
     """When a new dataset is selected, fill in the names of all the CAGs as options."""
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return []
+        return [[], []]
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -989,7 +1032,7 @@ def update_heatmap_cag_dropdown_options(
         for cag_id in cag_id_list
     ]
 
-    return options
+    return [options, options]
 
 @app.callback(
     [
@@ -1273,6 +1316,84 @@ def update_single_cag_graph(
 #########################
 # / SINGLE CAG CALLBACK #
 #########################
+
+
+#########################
+# GENOME CARD CALLBACKS #
+#########################
+@app.callback(
+    Output("genome-card", "style"),
+    [Input("selected-dataset", "children")]
+)
+def show_hide_genome_card(selected_dataset):
+    """Only show the genome card if the HDF5 has alignment information."""
+    hide_val = {"display": "none"}
+    show_val = {}
+
+    # No dataset is selected
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return hide_val
+    
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Check if dataset has alignment information
+    if has_genome_alignments(fp):
+        return show_val
+    else:
+        return hide_val
+
+@app.callback(
+    Output("genome-heatmap-cag-dropdown", "value"),
+    [Input("selected-dataset", "children")]
+)
+def update_genome_heatmap_cag_dropdown(selected_dataset):
+    """Deselect CAGs when a new dataset is selected."""
+    return []
+
+@app.callback(
+    Output("genome-heatmap-graph", "figure"),
+    [
+        Input("genome-heatmap-cag-dropdown", "value")
+    ],
+    [State("selected-dataset", "children")]
+)
+def update_genome_heatmap_figure(selected_cag, selected_dataset):
+    # Don't make a plot if a CAG hasn't been selected
+    if selected_cag == [] or selected_dataset == [-1] or selected_dataset == ["-1"]:
+        fig = go.Figure()
+        fig.update_layout(
+            template="simple_white"
+        )
+        return fig
+
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Get the genomes for this CAG (lengthy read operation)
+    genome_df = genomes_by_cag(fp, selected_cag)
+
+    # Filter down to the top N genomes
+    genome_df = genome_df.sort_values(
+        by="n_genes",
+        ascending=False,
+    ).head(
+        20
+    )
+
+    # Add in the other CAGs which align to these genomes (quick read operations)
+    genome_df = pd.concat([
+        cags_by_genome(fp, genome_id)
+        for genome_id in genome_df["genome"].values
+    ])
+
+    # Make the plot
+    return plot_genome_heatmap(
+        genome_df,
+        selected_cag,
+        genome_manifest(fp),
+        cag_summary(fp),
+    )
 
 
 #########################
