@@ -14,7 +14,7 @@ def navbar_simple(page_data):
         color="#112345",
         children=[
             dbc.Button(
-                'Menu',
+                'Main Menu',
                 id={
                     "type": "open-dataset-button",
                     "index": -1,
@@ -42,45 +42,39 @@ def dataset_summary_card(ix, dataset):
     return html.Div([
         html.Br(),
         dbc.Card([
-            dbc.CardHeader(dataset["name"]),
-            dbc.CardBody(
+            dbc.CardHeader([
                 dbc.Row([
-                    dbc.Col(width=1),
                     dbc.Col(
-                        html.Div([
-                            html.Br(),
-                            dcc.Markdown(
-                                dataset.get("description", "")
-                            ),
-                            html.Br(),
-                        ]),
-                        width=8,
+                        html.H4(dataset["name"]),
+                        width=6
                     ),
                     dbc.Col(
                         html.Div([
-                            html.Br(),
                             dbc.Button(
-                                'Open',
+                                'Open Dataset',
                                 id={
                                     "type": "open-dataset-button",
                                     "index": ix,
                                 },
-                                n_clicks=0
+                                n_clicks=0,
+                                color="primary",
                             ),
-                            html.Div(
+                            html.Div( # Hidden div storing whether the dataset has been opened
                                 id={
                                     "type": "open-dataset-pressed",
                                     "index": ix
                                 },
                                 style={"display": "none"}
-                            ),
-                            html.Br(),
-                        ]),
-                        width=1,
+                            )],
+                        style={"text-align": "right"}
                     ),
-                    dbc.Col(width=1),
-                ],
-                    justify="between"
+                        width=6
+                    ),
+                ])
+            ]),
+            dbc.CardBody(
+                dcc.Markdown(
+                    dataset.get("description", "")
                 )
             )
         ])
@@ -858,7 +852,10 @@ def corncob_parameter_dropdown(
     return [
         html.Label(label_text),
         dcc.Dropdown(
-            id=dropdown_id,
+            id={
+                "type": "corncob-parameter-dropdown",
+                "name": dropdown_id
+            },
             options=[
                 {'label': 'None', 'value': 'none'},
             ],
