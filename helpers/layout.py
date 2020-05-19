@@ -502,7 +502,7 @@ def volcano_card():
                         align="center"
                     ),
                     dbc.Col(
-                        volcano_parameter_dropdown(
+                        corncob_parameter_dropdown(
                             "volcano-parameter-dropdown",
                         ) + volcano_pvalue_slider(
                             "volcano-pvalue-slider",
@@ -620,22 +620,30 @@ def genome_card():
             dbc.CardBody([
                 dbc.Row([
                     dbc.Col(
-                        dbc.Spinner(dcc.Graph(
-                            id="genome-heatmap-graph"
-                        )),
+                        [
+                            dbc.Spinner(dcc.Graph(
+                                id="genome-scatter-graph"
+                            )),
+                            dbc.Spinner(dcc.Graph(
+                                id="genome-heatmap-graph"
+                            )),
+                        ],
                         width=8,
                         align="center",
                     ),
                     dbc.Col(
-                        [
-                            html.Label("Select CAG(s)"),
-                            dcc.Dropdown(
-                                id="genome-heatmap-cag-dropdown",
-                                options=[{"label": "None", "value": "none"}],
-                                value=[],
-                                multi=False,
-                            ),
-                        ],
+                        corncob_parameter_dropdown(
+                            "genome-parameter-dropdown",
+                        ) + basic_slider(
+                            "genome-scatter-ngenes-slider",
+                            "Minimum Size Filter (Num. Genes)",
+                            min_value=1,
+                            max_value=1000,
+                            step_value=10,
+                            default_value=100,
+                            marks=[1, 500, 1000],
+                            included=False
+                        ),
                         width=4,
                         align="center",
                     )
@@ -843,7 +851,7 @@ def basic_slider(
     ]
 
 
-def volcano_parameter_dropdown(
+def corncob_parameter_dropdown(
     dropdown_id,
     label_text='Parameter',
 ):

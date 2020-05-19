@@ -821,22 +821,35 @@ def draw_cag_heatmap(
     has_metadata = len(metadata_selected) > 0
     has_taxonomy = (taxa_rank != "none") & any(df is not None for _, df in cag_tax_dict.items())
 
+    # Set the mouseover text template
+    if abundance_metric == "raw":
+        hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>"
+    elif abundance_metric == "log10":
+        hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (log10): %{z}<extra></extra>"
+    elif abundance_metric == "zscore":
+        hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (z-score): %{z}<extra></extra>"
+
     if has_metadata is False and has_taxonomy is False:
 
         fig = go.Figure(
-            data=draw_cag_abund_heatmap_panel(plot_df),
+            data=draw_cag_abund_heatmap_panel(
+                plot_df,
+                hovertemplate=hovertemplate
+            ),
         )
 
     elif has_metadata is False and has_taxonomy:
 
         fig = draw_cag_abund_heatmap_with_tax(
-            plot_df, cag_tax_dict, taxa_rank
+            plot_df, cag_tax_dict, taxa_rank,
+            hovertemplate=hovertemplate
         )
 
     elif has_metadata and has_taxonomy is False:
 
         fig = draw_cag_abund_heatmap_with_metadata(
-            plot_df, plot_manifest_df, metadata_selected
+            plot_df, plot_manifest_df, metadata_selected,
+            hovertemplate=hovertemplate
         )
 
     else:
@@ -847,6 +860,7 @@ def draw_cag_heatmap(
             metadata_selected, 
             cag_tax_dict, 
             taxa_rank,
+            hovertemplate=hovertemplate,
         )
 
     fig.update_layout(
@@ -859,7 +873,8 @@ def draw_cag_heatmap(
 def draw_cag_abund_heatmap_with_tax(
     cag_abund_df, 
     cag_tax_dict,
-    taxa_rank
+    taxa_rank,
+    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
 ):
 
     # Make a plot with two panels, side-by-side, sharing the y-axis
@@ -875,7 +890,7 @@ def draw_cag_abund_heatmap_with_tax(
 
     # Plot the abundances on the left
     fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df), row=1, col=1
+        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=1, col=1
     )
 
     # Plot the taxonomic annotations on the right
@@ -888,7 +903,8 @@ def draw_cag_abund_heatmap_with_tax(
 def draw_cag_abund_heatmap_with_metadata(
     cag_abund_df, 
     plot_manifest_df, 
-    metadata_selected
+    metadata_selected,
+    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
 ):
 
     # Make a plot with two panels, one on top of the other, sharing the x-axis
@@ -917,7 +933,7 @@ def draw_cag_abund_heatmap_with_metadata(
 
     # Plot the abundances on the bottom
     fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df), row=2, col=1
+        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=2, col=1
     )
 
     return fig
@@ -928,6 +944,7 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
     metadata_selected, 
     cag_tax_dict, 
     taxa_rank,
+    hovertemplate="Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
 ):
 
     # Make a plot with four panels:
@@ -961,7 +978,7 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
 
     # Plot the abundances on the bottom-left
     fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df), row=2, col=1
+        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=2, col=1
     )
 
     # Plot the taxonomic annotations on the bottom-right
@@ -1063,7 +1080,7 @@ def draw_metadata_heatmap_panel(
 
 def draw_cag_abund_heatmap_panel(
     cag_abund_df,
-    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (log10): %{z}<extra></extra>",
+    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
 ):
     return go.Heatmap(
         z=cag_abund_df.values,
@@ -1274,28 +1291,65 @@ def draw_single_cag_graph(
 ##################
 # GENOME HEATMAP #
 ##################
-def plot_genome_heatmap(genome_df, selected_cag, genome_manifest_df, cag_summary_df):
-    # Figure out which CAGs to plot
+def plot_genome_scatter(genome_df, parameter, genome_manifest):
+
+    # Get the genome names to plot
+    genome_names = genome_manifest.set_index(
+        "id"
+    )[
+        "name"
+    ].reindex(index=genome_df[
+        "genome_id"
+    ])
+
+    # Draw a scatter plot
+    fig = go.Figure(
+        go.Scattergl(
+            x=genome_df["prop_pass_fdr"].apply(lambda v: round(v, 2)),
+            y=genome_df["mean_est_coef"].apply(lambda v: round(v, 2)),
+            ids=genome_df["genome_id"],
+            text=genome_names,
+            marker_color="blue",
+            hovertemplate="Genome %{text}<br>Accession: %{id}<br>Genome Proportion Passing FDR: %{x}<br>Mean Estimated Coefficient: %{y}<extra></extra>",
+            mode="markers",
+            opacity=0.5,
+        ),
+        layout=go.Layout(
+            clickmode="event+select"
+        )
+    )
+
+    # Set the style of the entire plot
+    fig.update_layout(
+        xaxis_title="Proportion of Genome Passing FDR",
+        yaxis_title="Mean Estimated Coefficient",
+        template="simple_white",
+        showlegend=False,
+        height=400,
+        width=600,
+    )
+
+    return fig
+
+def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
+    # Calculate the product of cag_prop and genome_prop
+    genome_df = genome_df.assign(
+        product = genome_df["cag_prop"] * genome_df["genome_prop"]
+    )
+    # Use the product to figure out which CAGs to plot
     cags_to_plot = pd.Series({
-        cag_id: cag_df["containment"].max()
-        for cag_id, cag_df in genome_df.query(
-            "n_genes >= 10"
-        ).groupby(
+        cag_id: cag_df["product"].max()
+        for cag_id, cag_df in genome_df.groupby(
             "CAG"
         )
     }).sort_values(
         ascending=False
     ).head(
-        10
+        30
     ).index.values
 
     # Format as a list
     cags_to_plot = [cag_id for cag_id in cags_to_plot]
-
-    # Make sure to plot the selected CAG
-    if selected_cag not in cags_to_plot:
-        cags_to_plot = cags_to_plot[:-1]
-        cags_to_plot.append(selected_cag)
 
     # Make the DataFrame to plot
     plot_df = genome_df.pivot_table(
@@ -1309,20 +1363,24 @@ def plot_genome_heatmap(genome_df, selected_cag, genome_manifest_df, cag_summary
     )
 
     # Sort the rows and columns with linkage clustering
-    plot_df = plot_df.reindex(
-        index=plot_df.index.values[
-            leaves_list(linkage(
-                plot_df,
-                method="ward"
-            ))
-        ],
-        columns=plot_df.columns.values[
-            leaves_list(linkage(
-                plot_df.T,
-                method="ward"
-            ))
-        ],
-    )
+    if plot_df.shape[0] > 3:
+        plot_df = plot_df.reindex(
+            index=plot_df.index.values[
+                leaves_list(linkage(
+                    plot_df,
+                    method="ward"
+                ))
+            ]
+        )
+    if plot_df.shape[1] > 3:
+        plot_df = plot_df.reindex(
+            columns=plot_df.columns.values[
+                leaves_list(linkage(
+                    plot_df.T,
+                    method="ward"
+                ))
+            ],
+        )
 
 
     # Make the text display
@@ -1379,7 +1437,7 @@ def plot_genome_heatmap(genome_df, selected_cag, genome_manifest_df, cag_summary
     )
 
     fig.update_layout(
-        width=700,
+        width=600,
         height=700,
     )
     return fig

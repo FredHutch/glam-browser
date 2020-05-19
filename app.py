@@ -37,6 +37,7 @@ from helpers.plotting import draw_cag_heatmap
 from helpers.plotting import draw_volcano_graph
 from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
+from helpers.plotting import plot_genome_scatter
 from helpers.plotting import plot_genome_heatmap
 from helpers.plotting import parse_manifest_json
 from helpers.taxonomy import make_cag_tax_df
@@ -245,13 +246,11 @@ def genome_manifest(fp):
     )
 
 @cache.memoize()
-def genomes_by_cag(fp, cag_id):
-    print("Reading genomes aligning to CAG {}".format(cag_id))
+def genome_summary_by_parameter(fp, parameter):
+    print("Reading genomes summarized by {}".format(parameter))
     return hdf5_get_item(
         fp,
-        "/genomes/cags/containment",
-        where="CAG == {}".format(cag_id),
-        timeout=120,
+        "/genomes/summary/{}".format(parameter),
     )
 
 @cache.memoize()
@@ -266,6 +265,17 @@ def cags_by_genome(fp, genome_id):
 @cache.memoize()
 def has_genome_alignments(fp):
     return genome_manifest(fp) is not None
+
+
+######################
+# PLOTTING FUNCTIONS #
+######################
+def empty_figure():
+    fig = go.Figure()
+    fig.update_layout(
+        template="simple_white"
+    )
+    return fig
 
 ##########################
 # SET UP THE PAGE LAYOUT #
@@ -585,7 +595,7 @@ def richness_graph_callback(
     selected_dataset, 
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         fp = page_data["contents"][selected_dataset[0]]["fp"]
         return update_richness_graph(
@@ -620,9 +630,9 @@ def single_sample_graph_callback(
     selected_dataset, 
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     elif primary_sample == "none" or display_metric is None:
-        return go.Figure()
+        return empty_figure()
     else:
         fp = page_data["contents"][selected_dataset[0]]["fp"]
 
@@ -768,7 +778,7 @@ def ordination_graph_callback(
     selected_dataset,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         fp = page_data["contents"][selected_dataset[0]]["fp"]
         return update_ordination_graph(
@@ -842,7 +852,7 @@ def cag_summary_graph_hist_callback(
     hist_metric,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -881,7 +891,7 @@ def cag_summary_graph_scatter_callback(
     selected_cag_json,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -938,10 +948,10 @@ def heatmap_graph_callback(
     selected_dataset,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     
     if len(cags_selected) == 0:
-        return go.Figure()
+        return empty_figure()
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -1003,10 +1013,7 @@ def update_heatmap_metadata_dropdown(
     return options, []
 
 @app.callback(
-    [
-        Output(element, 'options')
-        for element in ['cag-heatmap-cag-dropdown', 'genome-heatmap-cag-dropdown']
-    ],
+    Output('cag-heatmap-cag-dropdown', 'options'),
     [
         Input("selected-dataset", "children"),
     ])
@@ -1015,7 +1022,7 @@ def update_heatmap_cag_dropdown_options(
 ):
     """When a new dataset is selected, fill in the names of all the CAGs as options."""
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return [[], []]
+        return []
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -1032,7 +1039,7 @@ def update_heatmap_cag_dropdown_options(
         for cag_id in cag_id_list
     ]
 
-    return [options, options]
+    return options
 
 @app.callback(
     [
@@ -1101,7 +1108,7 @@ def update_heatmap_cag_dropdown_value(
     Output('volcano-graph', 'figure'),
     [
         Input("selected-dataset", "children"),
-        Input('volcano-parameter-dropdown', 'value'),
+        Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
         Input('volcano-pvalue-slider', 'value'),
         Input('volcano-fdr-radio', 'value'),
         Input('global-selected-cag', 'children'),
@@ -1114,7 +1121,7 @@ def volcano_graph_callback(
     selected_cag_json
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -1141,19 +1148,16 @@ def volcano_save_click_data(clickData):
                 return json.dumps(point, indent=2)
 
 @app.callback(
-    [
-        Output('volcano-parameter-dropdown', value)
-        for value in ["options", "value"]
-    ],
+    Output({"type": "corncob-parameter-dropdown","name": MATCH}, "options"),
     [
         Input("selected-dataset", "children"),
-    ])
-def update_volcano_parameter_dropdown(selected_dataset):
+    ],
+    [State({"type": "corncob-parameter-dropdown","name": MATCH}, "value")])
+def update_volcano_parameter_dropdown_options(selected_dataset, dummy):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        options =[
-            {'label': 'None', 'value': 'none'},
+        return [
+            {'label': 'None', 'value': 'none'}
         ]
-        default_value = "none"
     else:
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -1166,17 +1170,36 @@ def update_volcano_parameter_dropdown(selected_dataset):
         ).tolist(
         )
 
-        options = [
+        return [
             {'label': l, 'value': l}
             for l in parameter_list
         ]
 
-        if len(parameter_list) > 1:
-            default_value = parameter_list[1]
-        else:
-            default_value = parameter_list[0]
+@app.callback(
+    Output({"type": "corncob-parameter-dropdown","name": MATCH}, "value"),
+    [
+        Input("selected-dataset", "children"),
+    ],
+    [State({"type": "corncob-parameter-dropdown", "name": MATCH}, "options")])
+def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return "none"
+    else:
+        # Get the path to the indicated HDF5
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
 
-    return options, default_value
+        # Get the list of parameters
+        parameter_list = corncob(fp)[
+            "parameter"
+        ].drop_duplicates(
+        ).sort_values(
+        ).tolist(
+        )
+
+        if len(parameter_list) > 1:
+            return parameter_list[1]
+        else:
+            return parameter_list[0]
 
 @app.callback(
     [
@@ -1185,7 +1208,7 @@ def update_volcano_parameter_dropdown(selected_dataset):
     ],
     [
         Input("selected-dataset", "children"),
-        Input('volcano-parameter-dropdown', 'value'),
+        Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
     ])
 def update_volcano_pvalue_slider(selected_dataset, parameter):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
@@ -1196,6 +1219,9 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
         max_value = corncob(fp).query(
             "parameter == '{}'".format(parameter)
         )["neg_log_pvalue"].max()
+
+    if np.isnan(max_value):
+        max_value = 1
 
     marks = {
         str(int(n)): str(int(n))
@@ -1233,7 +1259,7 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, selected_cag_json):
             n: n
             for n in ["0", "1"]
         }
-        return go.Figure(), 1, marks
+        return empty_figure(), 1, marks
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -1284,7 +1310,7 @@ def update_single_cag_graph(
     selected_dataset,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -1344,53 +1370,73 @@ def show_hide_genome_card(selected_dataset):
         return hide_val
 
 @app.callback(
-    Output("genome-heatmap-cag-dropdown", "value"),
-    [Input("selected-dataset", "children")]
-)
-def update_genome_heatmap_cag_dropdown(selected_dataset):
-    """Deselect CAGs when a new dataset is selected."""
-    return []
-
-@app.callback(
-    Output("genome-heatmap-graph", "figure"),
+    Output("genome-scatter-graph", "figure"),
     [
-        Input("genome-heatmap-cag-dropdown", "value")
+        Input({
+            "type": "corncob-parameter-dropdown",
+            "name": "genome-parameter-dropdown"
+        }, "value"),
+        Input("genome-scatter-ngenes-slider", "value"),
     ],
     [State("selected-dataset", "children")]
 )
-def update_genome_heatmap_figure(selected_cag, selected_dataset):
+def update_genome_scatter_figure(parameter, min_ngenes, selected_dataset):
     # Don't make a plot if a CAG hasn't been selected
-    if selected_cag == [] or selected_dataset == [-1] or selected_dataset == ["-1"]:
-        fig = go.Figure()
-        fig.update_layout(
-            template="simple_white"
-        )
-        return fig
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return empty_figure()
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
 
     # Get the genomes for this CAG (lengthy read operation)
-    genome_df = genomes_by_cag(fp, selected_cag)
-
-    # Filter down to the top N genomes
-    genome_df = genome_df.sort_values(
-        by="n_genes",
-        ascending=False,
-    ).head(
-        20
+    genome_df = genome_summary_by_parameter(
+        fp, parameter
     )
 
-    # Add in the other CAGs which align to these genomes (quick read operations)
-    genome_df = pd.concat([
-        cags_by_genome(fp, genome_id)
-        for genome_id in genome_df["genome"].values
-    ])
+    # Skip if this dataset does not have corncob output
+    if genome_df is None:
+        return empty_figure()
+
+    # Filter down to the top N genomes
+    genome_df = genome_df.query( 
+        "total_genes >= {}".format(min_ngenes)
+    )
+
+    if genome_df.shape[0] == 0:
+        return empty_figure()
 
     # Make the plot
+    return plot_genome_scatter(
+        genome_df, parameter, genome_manifest(fp)
+    )
+
+@app.callback(
+    Output("genome-heatmap-graph", "figure"),
+    [
+        Input("genome-scatter-graph", "selectedData")
+    ],
+    [State("selected-dataset", "children")]
+)
+def update_genome_heatmap_figure(selected_genomes, selected_dataset):
+    if selected_genomes is None or len(selected_genomes["points"]) == 0:
+        return empty_figure()
+
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Enforce an upper limit the number of genomes to display
+    if len(selected_genomes["points"]) > 30:
+        selected_genomes["points"] = selected_genomes["points"][:30]
+
+    # Get the CAGs aligning to these genomes
+    genome_df = pd.concat([
+        cags_by_genome(fp, i["id"])
+        for i in selected_genomes["points"]
+    ])
+
+    # Make a plot
     return plot_genome_heatmap(
         genome_df,
-        selected_cag,
         genome_manifest(fp),
         cag_summary(fp),
     )
