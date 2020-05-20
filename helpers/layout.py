@@ -476,6 +476,15 @@ def volcano_card():
                     "volcano-fdr-radio",
                     label_text="FDR-BH adjustment"
                 ) + [
+                    html.Br(),
+                    html.Label("Compare Against"),
+                    dcc.Dropdown(
+                        id="corncob-comparison-parameter-dropdown",
+                        options=[
+                            {'label': 'Estimated Coefficient', 'value': 'coef'},
+                        ],
+                        value="coef"
+                    ),
                     html.Div(id='volcano-selected-cag',
                              style={"display": "none"}),
                 ],

@@ -1097,12 +1097,24 @@ def draw_cag_abund_heatmap_panel(
 def draw_volcano_graph(
     corncob_df,
     parameter, 
+    comparison_parameter,
     neg_log_pvalue_min, 
     fdr_on_off, 
     selected_cag_json
 ):
     if corncob_df is None or neg_log_pvalue_min is None:
         return go.Figure()
+
+    # If a comparison parameter was selected, plot the p-values against each other
+    if comparison_parameter != "coef":
+        return draw_double_volcano_graph(
+            corncob_df,
+            parameter,
+            comparison_parameter,
+            neg_log_pvalue_min,
+            fdr_on_off,
+            selected_cag_json
+        )
 
     # Subset to just this parameter
     plot_df = corncob_df.query(
@@ -1152,6 +1164,77 @@ def draw_volcano_graph(
             'xanchor': 'center',
             'yanchor': 'top',
         },
+        template="simple_white",
+        height=400,
+        width=600
+    )
+
+    return fig
+
+def draw_double_volcano_graph(
+    corncob_df,
+    parameter, 
+    comparison_parameter,
+    neg_log_pvalue_min, 
+    fdr_on_off, 
+    selected_cag_json
+):
+
+    # Set the metric to plot
+    if fdr_on_off == "off":
+        plot_y = "neg_log_pvalue"
+        hovertemplate = "CAG %{id}<br>" + comparison_parameter + " p-value (-log10): %{x}<br>" + parameter + " p-value (-log10): %{y}<extra></extra>"
+        axis_suffix = "p-value (-log10)"
+    else:
+        plot_y = "neg_log_qvalue"
+        hovertemplate = "CAG %{id}<br>" + comparison_parameter + " q-value (-log10): %{x}<br>" + parameter + " q-value (-log10): %{y}<extra></extra>"
+        axis_suffix = "q-value (-log10)"
+
+    # Subset to these two parameters and pivot to be wide
+    plot_df = pd.concat([
+        corncob_df.query(
+            "parameter == '{}'".format(param_name)
+        ).query(
+            "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
+        )
+        for param_name in [parameter, comparison_parameter]
+    ]).pivot_table(
+        index="CAG",
+        columns="parameter",
+        values=plot_y
+    )
+    
+    # Set the minimum value after filtering
+    plot_df.fillna(
+        plot_df.apply(lambda c: c.dropna().min()).min(),
+        inplace=True
+    )
+
+    # Parse the selected CAG data
+    if selected_cag_json is not None:
+        # Set the points which are selected in the scatter plot
+        selectedpoints = np.where(
+            plot_df.index.values == json.loads(selected_cag_json)["id"]
+        )
+    else:
+        selectedpoints = None
+
+    fig = go.Figure(
+        data=go.Scattergl(
+            x=plot_df[comparison_parameter],
+            y=plot_df[parameter],
+            ids=plot_df.index.values,
+            text=plot_df.index.values,
+            hovertemplate=hovertemplate,
+            mode="markers",
+            opacity=0.5,
+            selectedpoints=selectedpoints,
+        ),
+    )
+
+    fig.update_layout(
+        xaxis_title="{} {}".format(comparison_parameter, axis_suffix),
+        yaxis_title="{} {}".format(parameter, axis_suffix),
         template="simple_white",
         height=400,
         width=600

@@ -174,6 +174,15 @@ def corncob(fp):
     return hdf5_corncob(fp)
 
 @cache.memoize()
+def corncob_parameters(fp):
+    return corncob(fp)[
+        "parameter"
+    ].drop_duplicates(
+    ).sort_values(
+    ).tolist(
+    )
+
+@cache.memoize()
 def taxonomy(fp):
     return hdf5_taxonomy(fp)
 
@@ -1129,6 +1138,7 @@ def update_heatmap_cag_dropdown_value(
     [
         Input("selected-dataset", "children"),
         Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
+        Input("corncob-comparison-parameter-dropdown", "value"),
         Input('volcano-pvalue-slider', 'value'),
         Input('volcano-fdr-radio', 'value'),
         Input('global-selected-cag', 'children'),
@@ -1136,6 +1146,7 @@ def update_heatmap_cag_dropdown_value(
 def volcano_graph_callback(
     selected_dataset,
     parameter, 
+    comparison_parameter,
     neg_log_pvalue_min, 
     fdr_on_off, 
     selected_cag_json
@@ -1148,6 +1159,7 @@ def volcano_graph_callback(
         return draw_volcano_graph(
             corncob(fp),
             parameter, 
+            comparison_parameter,
             neg_log_pvalue_min, 
             fdr_on_off, 
             selected_cag_json
@@ -1183,17 +1195,35 @@ def update_volcano_parameter_dropdown_options(selected_dataset, dummy):
         fp = page_data["contents"][selected_dataset[0]]["fp"]
 
         # Get the list of parameters
-        parameter_list = corncob(fp)[
-            "parameter"
-        ].drop_duplicates(
-        ).sort_values(
-        ).tolist(
-        )
+        parameter_list = corncob_parameters(fp)
 
         return [
             {'label': l, 'value': l}
             for l in parameter_list
         ]
+
+@app.callback(
+    [Output("corncob-comparison-parameter-dropdown", value) for value in ["options", "value"]],
+    [Input("selected-dataset", "children")]
+)
+def update_volcano_comparison_dropdown(selected_dataset):
+    options = [{'label': 'Estimated Coefficient', 'value': 'coef'}]
+    value = "coef"
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return [options, value]
+    else:
+        # Get the path to the indicated HDF5
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        # Get the list of parameters
+        parameter_list = corncob_parameters(fp)
+
+        options = options + [
+            {'label': l, 'value': l}
+            for l in parameter_list
+        ]
+
+        return [options, value]
 
 @app.callback(
     Output({"type": "corncob-parameter-dropdown","name": MATCH}, "value"),
@@ -1209,12 +1239,7 @@ def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
         fp = page_data["contents"][selected_dataset[0]]["fp"]
 
         # Get the list of parameters
-        parameter_list = corncob(fp)[
-            "parameter"
-        ].drop_duplicates(
-        ).sort_values(
-        ).tolist(
-        )
+        parameter_list = corncob_parameters(fp)
 
         if len(parameter_list) > 1:
             return parameter_list[1]
