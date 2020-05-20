@@ -354,6 +354,26 @@ def open_dataset_button_click(n_clicks):
 ##################################
 
 
+##################################
+# TOGGLE DISPLAY BUTTON CALLBACK #
+##################################
+@app.callback(
+    Output(
+        {"type": "collapsable-card-body", "parent": MATCH},
+        'is_open'
+    ),
+    [Input(
+        {"type": "toggle-collapsable-card", "parent": MATCH},
+        'n_clicks'
+    )],
+)
+def toggle_card_button_click(n_clicks):
+    return n_clicks is None or n_clicks % 2 == 0
+####################################
+# / TOGGLE DISPLAY BUTTON CALLBACK #
+####################################
+
+
 ################################
 # OPEN DATASET SWITCH CALLBACK #
 ################################
