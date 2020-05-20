@@ -550,6 +550,7 @@ def print_anosim(
     metadata,
     manifest_json,
     full_manifest_df,
+    permutations=9999,
 ):
     """Run anosim and return a Markdown summary."""
 
@@ -567,7 +568,8 @@ def print_anosim(
                 columns=samples_to_analyze,
             ).values
         ),
-        plot_manifest_df[metadata].reindex(index=samples_to_analyze)
+        plot_manifest_df[metadata].reindex(index=samples_to_analyze),
+        permutations=permutations
     )
 
     return dcc.Markdown("""
@@ -575,11 +577,13 @@ def print_anosim(
 
         * R: {:.2} (Range: -1 to 1)
         * p: {:.2E}
+        * Permutations: {:,}
         * Sample size: {:,}
         * Number of groups: {:,}
         """.format(
             r["test statistic"],
             r["p-value"],
+            r["number of permutations"],
             int(r["sample size"]),
             int(r["number of groups"]),
         ))

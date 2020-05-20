@@ -244,9 +244,9 @@ def ordination_card():
                     options=[
                         {'label': 'Euclidean', 'value': 'euclidean'},
                         {'label': 'Aitchison', 'value': 'aitchison'},
-                        {'label': 'Braycurtis', 'value': 'braycurtis'},
+                        {'label': 'Bray-Curtis', 'value': 'braycurtis'},
                     ],
-                    value='euclidean'
+                    value='braycurtis'
                 ),
                 html.Br(),
                 html.Label('Ordination Method'),
