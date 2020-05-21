@@ -7,11 +7,6 @@ services:
 
     labels:
       io.rancher.container.pull_image: always
-      name: "scicomp-a1"
-      io.rancher.scheduler.affinity:host_label: name=scicomp-a1      
-    volumes:
-      - glam:/share
-      - /tmp:/mnt/foo
 
     restart: always
     environment:
@@ -21,9 +16,5 @@ services:
     image: redis:latest
     volumes:
       - ./redis.conf:/usr/local/etc/redis/redis.conf
-      # - glam:/share      
     command: redis-server /usr/local/etc/redis/redis.conf
   
-volumes:
-  glam:
-    external: true

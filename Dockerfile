@@ -10,9 +10,9 @@ RUN useradd -u 5555 -m -d /home/dash -c "dash user" dash
 ADD app.py /home/dash/
 ADD redis.conf /home/dash/
 ADD helpers/ /home/dash/helpers/
+ADD share/ /share/
 RUN chown -R dash:dash /home/dash 
 WORKDIR /home/dash
 EXPOSE 8050
 ENV DATA_FOLDER=/share
-# CMD python3 /home/dash/app.py
-CMD sleep infinity
+CMD python3 /home/dash/app.py

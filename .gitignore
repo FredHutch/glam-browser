@@ -46,3 +46,4 @@ helpers/__pycache__/
 
 *.hdf5
 *.hdf5.lock
+share/
