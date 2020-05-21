@@ -1,0 +1,9 @@
+version: '2'
+services:
+  glam:
+    scale: 1
+    start_on_create: true
+  redis:
+    scale: 1
+    start_on_create: true
+  

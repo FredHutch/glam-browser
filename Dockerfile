@@ -1,8 +1,9 @@
 FROM python:3.8.2-slim
 ADD requirements.txt /home/dash/
+RUN pip3 install numpy # TODO REMOVE
 RUN apt-get update
 RUN apt update && \
-	apt install -y hdf5-tools libhdf5-dev libhdf5-serial-dev nginx supervisor redis-server && \
+	apt install -y hdf5-tools libhdf5-dev libhdf5-serial-dev build-essential && \
 	pip3 install -r /home/dash/requirements.txt && \
 	HDF5_DIR=/usr/lib/x86_64-linux-gnu/hdf5/serial/ pip3 install tables
 RUN useradd -u 5555 -m -d /home/dash -c "dash user" dash
@@ -14,4 +15,5 @@ RUN chown -R dash:dash /home/dash
 WORKDIR /home/dash
 EXPOSE 8050
 ENV DATA_FOLDER=/share
-CMD redis-server /home/dash/redis.conf & python3 /home/dash/app.py
+# CMD python3 /home/dash/app.py
+CMD sleep infinity

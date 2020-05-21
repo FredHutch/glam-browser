@@ -1,0 +1,29 @@
+version: '2'
+services:
+  glam:
+    ports:
+      - "8050:8050"
+    image: dockerimages.fhcrc.org/glam:latest
+
+    labels:
+      io.rancher.container.pull_image: always
+      name: "scicomp-a1"
+      io.rancher.scheduler.affinity:host_label: name=scicomp-a1      
+    volumes:
+      - glam:/share
+      - /tmp:/mnt/foo
+
+    restart: always
+    environment:
+      REDIS_URL: "redis://redis:6379"
+
+  redis:
+    image: redis:latest
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+      # - glam:/share      
+    command: redis-server /usr/local/etc/redis/redis.conf
+  
+volumes:
+  glam:
+    external: true

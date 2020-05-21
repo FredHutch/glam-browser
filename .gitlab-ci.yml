@@ -1,0 +1,21 @@
+
+before_script:
+  - curl -LO https://releases.rancher.com/cli/v0.6.2/rancher-linux-amd64-v0.6.2.tar.gz
+  - tar zxf rancher-linux-amd64-v0.6.2.tar.gz
+  
+build_test:
+  script:
+    - docker build -t dockerimages.fhcrc.org/glam:latest .
+    - echo write some unit tests
+  
+  
+deploy:
+  only:
+    refs:
+       - deployment # TODO FIXME change to master at some point
+  script:
+    - docker login --username $DOCKERIMAGES_USER --password $DOCKERIMAGES_PASS https://dockerimages.fhcrc.org
+    - docker push dockerimages.fhcrc.org/glam:latest
+    - sleep 15
+    - rancher-v0.6.2/rancher --url https://ponderosa.fhcrc.org --access-key $RANCHERAPI_KEY --secret-key $RANCHERAPI_SECRET up -d --pull --force-upgrade --confirm-upgrade --stack glam --file docker-compose.yml --rancher-file rancher-compose.yml
+  
