@@ -14,4 +14,4 @@ RUN chown -R dash:dash /home/dash
 WORKDIR /home/dash
 EXPOSE 8050
 ENV DATA_FOLDER=/share
-CMD redis-server /home/dash/redis.conf & python3 /home/dash/app.py
+CMD python3 /home/dash/app.py
