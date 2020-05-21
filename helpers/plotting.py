@@ -1076,7 +1076,7 @@ def draw_metadata_heatmap_panel(
         ).values,
         text=plot_manifest_df.values,
         y=["{}".format(i) for i in plot_manifest_df.index.values],
-        x=["- {}".format(i) for i in plot_manifest_df.columns.values],
+        x=["Specimen: {}".format(i) for i in plot_manifest_df.columns.values],
         colorscale='Viridis',
         showscale=False,
         hovertemplate=hovertemplate,
@@ -1089,7 +1089,7 @@ def draw_cag_abund_heatmap_panel(
     return go.Heatmap(
         z=cag_abund_df.values,
         y=["CAG {} -".format(i) for i in cag_abund_df.index.values],
-        x=["- {}".format(i) for i in cag_abund_df.columns.values],
+        x=["Specimen: {}".format(i) for i in cag_abund_df.columns.values],
         colorbar={"title": "Abundance (log10)"},
         colorscale='blues',
         hovertemplate=hovertemplate,
