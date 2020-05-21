@@ -15,26 +15,32 @@ from helpers.layout import dataset_summary_card
 from helpers.layout import experiment_summary_card
 from helpers.layout import update_experiment_summary_card
 from helpers.layout import richness_card
+from helpers.layout import single_sample_card
 from helpers.layout import ordination_card
 from helpers.layout import cag_summary_card
 from helpers.layout import cag_heatmap_card
 from helpers.layout import volcano_card
 from helpers.layout import taxonomy_card
+from helpers.layout import single_cag_card
+from helpers.layout import genome_card
+from helpers.layout import manifest_card
 from helpers.plotting import update_richness_graph
 from helpers.plotting import run_pca
 from helpers.plotting import run_tsne
 from helpers.plotting import update_ordination_graph
 from helpers.plotting import print_anosim
+from helpers.plotting import plot_sample_vs_cag_size
+from helpers.plotting import plot_samples_pairwise
 from helpers.plotting import draw_cag_summary_graph_hist
 from helpers.plotting import draw_cag_summary_graph_scatter
 from helpers.plotting import draw_cag_heatmap
 from helpers.plotting import draw_volcano_graph
 from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
+from helpers.plotting import plot_genome_scatter
+from helpers.plotting import plot_genome_heatmap
 from helpers.plotting import parse_manifest_json
 from helpers.taxonomy import make_cag_tax_df
-from helpers.layout import single_cag_card
-from helpers.layout import manifest_card
 from flask_caching import Cache
 import dash
 import dash_bootstrap_components as dbc
@@ -142,6 +148,16 @@ def richness(fp):
     return hdf5_richness(fp)
 
 @cache.memoize()
+def sample_abund(fp, sample_name):
+    return hdf5_get_item(
+        fp,
+        "/abund/cag/wide",
+        columns=["CAG", sample_name],
+    ).set_index(
+        "CAG"
+    )
+
+@cache.memoize()
 def cag_summary(fp):
     return hdf5_cag_summary(fp)
 
@@ -156,6 +172,15 @@ def metrics(fp):
 @cache.memoize()
 def corncob(fp):
     return hdf5_corncob(fp)
+
+@cache.memoize()
+def corncob_parameters(fp):
+    return corncob(fp)[
+        "parameter"
+    ].drop_duplicates(
+    ).sort_values(
+    ).tolist(
+    )
 
 @cache.memoize()
 def taxonomy(fp):
@@ -218,6 +243,49 @@ def max_neg_log_pvalue(fp):
             "parameter"
         )["neg_log_pvalue"].max()
 
+
+#########################################
+# CACHE FUNCTIONS FOR GENOME ALIGNMENTS #
+#########################################
+@cache.memoize()
+def genome_manifest(fp):
+    return hdf5_get_item(
+        fp,
+        "/genomes/manifest",
+    )
+
+@cache.memoize()
+def genome_summary_by_parameter(fp, parameter):
+    print("Reading genomes summarized by {}".format(parameter))
+    return hdf5_get_item(
+        fp,
+        "/genomes/summary/{}".format(parameter),
+    )
+
+@cache.memoize()
+def cags_by_genome(fp, genome_id):
+    print("Reading CAGs aligning to genome {}".format(genome_id))
+    return hdf5_get_item(
+        fp,
+        "/genomes/cags/containment",
+        where="genome == '{}'".format(genome_id)
+    )
+
+@cache.memoize()
+def has_genome_alignments(fp):
+    return genome_manifest(fp) is not None
+
+
+######################
+# PLOTTING FUNCTIONS #
+######################
+def empty_figure():
+    fig = go.Figure()
+    fig.update_layout(
+        template="simple_white"
+    )
+    return fig
+
 ##########################
 # SET UP THE PAGE LAYOUT #
 ##########################
@@ -254,12 +322,14 @@ app.layout = html.Div(
                 # Cards for each of the plotted components
                 experiment_summary_card(),
                 richness_card(),
+                single_sample_card(),
                 ordination_card(),
                 cag_summary_card(),
                 cag_heatmap_card(),
                 volcano_card(),
                 taxonomy_card(),
                 single_cag_card(),
+                genome_card(),
                 manifest_card(),
             ],
             id="detail-display",
@@ -291,6 +361,26 @@ def open_dataset_button_click(n_clicks):
 ##################################
 # / OPEN DATASET BUTTON CALLBACK #
 ##################################
+
+
+##################################
+# TOGGLE DISPLAY BUTTON CALLBACK #
+##################################
+@app.callback(
+    Output(
+        {"type": "collapsable-card-body", "parent": MATCH},
+        'is_open'
+    ),
+    [Input(
+        {"type": "toggle-collapsable-card", "parent": MATCH},
+        'n_clicks'
+    )],
+)
+def toggle_card_button_click(n_clicks):
+    return n_clicks is None or n_clicks % 2 == 0
+####################################
+# / TOGGLE DISPLAY BUTTON CALLBACK #
+####################################
 
 
 ################################
@@ -534,7 +624,7 @@ def richness_graph_callback(
     selected_dataset, 
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         fp = page_data["contents"][selected_dataset[0]]["fp"]
         return update_richness_graph(
@@ -548,6 +638,111 @@ def richness_graph_callback(
 ############################
 # / RICHNESS CARD CALLBACK #
 ############################
+
+
+###############################
+# SINGLE SAMPLE CARD CALLBACK #
+###############################
+@app.callback(
+    Output("single-sample-graph", 'figure'),
+    [
+        Input('single-sample-primary-dropdown', 'value'),
+        Input('single-sample-secondary-dropdown', 'value'),
+        Input('single-sample-metric', 'value'),
+    ],
+    [State("selected-dataset", "children")],
+)
+def single_sample_graph_callback(
+    primary_sample, 
+    secondary_sample, 
+    display_metric,
+    selected_dataset, 
+):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return empty_figure()
+    elif primary_sample == "none" or display_metric is None:
+        return empty_figure()
+    else:
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        if secondary_sample == "cag_size":
+            return plot_sample_vs_cag_size(
+                sample_abund(fp, primary_sample),
+                primary_sample,
+                cag_summary(fp),
+                display_metric,
+            )
+        else:
+            return plot_samples_pairwise(
+                sample_abund(fp, primary_sample),
+                primary_sample,
+                sample_abund(fp, secondary_sample),
+                secondary_sample,
+                display_metric,
+                cag_summary(fp),
+            )
+
+@app.callback(
+    [
+        Output("single-sample-primary-dropdown", value)
+        for value in ["options", "value"]
+    ],
+    [
+        Input("selected-dataset", "children"),
+    ],
+)
+def update_single_sample_primary_dropdown(
+    selected_dataset, 
+):
+    options = [
+        {'label': 'None', 'value': 'none'}
+    ]
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return [options, "none"]
+    else:
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        options = [
+            {
+                "label": n,
+                "value": n
+            }
+            for n in manifest(fp).index.values
+        ]
+        return [options, manifest(fp).index.values[0]]
+
+@app.callback(
+    [
+        Output("single-sample-secondary-dropdown", value)
+        for value in ["options", "value"]
+    ],
+    [
+        Input("selected-dataset", "children"),
+    ],
+)
+def update_single_sample_secondary_dropdown(
+    selected_dataset, 
+):
+    options = [
+        {'label': 'CAG Size', 'value': 'cag_size'}
+    ]
+    value = "cag_size"
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return [options, value]
+    else:
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        options.extend([
+            {
+                "label": n,
+                "value": n
+            }
+            for n in manifest(fp).index.values
+        ])
+        return [options, value]
+#################################
+# / SINGLE SAMPLE CARD CALLBACK #
+#################################
 
 
 #############################
@@ -612,7 +807,7 @@ def ordination_graph_callback(
     selected_dataset,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         fp = page_data["contents"][selected_dataset[0]]["fp"]
         return update_ordination_graph(
@@ -671,7 +866,8 @@ def ordination_anosim_callback(
         Input({"name": 'cag-summary-prevalence-slider', "type": "cag-metric-slider", "metric": "prevalence"}, 'value'),
         Input({"name": 'cag-summary-abundance-slider', "type": "cag-metric-slider", "metric": "mean_abundance"}, 'value'),
         Input('cag-summary-nbinsx-slider', 'value'),
-        Input('cag-summary-log', 'value'),
+        Input('cag-summary-histogram-log', 'value'),
+        Input('cag-summary-histogram-metric', 'value'),
     ])
 def cag_summary_graph_hist_callback(
     selected_dataset,
@@ -682,9 +878,10 @@ def cag_summary_graph_hist_callback(
     abundance_range,
     nbinsx,
     log_scale,
+    hist_metric,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -697,6 +894,7 @@ def cag_summary_graph_hist_callback(
             abundance_range,
             nbinsx,
             log_scale,
+            hist_metric,
         )
 
 @app.callback(
@@ -722,7 +920,7 @@ def cag_summary_graph_scatter_callback(
     selected_cag_json,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -779,10 +977,10 @@ def heatmap_graph_callback(
     selected_dataset,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     
     if len(cags_selected) == 0:
-        return go.Figure()
+        return empty_figure()
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -794,10 +992,13 @@ def heatmap_graph_callback(
     })
 
     # Get the taxonomic hits for the selected CAGs
-    cag_tax_dict = {
-        cag_id: cag_taxonomy(cag_id, fp)
-        for cag_id in cags_selected
-    }
+    if taxa_rank != "none":
+        cag_tax_dict = {
+            cag_id: cag_taxonomy(cag_id, fp)
+            for cag_id in cags_selected
+        }
+    else:
+        cag_tax_dict = {}
 
     # Draw the figure
     return draw_cag_heatmap(
@@ -936,7 +1137,8 @@ def update_heatmap_cag_dropdown_value(
     Output('volcano-graph', 'figure'),
     [
         Input("selected-dataset", "children"),
-        Input('volcano-parameter-dropdown', 'value'),
+        Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
+        Input("corncob-comparison-parameter-dropdown", "value"),
         Input('volcano-pvalue-slider', 'value'),
         Input('volcano-fdr-radio', 'value'),
         Input('global-selected-cag', 'children'),
@@ -944,18 +1146,20 @@ def update_heatmap_cag_dropdown_value(
 def volcano_graph_callback(
     selected_dataset,
     parameter, 
+    comparison_parameter,
     neg_log_pvalue_min, 
     fdr_on_off, 
     selected_cag_json
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
     else:
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
         return draw_volcano_graph(
             corncob(fp),
             parameter, 
+            comparison_parameter,
             neg_log_pvalue_min, 
             fdr_on_off, 
             selected_cag_json
@@ -976,42 +1180,71 @@ def volcano_save_click_data(clickData):
                 return json.dumps(point, indent=2)
 
 @app.callback(
-    [
-        Output('volcano-parameter-dropdown', value)
-        for value in ["options", "value"]
-    ],
+    Output({"type": "corncob-parameter-dropdown","name": MATCH}, "options"),
     [
         Input("selected-dataset", "children"),
-    ])
-def update_volcano_parameter_dropdown(selected_dataset):
+    ],
+    [State({"type": "corncob-parameter-dropdown","name": MATCH}, "value")])
+def update_volcano_parameter_dropdown_options(selected_dataset, dummy):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        options =[
-            {'label': 'None', 'value': 'none'},
+        return [
+            {'label': 'None', 'value': 'none'}
         ]
-        default_value = "none"
     else:
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
 
         # Get the list of parameters
-        parameter_list = corncob(fp)[
-            "parameter"
-        ].drop_duplicates(
-        ).sort_values(
-        ).tolist(
-        )
+        parameter_list = corncob_parameters(fp)
 
-        options = [
+        return [
             {'label': l, 'value': l}
             for l in parameter_list
         ]
 
-        if len(parameter_list) > 1:
-            default_value = parameter_list[1]
-        else:
-            default_value = parameter_list[0]
+@app.callback(
+    [Output("corncob-comparison-parameter-dropdown", value) for value in ["options", "value"]],
+    [Input("selected-dataset", "children")]
+)
+def update_volcano_comparison_dropdown(selected_dataset):
+    options = [{'label': 'Estimated Coefficient', 'value': 'coef'}]
+    value = "coef"
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return [options, value]
+    else:
+        # Get the path to the indicated HDF5
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
 
-    return options, default_value
+        # Get the list of parameters
+        parameter_list = corncob_parameters(fp)
+
+        options = options + [
+            {'label': l, 'value': l}
+            for l in parameter_list
+        ]
+
+        return [options, value]
+
+@app.callback(
+    Output({"type": "corncob-parameter-dropdown","name": MATCH}, "value"),
+    [
+        Input("selected-dataset", "children"),
+    ],
+    [State({"type": "corncob-parameter-dropdown", "name": MATCH}, "options")])
+def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return "none"
+    else:
+        # Get the path to the indicated HDF5
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        # Get the list of parameters
+        parameter_list = corncob_parameters(fp)
+
+        if len(parameter_list) > 1:
+            return parameter_list[1]
+        else:
+            return parameter_list[0]
 
 @app.callback(
     [
@@ -1020,7 +1253,7 @@ def update_volcano_parameter_dropdown(selected_dataset):
     ],
     [
         Input("selected-dataset", "children"),
-        Input('volcano-parameter-dropdown', 'value'),
+        Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
     ])
 def update_volcano_pvalue_slider(selected_dataset, parameter):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
@@ -1031,6 +1264,9 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
         max_value = corncob(fp).query(
             "parameter == '{}'".format(parameter)
         )["neg_log_pvalue"].max()
+
+    if np.isnan(max_value):
+        max_value = 1
 
     marks = {
         str(int(n)): str(int(n))
@@ -1068,7 +1304,7 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, selected_cag_json):
             n: n
             for n in ["0", "1"]
         }
-        return go.Figure(), 1, marks
+        return empty_figure(), 1, marks
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -1119,7 +1355,7 @@ def update_single_cag_graph(
     selected_dataset,
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return go.Figure()
+        return empty_figure()
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -1151,6 +1387,104 @@ def update_single_cag_graph(
 #########################
 # / SINGLE CAG CALLBACK #
 #########################
+
+
+#########################
+# GENOME CARD CALLBACKS #
+#########################
+@app.callback(
+    Output("genome-card", "style"),
+    [Input("selected-dataset", "children")]
+)
+def show_hide_genome_card(selected_dataset):
+    """Only show the genome card if the HDF5 has alignment information."""
+    hide_val = {"display": "none"}
+    show_val = {}
+
+    # No dataset is selected
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return hide_val
+    
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Check if dataset has alignment information
+    if has_genome_alignments(fp):
+        return show_val
+    else:
+        return hide_val
+
+@app.callback(
+    Output("genome-scatter-graph", "figure"),
+    [
+        Input({
+            "type": "corncob-parameter-dropdown",
+            "name": "genome-parameter-dropdown"
+        }, "value"),
+        Input("genome-scatter-ngenes-slider", "value"),
+    ],
+    [State("selected-dataset", "children")]
+)
+def update_genome_scatter_figure(parameter, min_ngenes, selected_dataset):
+    # Don't make a plot if a CAG hasn't been selected
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return empty_figure()
+
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Get the genomes for this CAG (lengthy read operation)
+    genome_df = genome_summary_by_parameter(
+        fp, parameter
+    )
+
+    # Skip if this dataset does not have corncob output
+    if genome_df is None:
+        return empty_figure()
+
+    # Filter down to the top N genomes
+    genome_df = genome_df.query( 
+        "total_genes >= {}".format(min_ngenes)
+    )
+
+    if genome_df.shape[0] == 0:
+        return empty_figure()
+
+    # Make the plot
+    return plot_genome_scatter(
+        genome_df, parameter, genome_manifest(fp)
+    )
+
+@app.callback(
+    Output("genome-heatmap-graph", "figure"),
+    [
+        Input("genome-scatter-graph", "selectedData")
+    ],
+    [State("selected-dataset", "children")]
+)
+def update_genome_heatmap_figure(selected_genomes, selected_dataset):
+    if selected_genomes is None or len(selected_genomes["points"]) == 0:
+        return empty_figure()
+
+    # Get the path to the indicated HDF5
+    fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+    # Enforce an upper limit the number of genomes to display
+    if len(selected_genomes["points"]) > 30:
+        selected_genomes["points"] = selected_genomes["points"][:30]
+
+    # Get the CAGs aligning to these genomes
+    genome_df = pd.concat([
+        cags_by_genome(fp, i["id"])
+        for i in selected_genomes["points"]
+    ])
+
+    # Make a plot
+    return plot_genome_heatmap(
+        genome_df,
+        genome_manifest(fp),
+        cag_summary(fp),
+    )
 
 
 #########################

@@ -112,6 +112,159 @@ def update_richness_graph(
     return fig
 
 
+#######################
+# SINGLE SAMPLE GRAPH #
+#######################
+def plot_sample_vs_cag_size(
+    sample_abund_df,
+    sample_name,
+    cag_summary_df,
+    display_metric,
+):
+    # Set up the DataFrame for plotting
+    plot_df = cag_summary_df.reindex(
+        columns=["size", "size_log10"]
+    ).assign(
+        prop=sample_abund_df[sample_name]
+    ).query(
+        "prop > 0"
+    )
+    if display_metric == "clr":
+        # Calculate the CLR
+        clr = plot_df["prop"].apply(np.log10)
+        clr = clr - clr.mean()
+
+        # Round to 2 decimals
+        clr = clr.apply(lambda v: round(v, 2))
+
+        # Add to the DataFrame
+        plot_df = plot_df.assign(
+            clr = clr
+        )
+    else:
+        # Round the proportional abundance to 4 decimals
+        plot_df = plot_df.apply(
+            lambda c: c.apply(lambda v: round(v, 2)) if c.name == "prop" else c
+        )
+
+    # Reset the index to put CAG into a columns
+    plot_df = plot_df.reset_index()
+
+    # Rename the columns
+    column_names = {
+        "size": "Number of Genes",
+        "clr": "Relative Abundance (Centered Log-Ratio)",
+        "prop": "Relative Abundance (Proportion)"
+    }
+    plot_df = plot_df.rename(
+        columns=column_names
+    ).reindex(
+        columns=["CAG", "Number of Genes", column_names[display_metric]]
+    )
+
+    # Make the plot
+    fig = px.scatter(
+        plot_df,
+        x="Number of Genes",
+        y=column_names[display_metric],
+        hover_data=["CAG", "Number of Genes", column_names[display_metric]]
+    )
+
+    # Set the display theme
+    fig.update_layout(
+        showlegend=False,
+        template="simple_white",
+        height=500,
+        title={
+            'text': sample_name,
+            'y': 0.9,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
+    )
+    # Log scale the CAG size (horizontal) axis
+    fig.update_xaxes(type="log")
+
+    return fig
+
+def calc_clr(v):
+    """Calculate the CLR for a vector of abundances."""
+    # Index of non-zero values
+    ix = (v > 0)
+
+    # Lowest non-zero value
+    min_val = v[ix].min()
+
+    # Geometric mean
+    gmean_val = v[ix].apply(np.log10).mean()
+
+    # Compute the CLR
+    return v.clip(lower=min_val).apply(np.log10) - gmean_val
+
+def plot_samples_pairwise(
+    primary_sample_abund_df,
+    primary_sample_name,
+    secondary_sample_abund_df,
+    secondary_sample_name,
+    display_metric,
+    cag_summary_df,
+):
+    # Make an abundance DataFrame to plot
+    plot_df = pd.DataFrame({
+        "primary": primary_sample_abund_df[primary_sample_name],
+        "secondary": secondary_sample_abund_df[secondary_sample_name],
+    })
+    # Mask CAGs that are zero in both samples
+    plot_df = plot_df.assign(
+        max_val = plot_df.max(axis=1)
+    ).query(
+        "max_val > 0"
+    ).drop(
+        columns="max_val"
+    )
+
+    # If required, calculate the CLR
+    if display_metric == "clr":
+        
+        plot_df = plot_df.apply(calc_clr)
+
+    # Round the proportional abundance to 2 (clr) or 4 (prop) decimals
+    plot_df = plot_df.apply(
+        lambda c: c.apply(lambda v: round(v, 2 if display_metric == "clr" else 4))
+    )
+
+    # Add the CAG size
+    plot_df = plot_df.assign(
+        SIZE = cag_summary_df["size"]
+    ).rename(columns={
+        "SIZE": "Number of Genes",
+    })
+
+    # Reset the index to put the CAG label into a column
+    plot_df = plot_df.reset_index()
+
+    # Make the plot
+    fig = px.scatter(
+        plot_df,
+        x="primary",
+        y="secondary",
+        labels=dict(
+            primary="Abundance in {}".format(primary_sample_name),
+            secondary="Abundance in {}".format(secondary_sample_name),
+        ),
+        hover_data=plot_df.columns.values,
+    )
+
+    # Set the display theme
+    fig.update_layout(
+        showlegend=False,
+        template="simple_white",
+        height=500,
+    )
+
+    return fig
+
 ####################
 # ORDINATION GRAPH #
 ####################
@@ -397,6 +550,7 @@ def print_anosim(
     metadata,
     manifest_json,
     full_manifest_df,
+    permutations=9999,
 ):
     """Run anosim and return a Markdown summary."""
 
@@ -414,7 +568,8 @@ def print_anosim(
                 columns=samples_to_analyze,
             ).values
         ),
-        plot_manifest_df[metadata].reindex(index=samples_to_analyze)
+        plot_manifest_df[metadata].reindex(index=samples_to_analyze),
+        permutations=permutations
     )
 
     return dcc.Markdown("""
@@ -422,11 +577,13 @@ def print_anosim(
 
         * R: {:.2} (Range: -1 to 1)
         * p: {:.2E}
+        * Permutations: {:,}
         * Sample size: {:,}
         * Number of groups: {:,}
         """.format(
             r["test statistic"],
             r["p-value"],
+            r["number of permutations"],
             int(r["sample size"]),
             int(r["number of groups"]),
         ))
@@ -444,6 +601,7 @@ def draw_cag_summary_graph_hist(
     abundance_range,
     nbinsx,
     log_scale,
+    metric,
 ):
     # Apply the filters
     plot_df = cag_summary_df.query(
@@ -462,8 +620,8 @@ def draw_cag_summary_graph_hist(
         "entropy >= {}".format(entropy_range[0])
     ).query(
         "entropy <= {}".format(entropy_range[1])
-    ).apply(
-        lambda c: c.apply(np.log10) if c.name == "size" else c
+    ).assign(
+        CAGs = 1
     )
 
     axis_names = {
@@ -476,17 +634,23 @@ def draw_cag_summary_graph_hist(
     }
 
     # Draw a histogram
-    fig = go.Figure(
-        go.Histogram(
-            x=plot_df[metric_primary],
-            histfunc="count",
-            nbinsx=nbinsx,
-            hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
-        ),
+    fig = px.histogram(
+        plot_df,
+        x=metric_primary if metric_primary != "size" else "size_log10",
+        y="CAGs" if metric == "cags" else "size",
+        histfunc="sum",
+        nbins=nbinsx,
     )
+
+    if metric == "cags":
+        ylabel = "Total number of CAGs per bin"
+
+    else:
+        ylabel = "Total number of genes per bin"
+
     fig.update_layout(
         xaxis_title=axis_names[metric_primary],
-        yaxis_title="Number of CAGs",
+        yaxis_title=ylabel,
         template="simple_white",
         height=400,
         width=600,
@@ -601,7 +765,7 @@ def draw_cag_heatmap(
         )
     
     # Subset the CAG abundances to just those selected samples
-    cag_abund_df = cag_abund_df.reindex(
+    plot_df = cag_abund_df.reindex(
         index=plot_manifest_df.index
     )
 
@@ -609,12 +773,12 @@ def draw_cag_heatmap(
         # Transform to log10 relative abundance
 
         # First find the lowest non-zero value
-        lowest_value = cag_abund_df.apply(
+        lowest_value = plot_df.apply(
             lambda c: c[c > 0].min()
         ).min()
 
         # Now transform and set the floor
-        cag_abund_df = cag_abund_df.clip(
+        plot_df = plot_df.clip(
             lower=lowest_value
         ).applymap(
             np.log10
@@ -624,26 +788,26 @@ def draw_cag_heatmap(
     
     if abundance_metric == "zscore":
         # Transform into the Z-score per-sample
-        cag_abund_df = (cag_abund_df - cag_abund_df.mean()) / cag_abund_df.std()
+        plot_df = (plot_df - plot_df.mean()) / plot_df.std()
 
     # If selected, cluster the specimens by CAG abundance
     if cluster_by == "cag":
-        cag_abund_df = cag_abund_df.reindex(
-            index=cag_abund_df.index.values[
+        plot_df = plot_df.reindex(
+            index=plot_df.index.values[
                 leaves_list(
                     linkage(
-                        cag_abund_df,
+                        plot_df,
                         method="ward"
                     )
                 )
             ]
         )
         plot_manifest_df = plot_manifest_df.reindex(
-            index=cag_abund_df.index
+            index=plot_df.index
         )
 
     # Make the specimens columns and CAGs rows
-    cag_abund_df = cag_abund_df.T
+    plot_df = plot_df.T
     plot_manifest_df = plot_manifest_df.T
 
     # Set the figure width
@@ -661,32 +825,46 @@ def draw_cag_heatmap(
     has_metadata = len(metadata_selected) > 0
     has_taxonomy = (taxa_rank != "none") & any(df is not None for _, df in cag_tax_dict.items())
 
+    # Set the mouseover text template
+    if abundance_metric == "raw":
+        hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>"
+    elif abundance_metric == "log10":
+        hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (log10): %{z}<extra></extra>"
+    elif abundance_metric == "zscore":
+        hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (z-score): %{z}<extra></extra>"
+
     if has_metadata is False and has_taxonomy is False:
 
         fig = go.Figure(
-            data=draw_cag_abund_heatmap_panel(cag_abund_df),
+            data=draw_cag_abund_heatmap_panel(
+                plot_df,
+                hovertemplate=hovertemplate
+            ),
         )
 
     elif has_metadata is False and has_taxonomy:
 
         fig = draw_cag_abund_heatmap_with_tax(
-            cag_abund_df, cag_tax_dict, taxa_rank
+            plot_df, cag_tax_dict, taxa_rank,
+            hovertemplate=hovertemplate
         )
 
     elif has_metadata and has_taxonomy is False:
 
         fig = draw_cag_abund_heatmap_with_metadata(
-            cag_abund_df, plot_manifest_df, metadata_selected
+            plot_df, plot_manifest_df, metadata_selected,
+            hovertemplate=hovertemplate
         )
 
     else:
 
         fig = draw_cag_abund_heatmap_with_metadata_and_tax(
-            cag_abund_df, 
+            plot_df, 
             plot_manifest_df, 
             metadata_selected, 
             cag_tax_dict, 
             taxa_rank,
+            hovertemplate=hovertemplate,
         )
 
     fig.update_layout(
@@ -699,7 +877,8 @@ def draw_cag_heatmap(
 def draw_cag_abund_heatmap_with_tax(
     cag_abund_df, 
     cag_tax_dict,
-    taxa_rank
+    taxa_rank,
+    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
 ):
 
     # Make a plot with two panels, side-by-side, sharing the y-axis
@@ -715,7 +894,7 @@ def draw_cag_abund_heatmap_with_tax(
 
     # Plot the abundances on the left
     fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df), row=1, col=1
+        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=1, col=1
     )
 
     # Plot the taxonomic annotations on the right
@@ -728,7 +907,8 @@ def draw_cag_abund_heatmap_with_tax(
 def draw_cag_abund_heatmap_with_metadata(
     cag_abund_df, 
     plot_manifest_df, 
-    metadata_selected
+    metadata_selected,
+    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
 ):
 
     # Make a plot with two panels, one on top of the other, sharing the x-axis
@@ -757,7 +937,7 @@ def draw_cag_abund_heatmap_with_metadata(
 
     # Plot the abundances on the bottom
     fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df), row=2, col=1
+        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=2, col=1
     )
 
     return fig
@@ -768,6 +948,7 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
     metadata_selected, 
     cag_tax_dict, 
     taxa_rank,
+    hovertemplate="Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
 ):
 
     # Make a plot with four panels:
@@ -801,7 +982,7 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
 
     # Plot the abundances on the bottom-left
     fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df), row=2, col=1
+        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=2, col=1
     )
 
     # Plot the taxonomic annotations on the bottom-right
@@ -869,11 +1050,13 @@ def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
     return {
         "CAG": cag_id,
         "name": df["name"].values[0],
-        "label": "{}<br>{:,} genes assigned at the {} level or above<br>{:,} genes consistent with {}".format(
+        "label": "{}<br>{:,} / {:,} genes assigned at the {} level or above<br>{:,} / {:,} genes consistent with {}".format(
             df["name"].values[0],
             int(df["count"].values[0]),
+            df["total"].values[0],
             taxa_rank,
             int(df["consistent"].values[0]),
+            df["total"].values[0],
             df["name"].values[0],
         )
     }
@@ -893,7 +1076,7 @@ def draw_metadata_heatmap_panel(
         ).values,
         text=plot_manifest_df.values,
         y=["{}".format(i) for i in plot_manifest_df.index.values],
-        x=["- {}".format(i) for i in plot_manifest_df.columns.values],
+        x=["Specimen: {}".format(i) for i in plot_manifest_df.columns.values],
         colorscale='Viridis',
         showscale=False,
         hovertemplate=hovertemplate,
@@ -901,14 +1084,14 @@ def draw_metadata_heatmap_panel(
 
 def draw_cag_abund_heatmap_panel(
     cag_abund_df,
-    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (log10): %{z}<extra></extra>",
+    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
 ):
     return go.Heatmap(
         z=cag_abund_df.values,
         y=["CAG {} -".format(i) for i in cag_abund_df.index.values],
-        x=["- {}".format(i) for i in cag_abund_df.columns.values],
+        x=["Specimen: {}".format(i) for i in cag_abund_df.columns.values],
         colorbar={"title": "Abundance (log10)"},
-        colorscale='Bluered_r',
+        colorscale='blues',
         hovertemplate=hovertemplate,
     )
 
@@ -918,12 +1101,24 @@ def draw_cag_abund_heatmap_panel(
 def draw_volcano_graph(
     corncob_df,
     parameter, 
+    comparison_parameter,
     neg_log_pvalue_min, 
     fdr_on_off, 
     selected_cag_json
 ):
     if corncob_df is None or neg_log_pvalue_min is None:
         return go.Figure()
+
+    # If a comparison parameter was selected, plot the p-values against each other
+    if comparison_parameter != "coef":
+        return draw_double_volcano_graph(
+            corncob_df,
+            parameter,
+            comparison_parameter,
+            neg_log_pvalue_min,
+            fdr_on_off,
+            selected_cag_json
+        )
 
     # Subset to just this parameter
     plot_df = corncob_df.query(
@@ -973,6 +1168,77 @@ def draw_volcano_graph(
             'xanchor': 'center',
             'yanchor': 'top',
         },
+        template="simple_white",
+        height=400,
+        width=600
+    )
+
+    return fig
+
+def draw_double_volcano_graph(
+    corncob_df,
+    parameter, 
+    comparison_parameter,
+    neg_log_pvalue_min, 
+    fdr_on_off, 
+    selected_cag_json
+):
+
+    # Set the metric to plot
+    if fdr_on_off == "off":
+        plot_y = "neg_log_pvalue"
+        hovertemplate = "CAG %{id}<br>" + comparison_parameter + " p-value (-log10): %{x}<br>" + parameter + " p-value (-log10): %{y}<extra></extra>"
+        axis_suffix = "p-value (-log10)"
+    else:
+        plot_y = "neg_log_qvalue"
+        hovertemplate = "CAG %{id}<br>" + comparison_parameter + " q-value (-log10): %{x}<br>" + parameter + " q-value (-log10): %{y}<extra></extra>"
+        axis_suffix = "q-value (-log10)"
+
+    # Subset to these two parameters and pivot to be wide
+    plot_df = pd.concat([
+        corncob_df.query(
+            "parameter == '{}'".format(param_name)
+        ).query(
+            "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
+        )
+        for param_name in [parameter, comparison_parameter]
+    ]).pivot_table(
+        index="CAG",
+        columns="parameter",
+        values=plot_y
+    )
+    
+    # Set the minimum value after filtering
+    plot_df.fillna(
+        plot_df.apply(lambda c: c.dropna().min()).min(),
+        inplace=True
+    )
+
+    # Parse the selected CAG data
+    if selected_cag_json is not None:
+        # Set the points which are selected in the scatter plot
+        selectedpoints = np.where(
+            plot_df.index.values == json.loads(selected_cag_json)["id"]
+        )
+    else:
+        selectedpoints = None
+
+    fig = go.Figure(
+        data=go.Scattergl(
+            x=plot_df[comparison_parameter],
+            y=plot_df[parameter],
+            ids=plot_df.index.values,
+            text=plot_df.index.values,
+            hovertemplate=hovertemplate,
+            mode="markers",
+            opacity=0.5,
+            selectedpoints=selectedpoints,
+        ),
+    )
+
+    fig.update_layout(
+        xaxis_title="{} {}".format(comparison_parameter, axis_suffix),
+        yaxis_title="{} {}".format(parameter, axis_suffix),
         template="simple_white",
         height=400,
         width=600
@@ -1106,5 +1372,159 @@ def draw_single_cag_graph(
     fig.update_layout(
         template="simple_white",
         yaxis_title="CAG {}".format(cag_id)
+    )
+    return fig
+
+##################
+# GENOME HEATMAP #
+##################
+def plot_genome_scatter(genome_df, parameter, genome_manifest):
+
+    # Get the genome names to plot
+    genome_names = genome_manifest.set_index(
+        "id"
+    )[
+        "name"
+    ].reindex(index=genome_df[
+        "genome_id"
+    ])
+
+    # Draw a scatter plot
+    fig = go.Figure(
+        go.Scattergl(
+            x=genome_df["prop_pass_fdr"].apply(lambda v: round(v, 2)),
+            y=genome_df["mean_est_coef"].apply(lambda v: round(v, 2)),
+            ids=genome_df["genome_id"],
+            text=genome_names,
+            marker_color="blue",
+            hovertemplate="Genome %{text}<br>Accession: %{id}<br>Genome Proportion Passing FDR: %{x}<br>Mean Estimated Coefficient: %{y}<extra></extra>",
+            mode="markers",
+            opacity=0.5,
+        ),
+        layout=go.Layout(
+            clickmode="event+select"
+        )
+    )
+
+    # Set the style of the entire plot
+    fig.update_layout(
+        xaxis_title="Proportion of Genome Passing FDR",
+        yaxis_title="Mean Estimated Coefficient",
+        template="simple_white",
+        showlegend=False,
+        height=400,
+        width=600,
+    )
+
+    return fig
+
+def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
+    # Calculate the product of cag_prop and genome_prop
+    genome_df = genome_df.assign(
+        product = genome_df["cag_prop"] * genome_df["genome_prop"]
+    )
+    # Use the product to figure out which CAGs to plot
+    cags_to_plot = pd.Series({
+        cag_id: cag_df["product"].max()
+        for cag_id, cag_df in genome_df.groupby(
+            "CAG"
+        )
+    }).sort_values(
+        ascending=False
+    ).head(
+        30
+    ).index.values
+
+    # Format as a list
+    cags_to_plot = [cag_id for cag_id in cags_to_plot]
+
+    # Make the DataFrame to plot
+    plot_df = genome_df.pivot_table(
+        index="genome",
+        columns="CAG",
+        values="cag_prop"
+    ).reindex(
+        columns=cags_to_plot
+    ).fillna(
+        0
+    )
+
+    # Sort the rows and columns with linkage clustering
+    if plot_df.shape[0] > 3:
+        plot_df = plot_df.reindex(
+            index=plot_df.index.values[
+                leaves_list(linkage(
+                    plot_df,
+                    method="ward"
+                ))
+            ]
+        )
+    if plot_df.shape[1] > 3:
+        plot_df = plot_df.reindex(
+            columns=plot_df.columns.values[
+                leaves_list(linkage(
+                    plot_df.T,
+                    method="ward"
+                ))
+            ],
+        )
+
+
+    # Make the text display
+    text_df = pd.DataFrame({
+        cag_id: {
+            genome_id: "CAG Prop.: {} - Genome Prop.: {} - Genome bps: {:,} - Num. Genes: {:,}".format(
+                round(cag_genome_df["cag_prop"].values[0], 2),
+                round(cag_genome_df["genome_prop"].values[0], 4),
+                int(cag_genome_df["genome_bases"].values[0]),
+                int(cag_genome_df["n_genes"].values[0]),
+            )
+            for genome_id, cag_genome_df in cag_df.groupby("genome")
+        }
+        for cag_id, cag_df in genome_df.groupby("CAG")
+        if cag_id in cags_to_plot
+    }).reindex(
+        index=plot_df.index,
+        columns=plot_df.columns
+    )
+
+    # Get the genome names
+    genome_names = genome_manifest_df.set_index(
+        "id"
+    )[
+        "name"
+    ].reindex(
+        index=plot_df.index
+    ).tolist()
+
+    # Format the CAG labels to include sizes
+    cag_names = [
+        "CAG {} ({:,} genes)".format(
+            cag_id,
+            cag_summary_df.loc[cag_id, "size"]
+        )
+        for cag_id in plot_df.columns.values
+    ]
+
+    # Set the hover text format
+    hovertemplate = "%{x}<br>Genome: %{y}<br>%{text}<extra></extra>"
+
+    fig = go.Figure(
+        go.Heatmap(
+            text=text_df.values,
+            z=plot_df.values,
+            y=genome_names,
+            x=cag_names,
+            colorbar={"title": "Proportion of CAG"},
+            colorscale='blues',
+            hovertemplate=hovertemplate,
+            zmin=0.,
+            zmax=1.,
+        )
+    )
+
+    fig.update_layout(
+        width=600,
+        height=700,
     )
     return fig

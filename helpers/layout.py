@@ -14,7 +14,7 @@ def navbar_simple(page_data):
         color="#112345",
         children=[
             dbc.Button(
-                'Menu',
+                'Main Menu',
                 id={
                     "type": "open-dataset-button",
                     "index": -1,
@@ -42,45 +42,39 @@ def dataset_summary_card(ix, dataset):
     return html.Div([
         html.Br(),
         dbc.Card([
-            dbc.CardHeader(dataset["name"]),
-            dbc.CardBody(
+            dbc.CardHeader([
                 dbc.Row([
-                    dbc.Col(width=1),
                     dbc.Col(
-                        html.Div([
-                            html.Br(),
-                            dcc.Markdown(
-                                dataset.get("description", "")
-                            ),
-                            html.Br(),
-                        ]),
-                        width=8,
+                        html.H4(dataset["name"]),
+                        width=6
                     ),
                     dbc.Col(
                         html.Div([
-                            html.Br(),
                             dbc.Button(
-                                'Open',
+                                'Open Dataset',
                                 id={
                                     "type": "open-dataset-button",
                                     "index": ix,
                                 },
-                                n_clicks=0
+                                n_clicks=0,
+                                color="primary",
                             ),
-                            html.Div(
+                            html.Div( # Hidden div storing whether the dataset has been opened
                                 id={
                                     "type": "open-dataset-pressed",
                                     "index": ix
                                 },
                                 style={"display": "none"}
-                            ),
-                            html.Br(),
-                        ]),
-                        width=1,
+                            )],
+                        style={"text-align": "right"}
                     ),
-                    dbc.Col(width=1),
-                ],
-                    justify="between"
+                        width=6
+                    ),
+                ])
+            ]),
+            dbc.CardBody(
+                dcc.Markdown(
+                    dataset.get("description", "")
                 )
             )
         ])
@@ -134,122 +128,164 @@ def update_experiment_summary_card(dataset_metrics):
 # RICHNESS CARD #
 #################
 def richness_card():
-    return html.Div([
-        html.Br(),
-        dbc.Card([
-            dbc.CardHeader("Gene Analysis Summary"),
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Spinner(dcc.Graph(
-                            id="richness-graph"
-                        ))
+    return card_wrapper(
+        "Gene Analysis Summary",
+        dbc.Row([
+            dbc.Col([
+                dbc.Spinner(dcc.Graph(
+                    id="richness-graph"
+                ))
+            ],
+                align="center",
+                width=8,
+            ),
+            dbc.Col([
+                html.Br(),
+                html.Label('Display Values'),
+                dcc.Dropdown(
+                    id="richness-metric-dropdown",
+                    options=[
+                        {'label': 'Genes Assembled (#)',
+                            'value': 'n_genes_assembled'},
+                        {'label': 'Genes Aligned (#)',
+                            'value': 'n_genes_aligned'},
+                        {'label': 'Reads Aligned (%)',
+                            'value': 'prop_reads_aligned'},
                     ],
-                        align="center",
-                        width=8,
-                    ),
-                    dbc.Col([
-                        html.Br(),
-                        html.Label('Display Values'),
-                        dcc.Dropdown(
-                            id="richness-metric-dropdown",
-                            options=[
-                                {'label': 'Genes Assembled (#)',
-                                 'value': 'n_genes_assembled'},
-                                {'label': 'Genes Aligned (#)',
-                                 'value': 'n_genes_aligned'},
-                                {'label': 'Reads Aligned (%)',
-                                 'value': 'prop_reads_aligned'},
-                            ],
-                            value='prop_reads_aligned'
-                        ),
-                        html.Br(),
-                    ] + plot_type_dropdown(
-                        "richness-type-dropdown"
-                    ) + log_scale_radio_button(
-                        "richness-log-x",
-                        label_text="Number of Reads - Log Scale"
-                    ),
-                        align="center",
-                        width=4,
-                    )
-                ])
-            ])
+                    value='prop_reads_aligned'
+                ),
+                html.Br(),
+            ] + plot_type_dropdown(
+                "richness-type-dropdown"
+            ) + log_scale_radio_button(
+                "richness-log-x",
+                label_text="Number of Reads - Log Scale"
+            ),
+                align="center",
+                width=4,
+            )
         ])
-    ])
+    )
 ###################
 # / RICHNESS CARD #
 ###################
+
+
+######################
+# SINGLE SAMPLE CARD #
+######################
+def single_sample_card():
+    return card_wrapper(
+        "Single Sample Display",
+        dbc.Row([
+            dbc.Col([
+                dbc.Spinner(dcc.Graph(
+                            id="single-sample-graph"
+                            ))
+            ],
+                align="center",
+                width=8,
+            ),
+            dbc.Col([
+                html.Label('Select Sample'),
+                dcc.Dropdown(
+                    id="single-sample-primary-dropdown",
+                    options=[
+                        {'label': 'None', 'value': 'none'}
+                    ],
+                ),
+                html.Br(),
+                html.Label('Compare Against'),
+                dcc.Dropdown(
+                    id="single-sample-secondary-dropdown",
+                    options=[
+                        {'label': 'CAG Size', 'value': 'cag_size'}
+                    ],
+                ),
+                html.Br(),
+                html.Label('Display Metric'),
+                dcc.Dropdown(
+                    id="single-sample-metric",
+                    options=[
+                        {'label': 'Relative Abundance', 'value': 'prop'},
+                        {'label': 'Centered Log-Ratio', 'value': 'clr'},
+                    ],
+                    value="prop"
+                ),
+            ],
+                align="center",
+                width=4,
+            )
+        ])
+    )
+########################
+# / SINGLE SAMPLE CARD #
+########################
 
 
 ###################
 # ORDINATION CARD #
 ###################
 def ordination_card():
-    return html.Div([
-        html.Br(),
-        dbc.Card([
-            dbc.CardHeader("Ordination Analysis"),
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col(
-                        dbc.Spinner(dcc.Graph(
+    return card_wrapper(
+        "Ordination Analysis",
+        dbc.Row([
+            dbc.Col(
+                dbc.Spinner(dcc.Graph(
                             id="ordination-graph"
-                        )),
-                        width=8,
-                        align="center"
-                    ),
-                    dbc.Col([
-                        html.Label('Distance Metric'),
-                        dcc.Dropdown(
-                            id="ordination-metric",
-                            options=[
-                                {'label': 'Euclidean', 'value': 'euclidean'},
-                                {'label': 'Aitchison', 'value': 'aitchison'},
-                                {'label': 'Braycurtis', 'value': 'braycurtis'},
-                            ],
-                            value='euclidean'
-                        ),
-                        html.Br(),
-                        html.Label('Ordination Method'),
-                        dcc.Dropdown(
-                            id="ordination-algorithm",
-                            options=[
-                                {'label': 'PCA', 'value': 'pca'},
-                                {'label': 't-SNE', 'value': 'tsne'},
-                            ],
-                            value='pca'
-                        ),
-                        html.Br(),
-                    ] + ordination_pc_slider(
-                        "ordination-primary-pc",
-                        'Primary Axis',
-                        1
-                    ) + ordination_pc_slider(
-                        "ordination-secondary-pc",
-                        'Secondary Axis',
-                        2
-                    ) + basic_slider(
-                        "ordination-tsne-perplexity",
-                        "Perplexity",
-                        max_value=100,
-                        default_value=30,
-                        marks=[0, 10, 20, 30, 50, 70, 100],
-                        included=False,
-                    ) + metadata_field_dropdown(
-                        "ordination-metadata"
-                    ) + [
-                        html.Div(
-                            id="ordination-anosim-results"
-                        )
+                            )),
+                width=8,
+                align="center"
+            ),
+            dbc.Col([
+                html.Label('Distance Metric'),
+                dcc.Dropdown(
+                    id="ordination-metric",
+                    options=[
+                        {'label': 'Euclidean', 'value': 'euclidean'},
+                        {'label': 'Aitchison', 'value': 'aitchison'},
+                        {'label': 'Bray-Curtis', 'value': 'braycurtis'},
                     ],
-                        width=4,
-                        align="center"
-                    )
-                ])
-            ]),
+                    value='braycurtis'
+                ),
+                html.Br(),
+                html.Label('Ordination Method'),
+                dcc.Dropdown(
+                    id="ordination-algorithm",
+                    options=[
+                        {'label': 'PCA', 'value': 'pca'},
+                        {'label': 't-SNE', 'value': 'tsne'},
+                    ],
+                    value='pca'
+                ),
+                html.Br(),
+            ] + ordination_pc_slider(
+                "ordination-primary-pc",
+                'Primary Axis',
+                1
+            ) + ordination_pc_slider(
+                "ordination-secondary-pc",
+                'Secondary Axis',
+                2
+            ) + basic_slider(
+                "ordination-tsne-perplexity",
+                "Perplexity",
+                max_value=100,
+                default_value=30,
+                marks=[0, 10, 20, 30, 50, 70, 100],
+                included=False,
+            ) + metadata_field_dropdown(
+                "ordination-metadata"
+            ) + [
+                html.Div(
+                    id="ordination-anosim-results"
+                )
+            ],
+                width=4,
+                align="center"
+            )
         ])
-    ])
+    )
 #####################
 # / ORDINATION CARD #
 #####################
@@ -259,67 +295,77 @@ def ordination_card():
 # CAG SUMMARY CARD #
 ####################
 def cag_summary_card():
-    return html.Div([
-        html.Br(),
-        dbc.Card([
-            dbc.CardHeader("CAG Summary"),
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col(
-                        [
-                            dbc.Spinner(dcc.Graph(
+    return card_wrapper(
+        "CAG Summary",
+        dbc.Row([
+            dbc.Col(
+                [
+                    dbc.Spinner(dcc.Graph(
                                 id='cag-summary-graph-hist'
-                            )),
-                            dbc.Spinner(dcc.Graph(
+                                )),
+                    dbc.Spinner(dcc.Graph(
                                 id='cag-summary-graph-scatter'
-                            ))
-                        ],
-                        width=8,
-                        align="center"
-                    ),
-                    dbc.Col(
-                        cag_metric_dropdown(
-                            "cag-summary-metric-primary",
-                            default_value="size",
-                            label_text="Primary Metric (x-axis)",
-                        ) + cag_metric_dropdown(
-                            "cag-summary-metric-secondary",
-                            default_value="entropy",
-                            label_text="Secondary Metric (y-axis)",
-                        ) + cag_size_slider(
-                            "cag-summary-size-slider"
-                        ) + cag_metric_slider(
-                            "cag-summary-entropy-slider",
-                            "entropy",
-                            "CAG Entropy Filter",
-                        ) + cag_metric_slider(
-                            "cag-summary-prevalence-slider",
-                            "prevalence",
-                            "CAG Prevalence Filter"
-                        ) + cag_metric_slider(
-                            "cag-summary-abundance-slider",
-                            "mean_abundance",
-                            "CAG Abundance Filter",
-                        ) + nbins_slider(
-                            "cag-summary-nbinsx-slider"
-                        ) + log_scale_radio_button(
-                            "cag-summary-log",
-                            default="on",
-                            label_text="Histogram Log Scale"
-                        ) + [
-                            html.Div(id='global-selected-cag',
-                                     style={"display": "none"}),
-                            html.Div(id='cag-summary-selected-cag',
-                                     style={"display": "none"}),
-
-                        ],
-                        width=4,
-                        align="center"
-                    )
-                ])
-            ]),
+                                ))
+                ],
+                width=8,
+                align="center"
+            ),
+            dbc.Col([
+                html.Br(),
+                html.Label("Histogram Display"),
+                dcc.Dropdown(
+                    id='cag-summary-histogram-metric',
+                    options=[
+                        {'label': 'Number of genes', 'value': 'genes'},
+                        {'label': 'Number of CAGs', 'value': 'cags'},
+                    ],
+                    value="genes",
+                ),
+                html.Br(),
+                html.Label("Histogram Log Scale"),
+                dcc.Dropdown(
+                    id='cag-summary-histogram-log',
+                    options=[
+                        {'label': 'On', 'value': 'on'},
+                        {'label': 'Off', 'value': 'off'},
+                    ],
+                    value="on",
+                ),
+                html.Br(),
+                html.Div(id='global-selected-cag',
+                         style={"display": "none"}),
+                html.Div(id='cag-summary-selected-cag',
+                         style={"display": "none"}),
+            ] + nbins_slider(
+                "cag-summary-nbinsx-slider"
+            ) + cag_metric_dropdown(
+                "cag-summary-metric-primary",
+                default_value="size",
+                label_text="Primary Metric (x-axis)",
+            ) + cag_metric_dropdown(
+                "cag-summary-metric-secondary",
+                default_value="entropy",
+                label_text="Secondary Metric (y-axis)",
+            ) + cag_size_slider(
+                "cag-summary-size-slider"
+            ) + cag_metric_slider(
+                "cag-summary-entropy-slider",
+                "entropy",
+                "CAG Entropy Filter",
+            ) + cag_metric_slider(
+                "cag-summary-prevalence-slider",
+                "prevalence",
+                "CAG Prevalence Filter"
+            ) + cag_metric_slider(
+                "cag-summary-abundance-slider",
+                "mean_abundance",
+                "CAG Abundance Filter",
+            ),
+                width=4,
+                align="center"
+            )
         ])
-    ])
+    )
 ######################
 # / CAG SUMMARY CARD #
 ######################
@@ -329,84 +375,79 @@ def cag_summary_card():
 # CAG HEATMAP CARD #
 ####################
 def cag_heatmap_card():
-    return html.Div([
-        html.Br(),
-        dbc.Card([
-            dbc.CardHeader("CAG Abundance Heatmap"),
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col(
-                        dbc.Spinner(dcc.Graph(
-                            id='cag-heatmap-graph'
-                        )),
-                        width=8,
-                        align="center"
+    return card_wrapper(
+        "CAG Abundance Heatmap",
+        dbc.Row([
+            dbc.Col(
+                dbc.Spinner(dcc.Graph(
+                    id='cag-heatmap-graph'
+                )),
+                width=8,
+                align="center"
+            ),
+            dbc.Col(
+                [
+                    html.Label("Display CAGs"),
+                    dcc.Dropdown(
+                        id="cag-heatmap-cag-dropdown",
+                        options=[],
+                        value=[],
+                        multi=True
                     ),
-                    dbc.Col(
-                        [
-                            html.Label("Display CAGs"),
-                            dcc.Dropdown(
-                                id="cag-heatmap-cag-dropdown",
-                                options=[],
-                                value=[],
-                                multi=True
-                            ),
-                            html.Br(),
-                            html.Label("Display Metadata"),
-                            dcc.Dropdown(
-                                id="cag-heatmap-metadata-dropdown",
-                                options=[],
-                                value=[],
-                                multi=True
-                            ),
-                            html.Div(
-                                children=[-1],
-                                id="cag-heatmap-selected-dataset",
-                                style={"display": "none"}
-                            ),
-                            html.Br(),
-                            html.Label("Abundance Metric"),
-                            dcc.Dropdown(
-                                id='cag-heatmap-abundance-metric',
-                                options=[
-                                    {'label': 'Rel. Abund. (log10)', 'value': 'log10'},
-                                    {'label': 'Rel. Abund. (log10) (z-score)', 'value': 'zscore'},
-                                    {'label': 'Rel. Abund.', 'value': 'raw'},
-                                ],
-                                value="log10",
-                            ),
-                            html.Br(),
-                            html.Label("Group Specimens"),
-                            dcc.Dropdown(
-                                id='cag-heatmap-cluster',
-                                options=[
-                                    {'label': 'By Metadata', 'value': 'metadata'},
-                                    {'label': 'By CAG Abundances', 'value': 'cag'},
-                                ],
-                                value="metadata",
-                            ),
-                            html.Br(),
-                            html.Label("Show Taxonomy"),
-                            dcc.Dropdown(
-                                id='cag-heatmap-taxa-rank',
-                                options=[
-                                    {'label': 'None', 'value': 'none'},
-                                    {'label': 'Species', 'value': 'species'},
-                                    {'label': 'Genus', 'value': 'genus'},
-                                    {'label': 'Family', 'value': 'family'},
-                                    {'label': 'Class', 'value': 'class'},
-                                    {'label': 'Phylum,', 'value': 'Phylum'},
-                                ],
-                                value="none",
-                            ),
+                    html.Br(),
+                    html.Label("Display Metadata"),
+                    dcc.Dropdown(
+                        id="cag-heatmap-metadata-dropdown",
+                        options=[],
+                        value=[],
+                        multi=True
+                    ),
+                    html.Div(
+                        children=[-1],
+                        id="cag-heatmap-selected-dataset",
+                        style={"display": "none"}
+                    ),
+                    html.Br(),
+                    html.Label("Abundance Metric"),
+                    dcc.Dropdown(
+                        id='cag-heatmap-abundance-metric',
+                        options=[
+                            {'label': 'Rel. Abund. (log10)', 'value': 'log10'},
+                            {'label': 'Rel. Abund. (log10) (z-score)', 'value': 'zscore'},
+                            {'label': 'Rel. Abund.', 'value': 'raw'},
                         ],
-                        width=4,
-                        align="center"
-                    )
-                ])
-            ]),
+                        value="log10",
+                    ),
+                    html.Br(),
+                    html.Label("Group Specimens"),
+                    dcc.Dropdown(
+                        id='cag-heatmap-cluster',
+                        options=[
+                            {'label': 'By Metadata', 'value': 'metadata'},
+                            {'label': 'By CAG Abundances', 'value': 'cag'},
+                        ],
+                        value="metadata",
+                    ),
+                    html.Br(),
+                    html.Label("Show Taxonomy"),
+                    dcc.Dropdown(
+                        id='cag-heatmap-taxa-rank',
+                        options=[
+                            {'label': 'None', 'value': 'none'},
+                            {'label': 'Species', 'value': 'species'},
+                            {'label': 'Genus', 'value': 'genus'},
+                            {'label': 'Family', 'value': 'family'},
+                            {'label': 'Class', 'value': 'class'},
+                            {'label': 'Phylum,', 'value': 'Phylum'},
+                        ],
+                        value="none",
+                    ),
+                ],
+                width=4,
+                align="center"
+            )
         ])
-    ])
+)
 ######################
 # / CAG HEATMAP CARD #
 ######################
@@ -416,37 +457,42 @@ def cag_heatmap_card():
 # VOLCANO PLOT #
 ################
 def volcano_card():
-    return html.Div([
-        html.Br(),
-        dbc.Card([
-            dbc.CardHeader("Association Screening"),
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col(
-                        dbc.Spinner(dcc.Graph(
+    return card_wrapper(
+        "Association Screening",
+        dbc.Row([
+            dbc.Col(
+                dbc.Spinner(dcc.Graph(
                             id='volcano-graph'
-                        )),
-                        width=8,
-                        align="center"
-                    ),
-                    dbc.Col(
-                        volcano_parameter_dropdown(
-                            "volcano-parameter-dropdown",
-                        ) + volcano_pvalue_slider(
-                            "volcano-pvalue-slider",
-                        ) + log_scale_radio_button(
-                            "volcano-fdr-radio",
-                            label_text="FDR-BH adjustment"
-                        ) + [
-                            html.Div(id='volcano-selected-cag', style={"display": "none"}),
+                            )),
+                width=8,
+                align="center"
+            ),
+            dbc.Col(
+                corncob_parameter_dropdown(
+                    "volcano-parameter-dropdown",
+                ) + volcano_pvalue_slider(
+                    "volcano-pvalue-slider",
+                ) + log_scale_radio_button(
+                    "volcano-fdr-radio",
+                    label_text="FDR-BH adjustment"
+                ) + [
+                    html.Br(),
+                    html.Label("Compare Against"),
+                    dcc.Dropdown(
+                        id="corncob-comparison-parameter-dropdown",
+                        options=[
+                            {'label': 'Estimated Coefficient', 'value': 'coef'},
                         ],
-                        width=4,
-                        align="center"
-                    )
-                ])
-            ]),
+                        value="coef"
+                    ),
+                    html.Div(id='volcano-selected-cag',
+                             style={"display": "none"}),
+                ],
+                width=4,
+                align="center"
+            )
         ])
-    ], id="volcano")
+    )
 ##################
 # / VOLCANO PLOT #
 ##################
@@ -455,33 +501,28 @@ def volcano_card():
 # CAG TAXONOMY CARD #
 #####################
 def taxonomy_card():
-    return html.Div([
-        html.Br(),
-        dbc.Card([
-            dbc.CardHeader("CAG Taxonomy"),
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col(
-                        dbc.Spinner(dcc.Graph(
+    return card_wrapper(
+        "CAG Taxonomy",
+        dbc.Row([
+            dbc.Col(
+                dbc.Spinner(dcc.Graph(
                             id="cag-tax-graph"
-                        )),
-                        width=8,
-                        align="center",
-                    ),
-                    dbc.Col(
-                        basic_slider(
-                            "cag-tax-ngenes",
-                            "Minimum Number of Genes",
-                            included=False,
-                            default_value=5,
-                        ),
-                        width=4,
-                        align="center",
-                    )
-                ])
-            ])
+                            )),
+                width=8,
+                align="center",
+            ),
+            dbc.Col(
+                basic_slider(
+                    "cag-tax-ngenes",
+                    "Minimum Number of Genes",
+                    included=False,
+                    default_value=5,
+                ),
+                width=4,
+                align="center",
+            )
         ])
-    ])
+    )
 #######################
 # / CAG TAXONOMY CARD #
 #######################
@@ -491,50 +532,89 @@ def taxonomy_card():
 # SINGLE CAG CARD #
 ###################
 def single_cag_card():
-    return html.Div([
-        html.Br(),
-        dbc.Card([
-            dbc.CardHeader("Individual CAG Abundance"),
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col(
-                        dbc.Spinner(dcc.Graph(
+    return card_wrapper(
+        "Individual CAG Abundance",
+        dbc.Row([
+            dbc.Col(
+                dbc.Spinner(dcc.Graph(
                             id="single-cag-graph"
-                        )),
-                        width=8,
-                        align="center",
-                    ),
-                    dbc.Col(
-                        metadata_field_dropdown(
-                            "single-cag-xaxis",
-                            label_text="X-axis",
-                        ) + plot_type_dropdown(
-                            "single-cag-plot-type",
-                            options=[
-                                {'label': 'Points', 'value': 'scatter'},
-                                {'label': 'Line', 'value': 'line'},
-                                {'label': 'Boxplot', 'value': 'boxplot'},
-                                {'label': 'Stripplot', 'value': 'strip'},
-                            ]
-                        ) + metadata_field_dropdown(
-                            "single-cag-color",
-                            label_text="Color",
-                        ) + metadata_field_dropdown(
-                            "single-cag-facet",
-                            label_text="Facet",
-                        ) + log_scale_radio_button(
-                            "single-cag-log"
-                        ),
-                        width=4,
-                        align="center",
-                    )
-                ])
-            ])
+                            )),
+                width=8,
+                align="center",
+            ),
+            dbc.Col(
+                metadata_field_dropdown(
+                    "single-cag-xaxis",
+                    label_text="X-axis",
+                ) + plot_type_dropdown(
+                    "single-cag-plot-type",
+                    options=[
+                        {'label': 'Points', 'value': 'scatter'},
+                        {'label': 'Line', 'value': 'line'},
+                        {'label': 'Boxplot', 'value': 'boxplot'},
+                        {'label': 'Stripplot', 'value': 'strip'},
+                    ]
+                ) + metadata_field_dropdown(
+                    "single-cag-color",
+                    label_text="Color",
+                ) + metadata_field_dropdown(
+                    "single-cag-facet",
+                    label_text="Facet",
+                ) + log_scale_radio_button(
+                    "single-cag-log"
+                ),
+                width=4,
+                align="center",
+            )
         ])
-    ])
+    )
 #####################
 # / SINGLE CAG CARD #
 #####################
+
+
+###############
+# GENOME CARD #
+###############
+def genome_card():
+    return card_wrapper(
+        "Genome Similarity",
+        dbc.Row([
+            dbc.Col(
+                [
+                    dbc.Spinner(dcc.Graph(
+                                id="genome-scatter-graph"
+                                )),
+                    dbc.Spinner(dcc.Graph(
+                                id="genome-heatmap-graph"
+                                )),
+                ],
+                width=8,
+                align="center",
+            ),
+            dbc.Col(
+                corncob_parameter_dropdown(
+                    "genome-parameter-dropdown",
+                ) + basic_slider(
+                    "genome-scatter-ngenes-slider",
+                    "Minimum Size Filter (Num. Genes)",
+                    min_value=1,
+                    max_value=1000,
+                    step_value=10,
+                    default_value=100,
+                    marks=[1, 500, 1000],
+                    included=False
+                ),
+                width=4,
+                align="center",
+            )
+        ]),
+        custom_id="genome-card",
+        custom_style={"display": "none"}
+    )
+#################
+# / GENOME CARD #
+#################
 
 
 #################
@@ -615,6 +695,57 @@ def manifest_card():
 ###############################
 # REUSABLE DISPLAY COMPONENTS #
 ###############################
+def card_wrapper(
+    card_name,
+    card_body,
+    custom_id=None,
+    custom_style=None
+):
+    # Make an id for this particular card
+    card_id = card_name.lower().replace(" ", "-")
+    
+    return html.Div([
+        html.Br(),
+        dbc.Card([
+            dbc.CardHeader(
+                dbc.Row([
+                    dbc.Col(
+                        html.Div(
+                            card_name,
+                            style={"vertical-align": "middle"}
+                        ),
+                        width=6,
+                    ),
+                    dbc.Col(
+                        html.Div(
+                            dbc.Button(
+                                "</>",
+                                id={
+                                    "type": "toggle-collapsable-card",
+                                    "parent": card_id
+                                },
+                                n_clicks=0
+                            ),
+                            style={"text-align": "right"}
+                        ),
+                        width=6,
+                    )
+                ])
+            ),
+            dbc.CardBody([
+                dbc.Collapse(
+                    card_body,
+                    is_open=True,
+                    id={"type": "collapsable-card-body", "parent": card_id}
+                )
+            ])
+        ])
+    ],
+        id=card_id if custom_id is None else custom_id,
+        style=custom_style
+    )
+
+
 def exp_table_row(header1, value1, header2, value2, header_bg="#F4F6F6", value_bg="white", spacer_bg="white"):
     return [     # Table Body
         html.Tr([    # Row
@@ -732,14 +863,17 @@ def basic_slider(
     ]
 
 
-def volcano_parameter_dropdown(
+def corncob_parameter_dropdown(
     dropdown_id,
     label_text='Parameter',
 ):
     return [
         html.Label(label_text),
         dcc.Dropdown(
-            id=dropdown_id,
+            id={
+                "type": "corncob-parameter-dropdown",
+                "name": dropdown_id
+            },
             options=[
                 {'label': 'None', 'value': 'none'},
             ],
