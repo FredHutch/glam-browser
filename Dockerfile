@@ -7,7 +7,6 @@ RUN apt update && \
 	pip3 install -r /home/dash/requirements.txt && \
 	HDF5_DIR=/usr/lib/x86_64-linux-gnu/hdf5/serial/ pip3 install tables
 RUN useradd -u 5555 -m -d /home/dash -c "dash user" dash
-ADD system/. /home/dash/system/
 ADD app.py /home/dash/
 ADD redis.conf /home/dash/
 ADD helpers/ /home/dash/helpers/
