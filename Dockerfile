@@ -3,6 +3,7 @@ ADD requirements.txt /home/dash/
 RUN apt-get update
 RUN apt update && \
 	apt install -y hdf5-tools libhdf5-dev libhdf5-serial-dev nginx supervisor redis-server && \
+	apt install -y python-numpy python-scipy python-pandas && \
 	pip3 install -r /home/dash/requirements.txt && \
 	HDF5_DIR=/usr/lib/x86_64-linux-gnu/hdf5/serial/ pip3 install tables
 RUN useradd -u 5555 -m -d /home/dash -c "dash user" dash
