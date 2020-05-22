@@ -5,7 +5,7 @@ before_script:
   
 build_test:
   script:
-    - mkdir share
+    - mkdir -f share
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/oca/geneshot/2020-05-05-OCA/2020-05-05-OCA.results.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/underfeeding/geneshot/2020-05-04-underfeeding/2020-05-04-underfeeding.results.hdf5 share/
     - docker build -t dockerimages.fhcrc.org/glam:latest .
