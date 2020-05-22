@@ -1,0 +1,16 @@
+{
+    "page_title": "GLAM Browser",
+    "page_description": "Analysis of microbiome experiments, with interactive visualizations to promote scientific discovery. All datasets have been analyzed with the Geneshot bioinformatics pipeline for gene-level metagenomic analysis. Results for every dataset are presented in units of groups of Co-Abundant Genes (CAGs), which represent the proportion of genome copies in a given sample which contain that set of protein-coding genes. CAGs are identified by (1) _de novo_ assembly of WGS data to generate a non-redundant catalog of protein-coding genes, (2) quantification of those genes across all samples by unique alignment, and (3) clustering of CAGs by cosine distance between the vectors of abundance across all samples and average linkage clustering. Every gene is also annotated taxonomically by alignment against RefSeq, with functional annotations provided with eggNOG. Complete results for every dataset is available upon request from Samuel Minot, Ph.D. (Fred Hutch Microbiome Research Initiative).",
+    "contents": [
+        {
+            "fp": "2020-05-05-OCA.results.hdf5",
+            "name": "Obeticholic Acid Feeding Study (Friedman, et al. 2018)",
+            "description": "Study of oral obeticholic acid on the composition of the gut microbiome. Participants were administered the bile acid obeticholic acid (OCA) in one of three doses and stool microbiome samples were analyzed at three timepoints (before, during, and after OCA administration). In the re-analysis of this previously published dataset we tested for the marginal association of each individual CAG with a change in relative abundance at any one of the three timepoints. Gastroenterology. 2018 Dec;155(6): 1741-1752.e5 doi:10.1053/j.gastro.2018.08.022"
+        },
+        {
+            "fp": "2020-05-04-underfeeding.results.hdf5",
+            "name": "Caloric Intake Microbiome Study (Basolo, et al. 2020)",
+            "description": "Study of the effect of caloric intake on microbiome composition. Participants were housed in a controlled setting and fed a defined Weight-Maintaining Diet (WMD) for 17 days. During days 5-7 and 11-13 participants were either overfed to 150% of WMD (OF diet) or underfed to 50% of WMD (UF diet). Each participant experienced periods of both OF and UF, with randomized order of intervention. Microbiome samples were collected and analyzed at the end of each dietary period. In the re-analysis of this previously published dataset we tested for the marginal association of each individual CAG with a change in relative abundance as a function of diet (WMD vs. OF vs. UF), while controlling for consistent differences by participant. Nature Medicine. 2020; 26: 589–598."
+        }
+    ]
+}
