@@ -1,5 +1,5 @@
 {
-    "page_title": "GLAM Browser",
+    "page_title": "GLAM Browser - Fred Hutch Microbiome Research Initiative",
     "page_description": "Analysis of microbiome experiments, with interactive visualizations to promote scientific discovery. All datasets have been analyzed with the Geneshot bioinformatics pipeline for gene-level metagenomic analysis. Results for every dataset are presented in units of groups of Co-Abundant Genes (CAGs), which represent the proportion of genome copies in a given sample which contain that set of protein-coding genes. CAGs are identified by (1) _de novo_ assembly of WGS data to generate a non-redundant catalog of protein-coding genes, (2) quantification of those genes across all samples by unique alignment, and (3) clustering of CAGs by cosine distance between the vectors of abundance across all samples and average linkage clustering. Every gene is also annotated taxonomically by alignment against RefSeq, with functional annotations provided with eggNOG. Complete results for every dataset is available upon request from Samuel Minot, Ph.D. (Fred Hutch Microbiome Research Initiative).",
     "contents": [
         {
