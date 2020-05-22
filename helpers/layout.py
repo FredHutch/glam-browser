@@ -438,7 +438,7 @@ def cag_heatmap_card():
                             {'label': 'Genus', 'value': 'genus'},
                             {'label': 'Family', 'value': 'family'},
                             {'label': 'Class', 'value': 'class'},
-                            {'label': 'Phylum,', 'value': 'Phylum'},
+                            {'label': 'Phylum', 'value': 'phylum'},
                         ],
                         value="none",
                     ),
