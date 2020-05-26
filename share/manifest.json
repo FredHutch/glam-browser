@@ -11,6 +11,11 @@
             "fp": "2020-05-04-underfeeding.results.hdf5",
             "name": "Caloric Intake Microbiome Study (Basolo, et al. 2020)",
             "description": "Study of the effect of caloric intake on microbiome composition. Participants were housed in a controlled setting and fed a defined Weight-Maintaining Diet (WMD) for 17 days. During days 5-7 and 11-13 participants were either overfed to 150% of WMD (OF diet) or underfed to 50% of WMD (UF diet). Each participant experienced periods of both OF and UF, with randomized order of intervention. Microbiome samples were collected and analyzed at the end of each dietary period. In the re-analysis of this previously published dataset we tested for the marginal association of each individual CAG with a change in relative abundance as a function of diet (WMD vs. OF vs. UF), while controlling for consistent differences by participant. Nature Medicine. 2020; 26: 589–598."
+        },
+        {
+            "fp": "2020-05-26-liang-2020.results.hdf5",
+            "name": "IBD Virome Study (Liang, 2020)",
+            "description": "Study of composition of the gut virome in patients with and without Inflammatory Bowel Disease. Journal of Crohn's and Colitis. 2020; jjaa094. doi:10.1093/ecco-jcc/jjaa094."
         }
     ]
 }
