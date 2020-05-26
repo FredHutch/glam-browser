@@ -305,8 +305,6 @@ app.layout = html.Div(
                 dbc.Card(
                     dbc.CardBody([
                         dcc.Markdown(page_data.get("page_description", "")),
-                        html.Div(id="load-data-output", style={"display": "none"}),
-                        html.Div(id="load-data-input", style={"display": "none"}),
                     ])
                 )
             ] + [
@@ -1635,30 +1633,6 @@ def manifest_update_columns_selected(selected_dataset, selected_columns):
 ########################
 # / MANIFEST CALLBACKS #
 ########################
-
-######################
-# LOAD DATA CALLBACK #
-######################
-@app.callback(
-    Output('load-data-output', 'children'),
-    [Input('load-data-input', 'children')])
-def load_data_callback(trigger):
-    for dataset in page_data["contents"]:
-        _ = manifest(dataset["fp"])
-        _ = richness(dataset["fp"])
-        _ = cag_summary(dataset["fp"])
-        _ = distances(dataset["fp"], "euclidean")
-        _ = distances(dataset["fp"], "aitchison")
-        _ = distances(dataset["fp"], "braycurtis")
-        _ = metrics(dataset["fp"])
-        _ = corncob(dataset["fp"])
-        _ = taxonomy(dataset["fp"])
-        _ = read_cag_annotations(dataset["fp"], 1000)
-    return 1
-########################
-# / LOAD DATA CALLBACK #
-########################
-
 
 
 if __name__ == '__main__':
