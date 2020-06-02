@@ -82,8 +82,6 @@ def hdf5_get_item(
     lock = FileLock("{}.lock".format(fp), timeout=timeout)
 
     # Read in the table
-    print("Reading in {} from {}".format(key_path, fp))
-
     try:
         with lock:
             with pd.HDFStore(fp, "r") as store:
@@ -97,7 +95,6 @@ def hdf5_get_item(
                 except KeyError:
                     return None
     except Timeout:
-        print("Another instance of this application currently holds the lock on {}.".format(fp))
 
         sleep(retry)
         return hdf5_get_item(
