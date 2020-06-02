@@ -496,8 +496,10 @@ def update_ordination_graph(
                         ],
                         name=metadata_label,
                         ids=plot_df.index.values,
-                        text=metadata_plot_df[metadata],
-                        hovertemplate="%{id}<br>%{text}<extra></extra>",
+                        text=metadata_plot_df[metadata].apply(
+                            lambda n: "{}: {}".format(metadata, n)
+                        ),
+                        hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                         mode="markers",
                         marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
                     ),
@@ -513,8 +515,10 @@ def update_ordination_graph(
                     ],
                     y=plot_df[metadata],
                     ids=plot_df.index.values,
-                    text=plot_df[metadata],
-                    hovertemplate="%{id}<br>%{text}<extra></extra>",
+                    text=plot_df[metadata].apply(
+                        lambda n: "{}: {}".format(metadata, n)
+                    ),
+                    hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
                 ),
@@ -527,8 +531,10 @@ def update_ordination_graph(
                     x=plot_df[plot_df.columns.values[primary_pc - 1]],
                     y=plot_df[plot_df.columns.values[secondary_pc - 1]],
                     ids=plot_df.index.values,
-                    text=plot_df[metadata],
-                    hovertemplate="%{id}<br>%{text}<extra></extra>",
+                    text=plot_df[metadata].apply(
+                        lambda n: "{}: {}".format(metadata, n)
+                    ),
+                    hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
                 ),
