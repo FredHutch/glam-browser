@@ -1635,6 +1635,8 @@ def manifest_update_columns_selected(selected_dataset, selected_columns):
 # / MANIFEST CALLBACKS #
 ########################
 
+# Used for gunicorn execution
+server = app.server
 
 if __name__ == '__main__':
 
