@@ -150,9 +150,9 @@ def richness_card():
                         {'label': 'Genes Aligned (#)',
                             'value': 'n_genes_aligned'},
                         {'label': 'Reads Aligned (%)',
-                            'value': 'prop_reads_aligned'},
+                            'value': 'pct_reads_aligned'},
                     ],
-                    value='prop_reads_aligned'
+                    value='pct_reads_aligned'
                 ),
                 html.Br(),
             ] + plot_type_dropdown(
