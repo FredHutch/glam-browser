@@ -398,6 +398,16 @@ def update_ordination_graph(
             "METADATA": metadata
         })
 
+        # Remove specimens which lack the specified metadata
+        assert plot_df[metadata].isnull().mean() > 1.0, "Metadata is missing for all specimens"
+
+        # At least one sample is missing metadata
+        if plot_df[metadata].isnull().any():
+            # Subset to specimens which contain the metadata
+            plot_df = plot_df.reindex(
+                index = plot_df[metadata].dropna().index
+            )
+
         # Make a numeric transform of the metadata
         if plot_df[metadata].apply(
             lambda n: isinstance(n, float) or isinstance(n, int)
