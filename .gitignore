@@ -40,3 +40,9 @@ vignettes/*.pdf
 
 # Virtual environment
 venv/
+
+# Python files
+helpers/__pycache__/
+
+*.hdf5
+*.hdf5.lock
