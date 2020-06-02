@@ -175,6 +175,9 @@ def corncob(fp):
 
 @cache.memoize()
 def corncob_parameters(fp):
+    if corncob(fp) is None:
+        return None
+
     return corncob(fp)[
         "parameter"
     ].drop_duplicates(
@@ -256,7 +259,6 @@ def genome_manifest(fp):
 
 @cache.memoize()
 def genome_summary_by_parameter(fp, parameter):
-    print("Reading genomes summarized by {}".format(parameter))
     return hdf5_get_item(
         fp,
         "/genomes/summary/{}".format(parameter),
@@ -264,7 +266,6 @@ def genome_summary_by_parameter(fp, parameter):
 
 @cache.memoize()
 def cags_by_genome(fp, genome_id):
-    print("Reading CAGs aligning to genome {}".format(genome_id))
     return hdf5_get_item(
         fp,
         "/genomes/cags/containment",
@@ -1634,6 +1635,8 @@ def manifest_update_columns_selected(selected_dataset, selected_columns):
 # / MANIFEST CALLBACKS #
 ########################
 
+# Used for gunicorn execution
+server = app.server
 
 if __name__ == '__main__':
 

@@ -43,7 +43,6 @@ def update_richness_graph(
 ):
     # Make sure the selected parameters are in scope
     assert selected_type in ["hist", "scatter"]
-    assert selected_metric in richness_df.columns.values, (selected_metric, richness_df.columns.values)
 
     # Get the filtered manifest from the browser
     plot_manifest_df = parse_manifest_json(manifest_json, full_manifest_df)
@@ -52,18 +51,27 @@ def update_richness_graph(
     plot_richness_df = richness_df.reindex(
         index=plot_manifest_df.index.values
     )
+    
+    # Calculate the percent of reads aligned
+    plot_richness_df = plot_richness_df.assign(
+        pct_reads_aligned = (plot_richness_df["prop_reads_aligned"] * 100).apply(lambda v: round(v, 2))
+    )
+
+    assert selected_metric in plot_richness_df.columns.values, (selected_metric, richness_df.columns.values)
 
     metric_names = {
-        "prop_reads_aligned": "Prop. Reads Aligned",
+        "pct_reads_aligned": "Pct. Reads Aligned",
         "n_genes_aligned": "Num. Genes Aligned",
         "n_genes_assembled": "Num. Genes Assembled",
     }
 
     if selected_type == "scatter":
-        if "genes" in selected_metric:
-            hovertemplate = "%{text}: %{x:,} reads - %{y:,} genes<extra></extra>"
+        if selected_metric == "n_genes_aligned":
+            hovertemplate = "Sample: %{text}<br>%{x:,} reads<br>%{y:,} genes detected by alignment<extra></extra>"
+        elif selected_metric == "n_genes_assembled":
+            hovertemplate = "Sample: %{text}<br>%{x:,} reads<br>%{y:,} genes detected by assembly<extra></extra>"
         else:
-            hovertemplate = "%{text}: %{x:,} reads - %{y:.2f} aligned<extra></extra>"
+            hovertemplate = "Sample: %{text}<br>%{x:,} reads<br>%{y:.2f} percent of reads aligned uniquely<extra></extra>"
 
         fig = go.Figure(
             data=go.Scatter(
@@ -398,6 +406,16 @@ def update_ordination_graph(
             "METADATA": metadata
         })
 
+        # Remove specimens which lack the specified metadata
+        assert plot_df[metadata].isnull().mean() < 1.0, "Metadata is missing for all specimens"
+
+        # At least one sample is missing metadata
+        if plot_df[metadata].isnull().any():
+            # Subset to specimens which contain the metadata
+            plot_df = plot_df.reindex(
+                index = plot_df[metadata].dropna().index
+            )
+
         # Make a numeric transform of the metadata
         if plot_df[metadata].apply(
             lambda n: isinstance(n, float) or isinstance(n, int)
@@ -478,8 +496,10 @@ def update_ordination_graph(
                         ],
                         name=metadata_label,
                         ids=plot_df.index.values,
-                        text=metadata_plot_df[metadata],
-                        hovertemplate="%{id}<br>%{text}<extra></extra>",
+                        text=metadata_plot_df[metadata].apply(
+                            lambda n: "{}: {}".format(metadata, n)
+                        ),
+                        hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                         mode="markers",
                         marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
                     ),
@@ -495,8 +515,10 @@ def update_ordination_graph(
                     ],
                     y=plot_df[metadata],
                     ids=plot_df.index.values,
-                    text=plot_df[metadata],
-                    hovertemplate="%{id}<br>%{text}<extra></extra>",
+                    text=plot_df[metadata].apply(
+                        lambda n: "{}: {}".format(metadata, n)
+                    ),
+                    hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
                 ),
@@ -509,8 +531,10 @@ def update_ordination_graph(
                     x=plot_df[plot_df.columns.values[primary_pc - 1]],
                     y=plot_df[plot_df.columns.values[secondary_pc - 1]],
                     ids=plot_df.index.values,
-                    text=plot_df[metadata],
-                    hovertemplate="%{id}<br>%{text}<extra></extra>",
+                    text=plot_df[metadata].apply(
+                        lambda n: "{}: {}".format(metadata, n)
+                    ),
+                    hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
                 ),
