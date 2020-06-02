@@ -407,7 +407,7 @@ def update_ordination_graph(
         })
 
         # Remove specimens which lack the specified metadata
-        assert plot_df[metadata].isnull().mean() > 1.0, "Metadata is missing for all specimens"
+        assert plot_df[metadata].isnull().mean() < 1.0, "Metadata is missing for all specimens"
 
         # At least one sample is missing metadata
         if plot_df[metadata].isnull().any():
