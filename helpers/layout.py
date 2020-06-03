@@ -441,76 +441,90 @@ Note: Click on the camera icon at the top of this plot (or any on this page) to 
 def cag_heatmap_card():
     return card_wrapper(
         "CAG Abundance Heatmap",
-        dbc.Row([
-            dbc.Col(
-                dbc.Spinner(dcc.Graph(
-                    id='cag-heatmap-graph'
-                )),
-                width=8,
-                align="center"
-            ),
-            dbc.Col(
-                [
-                    html.Label("Display CAGs"),
-                    dcc.Dropdown(
-                        id="cag-heatmap-cag-dropdown",
-                        options=[],
-                        value=[],
-                        multi=True
-                    ),
-                    html.Br(),
-                    html.Label("Display Metadata"),
-                    dcc.Dropdown(
-                        id="cag-heatmap-metadata-dropdown",
-                        options=[],
-                        value=[],
-                        multi=True
-                    ),
-                    html.Div(
-                        children=[-1],
-                        id="cag-heatmap-selected-dataset",
-                        style={"display": "none"}
-                    ),
-                    html.Br(),
-                    html.Label("Abundance Metric"),
-                    dcc.Dropdown(
-                        id='cag-heatmap-abundance-metric',
-                        options=[
-                            {'label': 'Rel. Abund. (log10)', 'value': 'log10'},
-                            {'label': 'Rel. Abund. (log10) (z-score)', 'value': 'zscore'},
-                            {'label': 'Rel. Abund.', 'value': 'raw'},
-                        ],
-                        value="log10",
-                    ),
-                    html.Br(),
-                    html.Label("Group Specimens"),
-                    dcc.Dropdown(
-                        id='cag-heatmap-cluster',
-                        options=[
-                            {'label': 'By Metadata', 'value': 'metadata'},
-                            {'label': 'By CAG Abundances', 'value': 'cag'},
-                        ],
-                        value="metadata",
-                    ),
-                    html.Br(),
-                    html.Label("Show Taxonomy"),
-                    dcc.Dropdown(
-                        id='cag-heatmap-taxa-rank',
-                        options=[
-                            {'label': 'None', 'value': 'none'},
-                            {'label': 'Species', 'value': 'species'},
-                            {'label': 'Genus', 'value': 'genus'},
-                            {'label': 'Family', 'value': 'family'},
-                            {'label': 'Class', 'value': 'class'},
-                            {'label': 'Phylum', 'value': 'phylum'},
-                        ],
-                        value="none",
-                    ),
-                ],
-                width=4,
-                align="center"
-            )
-        ]),
+        [
+            dbc.Row([
+                dbc.Col(
+                    [
+                        html.Label("Display CAGs"),
+                        dcc.Dropdown(
+                            id="cag-heatmap-cag-dropdown",
+                            options=[],
+                            value=[],
+                            multi=True
+                        )
+                    ],
+                    width=4,
+                    align="center",
+                ),
+                dbc.Col(
+                    [
+                        html.Label("Display Metadata"),
+                        dcc.Dropdown(
+                            id="cag-heatmap-metadata-dropdown",
+                            options=[],
+                            value=[],
+                            multi=True
+                        ),
+                        html.Div(
+                            children=[-1],
+                            id="cag-heatmap-selected-dataset",
+                            style={"display": "none"}
+                        ),
+                        html.Br(),
+                        html.Label("Group Specimens"),
+                        dcc.Dropdown(
+                            id='cag-heatmap-cluster',
+                            options=[
+                                {'label': 'By Metadata', 'value': 'metadata'},
+                                {'label': 'By CAG Abundances', 'value': 'cag'},
+                            ],
+                            value="metadata",
+                        ),
+                    ],
+                    width=4,
+                    align="center",
+                ),
+                dbc.Col(
+                    [
+                        html.Label("Abundance Metric"),
+                        dcc.Dropdown(
+                            id='cag-heatmap-abundance-metric',
+                            options=[
+                                {'label': 'Rel. Abund. (log10)', 'value': 'log10'},
+                                {'label': 'Rel. Abund. (log10) (z-score)', 'value': 'zscore'},
+                                {'label': 'Rel. Abund.', 'value': 'raw'},
+                            ],
+                            value="log10",
+                        ),
+                        html.Br(),
+                        html.Label("Show Taxonomy"),
+                        dcc.Dropdown(
+                            id='cag-heatmap-taxa-rank',
+                            options=[
+                                {'label': 'None', 'value': 'none'},
+                                {'label': 'Species', 'value': 'species'},
+                                {'label': 'Genus', 'value': 'genus'},
+                                {'label': 'Family', 'value': 'family'},
+                                {'label': 'Class', 'value': 'class'},
+                                {'label': 'Phylum', 'value': 'phylum'},
+                            ],
+                            value="none",
+                        ),
+                    ],
+                    width=4,
+                    align="center"
+                )
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    dbc.Spinner(dcc.Graph(
+                        id='cag-heatmap-graph'
+                    )),
+                    width=12,
+                    align="center"
+                )
+            ]),
+        ],
         help_text="""
 The relative abundance of a user-selected group of CAGs is shown in comparison to
 specimen metadata as well as the taxonomic annotation of those CAGs.
