@@ -729,36 +729,57 @@ Note: Click on the camera icon at the top of this plot (or any on this page) to 
 def genome_card():
     return card_wrapper(
         "Genome Similarity",
-        dbc.Row([
-            dbc.Col(
-                [
-                    dbc.Spinner(dcc.Graph(
-                                id="genome-scatter-graph"
-                                )),
-                    dbc.Spinner(dcc.Graph(
-                                id="genome-heatmap-graph"
-                                )),
-                ],
-                width=8,
-                align="center",
-            ),
-            dbc.Col(
-                corncob_parameter_dropdown(
-                    "genome-parameter-dropdown",
-                ) + basic_slider(
-                    "genome-scatter-ngenes-slider",
-                    "Minimum Size Filter (Num. Genes)",
-                    min_value=1,
-                    max_value=1000,
-                    step_value=10,
-                    default_value=100,
-                    marks=[1, 500, 1000],
-                    included=False
+        [
+            dbc.Row([
+                dbc.Col(
+                    corncob_parameter_dropdown(
+                        "genome-parameter-dropdown",
+                    ),
+                    width = 4,
+                    align = "center"
                 ),
-                width=4,
-                align="center",
-            )
-        ]),
+                dbc.Col(
+                    basic_slider(
+                        "genome-scatter-ngenes-slider",
+                        "Minimum Size Filter (Num. Genes)",
+                        min_value=1,
+                        max_value=1000,
+                        step_value=10,
+                        default_value=100,
+                        marks=[1, 500, 1000],
+                        included=False
+                    ),
+                    width=4,
+                    align="center",
+                )
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    [
+                        dbc.Spinner(
+                            dcc.Graph(
+                                id="genome-scatter-graph"
+                            )
+                        )
+                    ],
+                    width=12,
+                    align="center",
+                )
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    [
+                        dbc.Spinner(
+                            dcc.Graph(
+                                id="genome-heatmap-graph"
+                            )
+                        ),
+                    ],
+                    width=12,
+                    align="center",
+                )
+            ])
+        ],
         custom_id="genome-card",
         custom_style={"display": "none"},
         help_text="""
