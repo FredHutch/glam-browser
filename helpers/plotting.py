@@ -412,9 +412,7 @@ def update_ordination_graph(
         # At least one sample is missing metadata
         if plot_df[metadata].isnull().any():
             # Subset to specimens which contain the metadata
-            plot_df = plot_df.reindex(
-                index = plot_df[metadata].dropna().index
-            )
+            plot_df = plot_df.dropna()
 
         # Make a numeric transform of the metadata
         if plot_df[metadata].apply(
