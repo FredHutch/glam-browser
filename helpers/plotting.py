@@ -371,19 +371,19 @@ def update_ordination_graph(
 
         # No metadata
 
-        # Histogram on the top panel
+        # Histogram on the bottom panel
         fig.add_trace(
             go.Histogram(
                 x=plot_df[plot_df.columns.values[primary_pc - 1]],
                 hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
             ),
-            row=1, col=1
+            row=2, col=1
         )
         fig.update_yaxes(
             title_text="Number of Specimens",
-            row=1, col=1
+            row=2, col=1
         )
-        # Scatter on the bottom panel
+        # Scatter on the top panel
         fig.add_trace(
             go.Scatter(
                 x=plot_df[plot_df.columns.values[primary_pc - 1]],
@@ -394,7 +394,7 @@ def update_ordination_graph(
                 mode="markers",
                 marker_color="blue"
             ),
-            row=2, col=1
+            row=1, col=1
         )
 
     else:
@@ -467,12 +467,12 @@ def update_ordination_graph(
         )
         assert plot_df["METADATA_COLOR"].isnull().sum() == 0, (plot_df.head(), cmap)
 
-        # Scatterplot or Boxplot on the top panel
+        # Scatterplot or Boxplot on the bottom panel
         if plot_df[metadata].unique().shape[0] <= 5:
 
             # Iterate over each of the metadata groups
             for metadata_label, metadata_plot_df in plot_df.groupby(metadata):
-                # Boxplot on the upper panel
+                # Boxplot on the bottom panel
                 fig.add_trace(
                     go.Box(
                         x=metadata_plot_df[
@@ -481,9 +481,9 @@ def update_ordination_graph(
                         name=metadata_label,
                         marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
                     ),
-                    row=1, col=1
+                    row=2, col=1
                 )
-                # Scatter on the bottom panel
+                # Scatter on the top panel
                 fig.add_trace(
                     go.Scatter(
                         x=metadata_plot_df[
@@ -501,11 +501,11 @@ def update_ordination_graph(
                         mode="markers",
                         marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
                     ),
-                    row=2, col=1
+                    row=1, col=1
                 )
 
         else:
-            # Scatter on the upper panel
+            # Scatter on the bottom panel
             fig.add_trace(
                 go.Scatter(
                     x=plot_df[
@@ -520,10 +520,10 @@ def update_ordination_graph(
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
                 ),
-                row=1, col=1
+                row=2, col=1
             )
 
-            # Scatter on the bottom panel
+            # Scatter on the top panel
             fig.add_trace(
                 go.Scatter(
                     x=plot_df[plot_df.columns.values[primary_pc - 1]],
@@ -536,7 +536,7 @@ def update_ordination_graph(
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
                 ),
-                row=2, col=1
+                row=1, col=1
             )
 
         fig.update_yaxes(
@@ -547,15 +547,15 @@ def update_ordination_graph(
 
     fig.update_xaxes(
         title_text=plot_df.columns.values[primary_pc - 1],
-        row=1, col=1
+        row=2, col=1
     )
     fig.update_xaxes(
         title_text=plot_df.columns.values[primary_pc - 1],
-        row=2, col=1
+        row=1, col=1
     )
     fig.update_yaxes(
         title_text=plot_df.columns.values[secondary_pc - 1],
-        row=2, col=1
+        row=1, col=1
     )
 
     fig.update_layout(
