@@ -340,74 +340,116 @@ Note: Click on the camera icon at the top of this plot (or any on this page) to 
 def cag_summary_card():
     return card_wrapper(
         "CAG Summary",
-        dbc.Row([
-            dbc.Col(
-                [
-                    dbc.Spinner(dcc.Graph(
-                                id='cag-summary-graph-hist'
-                                )),
-                    dbc.Spinner(dcc.Graph(
+        [
+            dbc.Row([
+                dbc.Col(
+                    cag_metric_dropdown(
+                        "cag-summary-metric-primary",
+                        default_value="size",
+                        label_text="Primary Metric (x-axis)",
+                    ) + cag_metric_dropdown(
+                        "cag-summary-metric-secondary",
+                        default_value="entropy",
+                        label_text="Secondary Metric (y-axis)",
+                    ),
+                    width = 4,
+                    align = "center"
+                ),
+                dbc.Col(
+                    cag_size_slider(
+                        "cag-summary-size-slider"
+                    ) + cag_metric_slider(
+                        "cag-summary-entropy-slider",
+                        "entropy",
+                        "CAG Entropy Filter",
+                    ) ,
+                    width = 4,
+                    align = "center"
+                ),
+                dbc.Col(
+                    cag_metric_slider(
+                        "cag-summary-prevalence-slider",
+                        "prevalence",
+                        "CAG Prevalence Filter"
+                    ) + cag_metric_slider(
+                        "cag-summary-abundance-slider",
+                        "mean_abundance",
+                        "CAG Abundance Filter",
+                    ),
+                    width = 4,
+                    align = "center"
+                )
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    [
+                        dbc.Spinner(
+                            dcc.Graph(
                                 id='cag-summary-graph-scatter'
-                                ))
-                ],
-                width=8,
-                align="center"
-            ),
-            dbc.Col([
-                html.Br(),
-                html.Label("Histogram Display"),
-                dcc.Dropdown(
-                    id='cag-summary-histogram-metric',
-                    options=[
-                        {'label': 'Number of genes', 'value': 'genes'},
-                        {'label': 'Number of CAGs', 'value': 'cags'},
+                            )
+                        ),
                     ],
-                    value="genes",
-                ),
-                html.Br(),
-                html.Label("Histogram Log Scale"),
-                dcc.Dropdown(
-                    id='cag-summary-histogram-log',
-                    options=[
-                        {'label': 'On', 'value': 'on'},
-                        {'label': 'Off', 'value': 'off'},
+                    width=12,
+                    align="center"
+                )
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    [
+                        html.Label("Histogram Display"),
+                        dcc.Dropdown(
+                            id='cag-summary-histogram-metric',
+                            options=[
+                                {'label': 'Number of genes', 'value': 'genes'},
+                                {'label': 'Number of CAGs', 'value': 'cags'},
+                            ],
+                            value="genes",
+                        )
                     ],
-                    value="on",
+                    width = 4,
+                    align = "center"
                 ),
-                html.Br(),
-                html.Div(id='global-selected-cag',
-                         style={"display": "none"}),
-                html.Div(id='cag-summary-selected-cag',
-                         style={"display": "none"}),
-            ] + nbins_slider(
-                "cag-summary-nbinsx-slider"
-            ) + cag_metric_dropdown(
-                "cag-summary-metric-primary",
-                default_value="size",
-                label_text="Primary Metric (x-axis)",
-            ) + cag_metric_dropdown(
-                "cag-summary-metric-secondary",
-                default_value="entropy",
-                label_text="Secondary Metric (y-axis)",
-            ) + cag_size_slider(
-                "cag-summary-size-slider"
-            ) + cag_metric_slider(
-                "cag-summary-entropy-slider",
-                "entropy",
-                "CAG Entropy Filter",
-            ) + cag_metric_slider(
-                "cag-summary-prevalence-slider",
-                "prevalence",
-                "CAG Prevalence Filter"
-            ) + cag_metric_slider(
-                "cag-summary-abundance-slider",
-                "mean_abundance",
-                "CAG Abundance Filter",
-            ),
-                width=4,
-                align="center"
-            )
-        ]),
+                dbc.Col(
+                    [
+                        html.Label("Histogram Log Scale"),
+                        dcc.Dropdown(
+                            id='cag-summary-histogram-log',
+                            options=[
+                                {'label': 'On', 'value': 'on'},
+                                {'label': 'Off', 'value': 'off'},
+                            ],
+                            value="on",
+                        ),
+                        html.Div(id='global-selected-cag',
+                                style={"display": "none"}),
+                        html.Div(id='cag-summary-selected-cag',
+                                style={"display": "none"}),
+                    ],
+                    width = 4,
+                    align = "center"
+                ),
+                dbc.Col(
+                    nbins_slider(
+                        "cag-summary-nbinsx-slider"
+                    ),
+                    width=4,
+                    align="center"
+                )
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    [
+                        dbc.Spinner(
+                            dcc.Graph(
+                                id='cag-summary-graph-hist'
+                            )
+                        ),
+                    ],
+                    width=12,
+                    align="center"
+                )
+            ])
+        ],
         help_text="""
 Genes were grouped into Co-Abundant Groups (CAGs), and this panel summarizes that set of CAGs on the basis of:
 
