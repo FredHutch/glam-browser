@@ -760,7 +760,23 @@ def genome_card():
             )
         ]),
         custom_id="genome-card",
-        custom_style={"display": "none"}
+        custom_style={"display": "none"},
+        help_text="""
+Summary of genome alignment against CAGs associated with parameters of interest.
+
+The upper plot summarizes all of the genomes which aligned to the CAGs in this dataset.
+Each genome is summarized by (a) the proportion of the genome which aligns to any CAG
+which is associated with the indicated parameter (at a fixed p-value threshold), as well as
+(b) the average estimated coefficient for those genes which do align against that genome.
+
+*Selecting Genomes*
+
+To select a set of genomes to display in more detail, mouse over the scatter plot and
+activate one of the selection tools (box select or lasso select).
+Using that selection tool, indicate those genomes which you wish to display more details on.
+The lower plot will then be rendered with those set of selected genomes.
+Using the controls on the right, you may then filter the CAGs and genomes which are displayed.
+        """
     )
 #################
 # / GENOME CARD #
