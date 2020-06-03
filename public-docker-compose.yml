@@ -1,0 +1,17 @@
+version: '2'
+services:
+  glam:
+    ports:
+      - "8050:8050"
+    image: quay.io/fhcrc-microbiome/glam:latest
+    volumes:
+      - "./data:/share"
+    environment:
+      REDIS_URL: "redis://redis:6379"
+
+  redis:
+    image: redis:latest
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+  
