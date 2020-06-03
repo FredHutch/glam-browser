@@ -17,4 +17,4 @@ RUN chown -R dash:dash /home/dash
 WORKDIR /home/dash
 EXPOSE 8050
 ENV DATA_FOLDER=/share
-CMD gunicorn --workers 4 --worker-class gevent --bind 0.0.0.0:8050 app:server
+CMD python3 /home/dash/app.py
