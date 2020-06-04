@@ -157,6 +157,9 @@ def richness_card():
                 html.Br(),
             ] + plot_type_dropdown(
                 "richness-type-dropdown"
+            ) + metadata_field_dropdown(
+                "richness-metadata-dropdown",
+                label_text="Color By"
             ) + log_scale_radio_button(
                 "richness-log-x",
                 label_text="Number of Reads - Log Scale"
