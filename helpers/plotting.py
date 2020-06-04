@@ -577,7 +577,16 @@ def print_anosim(
     """Run anosim and return a Markdown summary."""
 
     # Get the filtered manifest from the browser
-    plot_manifest_df = parse_manifest_json(manifest_json, full_manifest_df)
+    plot_manifest_df = parse_manifest_json(
+        manifest_json, 
+        full_manifest_df
+    ).reset_index(
+    ).reindex(
+        columns = ["specimen", metadata]
+    ).drop_duplicates(
+    ).set_index(
+        "specimen"
+    )
 
     # Remove any samples with NaN for this field
     samples_to_analyze = plot_manifest_df[metadata].dropna().index.values
