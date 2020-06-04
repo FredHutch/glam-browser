@@ -1545,8 +1545,6 @@ def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
         )
     )
 
-    fig.update_layout(
-        width=600,
-        height=700,
-    )
+    fig.update_yaxes(automargin=True)
+
     return fig
