@@ -122,7 +122,11 @@ def hdf5_get_item(
 
 
 def hdf5_manifest(fp):
-    return hdf5_get_item(fp, "/manifest", index_col="specimen")
+    df = hdf5_get_item(fp, "/manifest")
+    for k in ["R1", "R2", "I1", "I2"]:
+        if k in df:
+            df = df.drop(columns=k)
+    return df.drop_duplicates().set_index("specimen")
 
 def hdf5_richness(fp):
     return hdf5_get_item(

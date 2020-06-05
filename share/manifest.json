@@ -8,6 +8,11 @@
             "description": "Study of oral obeticholic acid on the composition of the gut microbiome. Participants were administered the bile acid obeticholic acid (OCA) in one of three doses and stool microbiome samples were analyzed at three timepoints (before, during, and after OCA administration). In the re-analysis of this previously published dataset we tested for the marginal association of each individual CAG with a change in relative abundance at any one of the three timepoints. Gastroenterology. 2018 Dec;155(6): 1741-1752.e5 doi:10.1053/j.gastro.2018.08.022"
         },
         {
+            "fp": "2020-04-23-colon-cleanout-ImmPostCC.ImmPostCC.corncob.hdf5",
+            "name": "Colon Cleanout Study (Fukuyama, et al. 2017)",
+            "description": "Study of the effect of PEG colon preparation on the composition of the gut microbiome. Participants were sampled repeatedly before and after PEG treatment as used for colonoscopy. In the re-analysis of this previously published dataset we tested for the marginal association of each individual CAG with a change in relative abundance during the period immediately following colon cleanout (ImmPostCC). PLoS Computational Biology. 2017 Aug;13(8): e1005706 doi:10.1371/journal.pcbi.1005706"
+        },
+        {
             "fp": "2020-05-04-underfeeding.results.hdf5",
             "name": "Caloric Intake Microbiome Study (Basolo, et al. 2020)",
             "description": "Study of the effect of caloric intake on microbiome composition. Participants were housed in a controlled setting and fed a defined Weight-Maintaining Diet (WMD) for 17 days. During days 5-7 and 11-13 participants were either overfed to 150% of WMD (OF diet) or underfed to 50% of WMD (UF diet). Each participant experienced periods of both OF and UF, with randomized order of intervention. Microbiome samples were collected and analyzed at the end of each dietary period. In the re-analysis of this previously published dataset we tested for the marginal association of each individual CAG with a change in relative abundance as a function of diet (WMD vs. OF vs. UF), while controlling for consistent differences by participant. Nature Medicine. 2020; 26: 589–598."

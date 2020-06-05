@@ -653,6 +653,10 @@ def experiment_summary_card_callback(selected_dataset):
     [
         Input('richness-metric-dropdown', 'value'),
         Input('richness-type-dropdown', 'value'),
+        Input({
+            "type": "metadata-field-dropdown",
+            "name": 'richness-metadata-dropdown'
+        }, 'value'),
         Input('richness-log-x', 'value'),
         Input('manifest-filtered', 'children'),
     ],
@@ -661,6 +665,7 @@ def experiment_summary_card_callback(selected_dataset):
 def richness_graph_callback(
     selected_metric, 
     selected_type, 
+    selected_metadata,
     log_x,
     manifest_json,
     selected_dataset, 
@@ -673,6 +678,7 @@ def richness_graph_callback(
             richness(fp),
             selected_metric,
             selected_type,
+            selected_metadata,
             log_x,
             manifest_json,
             manifest(fp)
@@ -1236,13 +1242,19 @@ def update_volcano_parameter_dropdown_options(selected_dataset, dummy):
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
 
-        # Get the list of parameters
-        parameter_list = corncob_parameters(fp)
+        # Check to see if the file contains corncob results
+        if corncob_parameters(fp) is None:
+            return [
+                {'label': 'None', 'value': 'none'}
+            ]
 
-        return [
-            {'label': l, 'value': l}
-            for l in parameter_list
-        ]
+        else:
+            # Get the list of parameters
+            parameter_list = corncob_parameters(fp)
+            return [
+                {'label': l, 'value': l}
+                for l in parameter_list
+            ]
 
 @app.callback(
     [Output("corncob-comparison-parameter-dropdown", value) for value in ["options", "value"]],
@@ -1260,10 +1272,13 @@ def update_volcano_comparison_dropdown(selected_dataset):
         # Get the list of parameters
         parameter_list = corncob_parameters(fp)
 
-        options = options + [
-            {'label': l, 'value': l}
-            for l in parameter_list
-        ]
+        # Check to make sure that the file contains corncob results
+        if parameter_list is not None:
+
+            options = options + [
+                {'label': l, 'value': l}
+                for l in parameter_list
+            ]
 
         return [options, value]
 
@@ -1282,6 +1297,9 @@ def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
 
         # Get the list of parameters
         parameter_list = corncob_parameters(fp)
+
+        if parameter_list is None:
+            return "none"
 
         if len(parameter_list) > 1:
             return parameter_list[1]
@@ -1303,9 +1321,14 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
     else:
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset[0]]["fp"]
-        max_value = corncob(fp).query(
-            "parameter == '{}'".format(parameter)
-        )["neg_log_pvalue"].max()
+
+        # If there are no corncob results, max_value = 1
+        if corncob(fp) is None:
+            max_value = 1
+        else:
+            max_value = corncob(fp).query(
+                "parameter == '{}'".format(parameter)
+            )["neg_log_pvalue"].max()
 
     if np.isnan(max_value):
         max_value = 1

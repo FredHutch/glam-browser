@@ -30,6 +30,88 @@ def parse_manifest_json(manifest_json, manifest_df):
             "specimen"
         )
 
+def add_metadata_to_dataframe(plot_df, plot_manifest_df, metadata):
+    # Add the specified metadata to the DataFrame
+    plot_df = plot_df.assign(
+        METADATA=plot_manifest_df.reset_index(
+        ).reindex(
+            columns=["specimen", metadata]
+        ).drop_duplicates(
+        ).set_index(
+            "specimen"
+        )[metadata]
+    ).rename(columns={
+        "METADATA": metadata
+    })
+
+    # Remove specimens which lack the specified metadata
+    assert plot_df[metadata].isnull().mean(
+    ) < 1.0, "Metadata is missing for all specimens"
+
+    # At least one sample is missing metadata
+    if plot_df[metadata].isnull().any():
+        # Subset to specimens which contain the metadata
+        plot_df = plot_df.dropna()
+
+    # Make sure we didn't drop all of the samples
+    assert plot_df.shape[0] > 0
+
+    # Make a numeric transform of the metadata
+    if plot_df[metadata].apply(
+        lambda n: isinstance(n, float) or isinstance(n, int)
+    ).all():
+
+        # The metadata is already numeric
+        plot_df = plot_df.assign(
+            METADATA_FLOAT=plot_df[metadata]
+        )
+
+    # Try to convert to datetime
+    elif pd.to_datetime(plot_df[metadata], errors="coerce").isnull().sum() == 0:
+        plot_df = plot_df.assign(
+            METADATA_FLOAT=pd.to_datetime(
+                plot_df[metadata],
+                errors="raise"
+            ).apply(str)
+        )
+
+    # Treat as categorical
+    else:
+        # Assign a rank order
+        rank_order = {
+            n: ix
+            for ix, n in enumerate(plot_df[metadata].drop_duplicates().sort_values().values)
+        }
+        plot_df = plot_df.assign(
+            METADATA_FLOAT=plot_df[metadata].apply(rank_order.get)
+        )
+
+    # Set up a metadata color map depending on how many distinct values
+    # there are. For small numbers, use "colorblind", otherwise "coolwarm"
+    if plot_df["METADATA_FLOAT"].unique().shape[0] <= 5:
+        palette_name = "colorblind"
+
+    else:
+        palette_name = "coolwarm"
+
+    # Here is the actual color map
+    cmap = dict(zip(
+        plot_df["METADATA_FLOAT"].drop_duplicates().sort_values().values,
+        color_palette(
+            palette_name,
+            plot_df["METADATA_FLOAT"].unique().shape[0]
+        ).as_hex()
+    ))
+
+    # Now add that color to the plot DataFrame
+    plot_df = plot_df.assign(
+        METADATA_COLOR=plot_df["METADATA_FLOAT"].apply(cmap.get)
+    )
+    assert plot_df["METADATA_COLOR"].isnull().sum() == 0, (plot_df.head(), cmap)
+
+    return plot_df
+
+
 ##################
 # RICHNESS GRAPH #
 ##################
@@ -37,6 +119,7 @@ def update_richness_graph(
     richness_df,
     selected_metric,
     selected_type,
+    selected_metadata,
     log_x,
     manifest_json,
     full_manifest_df,
@@ -49,13 +132,28 @@ def update_richness_graph(
 
     # Subset the richness table based on the filtered manifest
     plot_richness_df = richness_df.reindex(
-        index=plot_manifest_df.index.values
+        index=list(set([n for n in plot_manifest_df.index.values]))
     )
     
     # Calculate the percent of reads aligned
     plot_richness_df = plot_richness_df.assign(
         pct_reads_aligned = (plot_richness_df["prop_reads_aligned"] * 100).apply(lambda v: round(v, 2))
     )
+
+    # If metadata was selected, add it to the plot
+    if selected_metadata != "none":
+
+        # Add the indicated metadata to the plotting dataframe
+        # This will also add a METADATA_COLOR column as appropriate
+        plot_richness_df = add_metadata_to_dataframe(
+            plot_richness_df,
+            plot_manifest_df,
+            selected_metadata
+        )
+
+        # Make sure that we have the needed metadata
+        assert selected_metadata in plot_richness_df.columns.values
+        assert "METADATA_COLOR" in plot_richness_df.columns.values
 
     assert selected_metric in plot_richness_df.columns.values, (selected_metric, richness_df.columns.values)
 
@@ -67,21 +165,45 @@ def update_richness_graph(
 
     if selected_type == "scatter":
         if selected_metric == "n_genes_aligned":
-            hovertemplate = "Sample: %{text}<br>%{x:,} reads<br>%{y:,} genes detected by alignment<extra></extra>"
+            if selected_metadata == "none":
+                hovertemplate = "Sample: %{id}<br>%{x:,} reads<br>%{y:,} genes detected by alignment<extra></extra>"
+            else:
+                hovertemplate = "Sample: %{id}<br>%{x:,} reads<br>%{y:,} genes detected by alignment<br>%{text}<extra></extra>"
         elif selected_metric == "n_genes_assembled":
-            hovertemplate = "Sample: %{text}<br>%{x:,} reads<br>%{y:,} genes detected by assembly<extra></extra>"
+            if selected_metadata == "none":
+                hovertemplate = "Sample: %{id}<br>%{x:,} reads<br>%{y:,} genes detected by assembly<extra></extra>"
+            else:
+                hovertemplate = "Sample: %{id}<br>%{x:,} reads<br>%{y:,} genes detected by assembly<br>%{text}<extra></extra>"
         else:
-            hovertemplate = "Sample: %{text}<br>%{x:,} reads<br>%{y:.2f} percent of reads aligned uniquely<extra></extra>"
+            if selected_metadata == "none":
+                hovertemplate = "Sample: %{id}<br>%{x:,} reads<br>%{y:.2f} percent of reads aligned uniquely<extra></extra>"
+            else:
+                hovertemplate = "Sample: %{id}<br>%{x:,} reads<br>%{y:.2f} percent of reads aligned uniquely<br>%{text}<extra></extra>"
 
-        fig = go.Figure(
-            data=go.Scatter(
-                x=plot_richness_df["n_reads"],
-                y=plot_richness_df[selected_metric],
-                text=plot_richness_df.index.values,
-                hovertemplate=hovertemplate,
-                mode="markers",
-            ),
-        )
+        if selected_metadata == "none":
+            fig = go.Figure(
+                data=go.Scatter(
+                    x=plot_richness_df["n_reads"],
+                    y=plot_richness_df[selected_metric],
+                    ids=plot_richness_df.index.values,
+                    hovertemplate=hovertemplate,
+                    mode="markers",
+                )
+            )
+        else:
+            fig = go.Figure(
+                data=go.Scatter(
+                    x=plot_richness_df["n_reads"],
+                    y=plot_richness_df[selected_metric],
+                    ids=plot_richness_df.index.values,
+                    hovertemplate=hovertemplate,
+                    mode="markers",
+                    marker_color=plot_richness_df["METADATA_COLOR"],
+                    text=plot_richness_df[selected_metadata].apply(
+                        lambda n: "{}: {}".format(selected_metadata, n)
+                    ),
+                )
+            )
 
         fig.update_layout(
             xaxis_title="Number of Reads",
@@ -371,19 +493,19 @@ def update_ordination_graph(
 
         # No metadata
 
-        # Histogram on the top panel
+        # Histogram on the bottom panel
         fig.add_trace(
             go.Histogram(
                 x=plot_df[plot_df.columns.values[primary_pc - 1]],
                 hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
             ),
-            row=1, col=1
+            row=2, col=1
         )
         fig.update_yaxes(
             title_text="Number of Specimens",
-            row=1, col=1
+            row=2, col=1
         )
-        # Scatter on the bottom panel
+        # Scatter on the top panel
         fig.add_trace(
             go.Scatter(
                 x=plot_df[plot_df.columns.values[primary_pc - 1]],
@@ -394,87 +516,24 @@ def update_ordination_graph(
                 mode="markers",
                 marker_color="blue"
             ),
-            row=2, col=1
+            row=1, col=1
         )
 
     else:
-
-        # Add the specified metadata to the DataFrame
-        plot_df = plot_df.assign(
-            METADATA = plot_manifest_df[metadata]
-        ).rename(columns={
-            "METADATA": metadata
-        })
-
-        # Remove specimens which lack the specified metadata
-        assert plot_df[metadata].isnull().mean() < 1.0, "Metadata is missing for all specimens"
-
-        # At least one sample is missing metadata
-        if plot_df[metadata].isnull().any():
-            # Subset to specimens which contain the metadata
-            plot_df = plot_df.reindex(
-                index = plot_df[metadata].dropna().index
-            )
-
-        # Make a numeric transform of the metadata
-        if plot_df[metadata].apply(
-            lambda n: isinstance(n, float) or isinstance(n, int)
-        ).all():
-
-            # The metadata is already numeric
-            plot_df = plot_df.assign(
-                METADATA_FLOAT = plot_df[metadata]
-            )
-
-        # Try to convert to datetime
-        elif pd.to_datetime(plot_df[metadata], errors="coerce").isnull().sum() == 0:
-            plot_df = plot_df.assign(
-                METADATA_FLOAT = pd.to_datetime(
-                    plot_df[metadata],
-                    errors="raise"
-                ).apply(str)
-            )
-
-        # Treat as categorical
-        else:
-            # Assign a rank order
-            rank_order = {
-                n: ix
-                for ix, n in enumerate(plot_df[metadata].drop_duplicates().sort_values().values)
-            }
-            plot_df = plot_df.assign(
-                METADATA_FLOAT = plot_df[metadata].apply(rank_order.get)
-            )
-
-        # Set up a metadata color map depending on how many distinct values
-        # there are. For small numbers, use "colorblind", otherwise "coolwarm"
-        if plot_df["METADATA_FLOAT"].unique().shape[0] <= 5:
-            palette_name = "colorblind"
-
-        else:
-            palette_name = "coolwarm"
-
-        # Here is the actual color map
-        cmap = dict(zip(
-            plot_df["METADATA_FLOAT"].drop_duplicates().sort_values().values,
-            color_palette(
-                palette_name,
-                plot_df["METADATA_FLOAT"].unique().shape[0]
-            ).as_hex()
-        ))
-
-        # Now add that color to the plot DataFrame
-        plot_df = plot_df.assign(
-            METADATA_COLOR = plot_df["METADATA_FLOAT"].apply(cmap.get)
+        # Add the indicated metadata to the plotting dataframe
+        # This will also add a METADATA_COLOR column as appropriate
+        plot_df = add_metadata_to_dataframe(
+            plot_df, 
+            plot_manifest_df, 
+            metadata
         )
-        assert plot_df["METADATA_COLOR"].isnull().sum() == 0, (plot_df.head(), cmap)
 
-        # Scatterplot or Boxplot on the top panel
+        # Scatterplot or Boxplot on the bottom panel
         if plot_df[metadata].unique().shape[0] <= 5:
 
             # Iterate over each of the metadata groups
             for metadata_label, metadata_plot_df in plot_df.groupby(metadata):
-                # Boxplot on the upper panel
+                # Boxplot on the bottom panel
                 fig.add_trace(
                     go.Box(
                         x=metadata_plot_df[
@@ -483,9 +542,9 @@ def update_ordination_graph(
                         name=metadata_label,
                         marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
                     ),
-                    row=1, col=1
+                    row=2, col=1
                 )
-                # Scatter on the bottom panel
+                # Scatter on the top panel
                 fig.add_trace(
                     go.Scatter(
                         x=metadata_plot_df[
@@ -503,11 +562,11 @@ def update_ordination_graph(
                         mode="markers",
                         marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
                     ),
-                    row=2, col=1
+                    row=1, col=1
                 )
 
         else:
-            # Scatter on the upper panel
+            # Scatter on the bottom panel
             fig.add_trace(
                 go.Scatter(
                     x=plot_df[
@@ -522,10 +581,10 @@ def update_ordination_graph(
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
                 ),
-                row=1, col=1
+                row=2, col=1
             )
 
-            # Scatter on the bottom panel
+            # Scatter on the top panel
             fig.add_trace(
                 go.Scatter(
                     x=plot_df[plot_df.columns.values[primary_pc - 1]],
@@ -538,7 +597,7 @@ def update_ordination_graph(
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
                 ),
-                row=2, col=1
+                row=1, col=1
             )
 
         fig.update_yaxes(
@@ -549,15 +608,15 @@ def update_ordination_graph(
 
     fig.update_xaxes(
         title_text=plot_df.columns.values[primary_pc - 1],
-        row=1, col=1
+        row=2, col=1
     )
     fig.update_xaxes(
         title_text=plot_df.columns.values[primary_pc - 1],
-        row=2, col=1
+        row=1, col=1
     )
     fig.update_yaxes(
         title_text=plot_df.columns.values[secondary_pc - 1],
-        row=2, col=1
+        row=1, col=1
     )
 
     fig.update_layout(
@@ -579,7 +638,16 @@ def print_anosim(
     """Run anosim and return a Markdown summary."""
 
     # Get the filtered manifest from the browser
-    plot_manifest_df = parse_manifest_json(manifest_json, full_manifest_df)
+    plot_manifest_df = parse_manifest_json(
+        manifest_json, 
+        full_manifest_df
+    ).reset_index(
+    ).reindex(
+        columns = ["specimen", metadata]
+    ).drop_duplicates(
+    ).set_index(
+        "specimen"
+    )
 
     # Remove any samples with NaN for this field
     samples_to_analyze = plot_manifest_df[metadata].dropna().index.values
@@ -1547,8 +1615,6 @@ def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
         )
     )
 
-    fig.update_layout(
-        width=600,
-        height=700,
-    )
+    fig.update_yaxes(automargin=True)
+
     return fig
