@@ -7,7 +7,7 @@ build_test:
   script:
     - mkdir -p share
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/oca/geneshot/2020-05-05-OCA/2020-05-05-OCA.results.hdf5 share/
-    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/colon-cleanout/geneshot/2020-04-23-colon-cleanout/2020-04-23-colon-cleanout-ImmPostCC.ImmPostCC.corncob.hdf5 share/
+    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/colon-cleanout/geneshot/2020-04-23-colon-cleanout/2020-04-23-colon-cleanout-Colon_Cleanout_Interval.Colon_Cleanout_Interval.corncob.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/underfeeding/geneshot/2020-05-04-underfeeding/2020-05-04-underfeeding.results.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/liang-2020/geneshot/2020-05-26-liang-2020/2020-05-26-liang-2020.results.hdf5 share/
     - docker build -t dockerimages.fhcrc.org/glam:latest .
