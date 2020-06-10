@@ -8,7 +8,7 @@
             "description": "Study of oral obeticholic acid on the composition of the gut microbiome. Participants were administered the bile acid obeticholic acid (OCA) in one of three doses and stool microbiome samples were analyzed at three timepoints (before, during, and after OCA administration). In the re-analysis of this previously published dataset we tested for the marginal association of each individual CAG with a change in relative abundance at any one of the three timepoints. Gastroenterology. 2018 Dec;155(6): 1741-1752.e5 doi:10.1053/j.gastro.2018.08.022"
         },
         {
-            "fp": "2020-04-23-colon-cleanout-Colon_Cleanout_Interval.Colon_Cleanout_Interval.corncob.hdf5",
+            "fp": "2020-04-23-colon-cleanout-Colon_Cleanout_Interval_host_subject_id.Colon_Cleanout_Interval.corncob.hdf5",
             "name": "Colon Cleanout Study (Fukuyama, et al. 2017)",
             "description": "Study of the effect of PEG colon preparation on the composition of the gut microbiome. Participants were sampled repeatedly before and after PEG treatment as used for colonoscopy. In the re-analysis of this previously published dataset we tested for the marginal association of each individual CAG with a change in relative abundance during the period immediately following colon cleanout (ImmPostCC). PLoS Computational Biology. 2017 Aug;13(8): e1005706 doi:10.1371/journal.pcbi.1005706"
         },
