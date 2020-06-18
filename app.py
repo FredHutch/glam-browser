@@ -640,6 +640,16 @@ def experiment_summary_card_callback(selected_dataset):
         return update_experiment_summary_card(
             metrics(fp)
         )
+@app.callback(
+    Output("experiment-summary-card-header", 'children'),
+    [Input("selected-dataset", "children")],
+)
+def experiment_summary_card_header_callback(selected_dataset):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return "Experiment"
+    else:
+        # Return the name of the indicated HDF5
+        return "Experiment: {}".format(page_data["contents"][selected_dataset[0]]["name"])
 ######################################
 # / EXPERIMENT SUMMARY CARD CALLBACK #
 ######################################

@@ -88,7 +88,7 @@ def experiment_summary_card():
     return html.Div([
         html.Br(),
         dbc.Card([
-            dbc.CardHeader("Experiment"),
+            dbc.CardHeader("Experiment", id="experiment-summary-card-header"),
             dbc.CardBody(html.Div(id="experiment-summary-card"))
         ])
     ])
