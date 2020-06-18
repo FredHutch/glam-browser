@@ -1196,7 +1196,6 @@ def draw_volcano_graph(
     comparison_parameter,
     neg_log_pvalue_min, 
     fdr_on_off, 
-    selected_cag_json
 ):
     if corncob_df is None or neg_log_pvalue_min is None:
         return go.Figure()
@@ -1209,7 +1208,6 @@ def draw_volcano_graph(
             comparison_parameter,
             neg_log_pvalue_min,
             fdr_on_off,
-            selected_cag_json
         )
 
     # Subset to just this parameter
@@ -1218,15 +1216,6 @@ def draw_volcano_graph(
     ).query(
         "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
     )
-
-    # Parse the selected CAG data
-    if selected_cag_json is not None:
-        # Set the points which are selected in the scatter plot
-        selectedpoints = np.where(
-            plot_df["CAG"].values == json.loads(selected_cag_json)["id"]
-        )
-    else:
-        selectedpoints = None
 
     if fdr_on_off == "off":
         plot_y = "neg_log_pvalue"
@@ -1246,7 +1235,6 @@ def draw_volcano_graph(
             hovertemplate=hovertemplate,
             mode="markers",
             opacity=0.5,
-            selectedpoints=selectedpoints,
         ),
     )
 
@@ -1273,7 +1261,6 @@ def draw_double_volcano_graph(
     comparison_parameter,
     neg_log_pvalue_min, 
     fdr_on_off, 
-    selected_cag_json
 ):
 
     # Set the metric to plot
@@ -1306,15 +1293,6 @@ def draw_double_volcano_graph(
         inplace=True
     )
 
-    # Parse the selected CAG data
-    if selected_cag_json is not None:
-        # Set the points which are selected in the scatter plot
-        selectedpoints = np.where(
-            plot_df.index.values == json.loads(selected_cag_json)["id"]
-        )
-    else:
-        selectedpoints = None
-
     fig = go.Figure(
         data=go.Scattergl(
             x=plot_df[comparison_parameter],
@@ -1324,7 +1302,6 @@ def draw_double_volcano_graph(
             hovertemplate=hovertemplate,
             mode="markers",
             opacity=0.5,
-            selectedpoints=selectedpoints,
         ),
     )
 

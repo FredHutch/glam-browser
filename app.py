@@ -1199,7 +1199,6 @@ def update_heatmap_cag_dropdown_value(
         Input("corncob-comparison-parameter-dropdown", "value"),
         Input('volcano-pvalue-slider', 'value'),
         Input('volcano-fdr-radio', 'value'),
-        Input('global-selected-cag', 'children'),
     ])
 def volcano_graph_callback(
     selected_dataset,
@@ -1207,7 +1206,6 @@ def volcano_graph_callback(
     comparison_parameter,
     neg_log_pvalue_min, 
     fdr_on_off, 
-    selected_cag_json
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
         return empty_figure()
@@ -1220,7 +1218,6 @@ def volcano_graph_callback(
             comparison_parameter,
             neg_log_pvalue_min, 
             fdr_on_off, 
-            selected_cag_json
         )
 
 @app.callback(
