@@ -274,7 +274,7 @@ def plot_sample_vs_cag_size(
     else:
         # Round the proportional abundance to 4 decimals
         plot_df = plot_df.apply(
-            lambda c: c.apply(lambda v: round(v, 2)) if c.name == "prop" else c
+            lambda c: c.apply(lambda v: round(v, 4)) if c.name == "prop" else c
         )
 
     # Reset the index to put CAG into a columns
