@@ -902,6 +902,18 @@ def draw_cag_heatmap(
     plot_df = plot_df.T
     plot_manifest_df = plot_manifest_df.T
 
+    # Group the CAGs based on their abundance
+    plot_df = plot_df.reindex(
+        index=plot_df.index.values[
+            leaves_list(
+                linkage(
+                    plot_df,
+                    method="ward"
+                )
+            )
+        ]
+    )
+
     # Set the figure width
     figure_width = 800
     # Set the figure height
