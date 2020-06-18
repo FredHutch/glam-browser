@@ -1169,8 +1169,13 @@ def update_heatmap_cag_dropdown_value(
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset]["fp"]
 
+        # Pick the top five CAGs to display by mean abundance
+        top_five_cags = cag_summary(fp)["mean_abundance"].sort_values(
+            ascending=False
+        ).index.values[:5]
+
         # With a new dataset, select the first five CAGs
-        return [selected_dataset], cag_summary(fp).index.values[:5]
+        return [selected_dataset], top_five_cags
 
     else:
         # Reaching this point in the function, a new dataset has _not_ been selected
