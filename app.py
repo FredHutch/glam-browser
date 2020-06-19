@@ -20,7 +20,6 @@ from helpers.layout import ordination_card
 from helpers.layout import cag_summary_card
 from helpers.layout import cag_heatmap_card
 from helpers.layout import volcano_card
-from helpers.layout import taxonomy_card
 from helpers.layout import single_cag_card
 from helpers.layout import genome_card
 from helpers.layout import manifest_card
@@ -326,7 +325,6 @@ app.layout = html.Div(
                 cag_summary_card(),
                 cag_heatmap_card(),
                 volcano_card(),
-                taxonomy_card(),
                 single_cag_card(),
                 genome_card(),
                 manifest_card(),
@@ -640,6 +638,16 @@ def experiment_summary_card_callback(selected_dataset):
         return update_experiment_summary_card(
             metrics(fp)
         )
+@app.callback(
+    Output("experiment-summary-card-header", 'children'),
+    [Input("selected-dataset", "children")],
+)
+def experiment_summary_card_header_callback(selected_dataset):
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        return "Experiment"
+    else:
+        # Return the name of the indicated HDF5
+        return "Experiment: {}".format(page_data["contents"][selected_dataset[0]]["name"])
 ######################################
 # / EXPERIMENT SUMMARY CARD CALLBACK #
 ######################################
@@ -1090,16 +1098,19 @@ def update_heatmap_metadata_dropdown(
     return options, []
 
 @app.callback(
-    Output('cag-heatmap-cag-dropdown', 'options'),
+    [
+        Output('cag-heatmap-cag-dropdown', 'options'),
+        Output('single-cag-dropdown', 'options'),
+    ],
     [
         Input("selected-dataset", "children"),
     ])
-def update_heatmap_cag_dropdown_options(
+def update_cag_dropdown_options(
     selected_dataset,
 ):
     """When a new dataset is selected, fill in the names of all the CAGs as options."""
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return []
+        return [], []
 
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
@@ -1116,7 +1127,7 @@ def update_heatmap_cag_dropdown_options(
         for cag_id in cag_id_list
     ]
 
-    return options
+    return options, options
 
 @app.callback(
     [
@@ -1159,8 +1170,13 @@ def update_heatmap_cag_dropdown_value(
         # Get the path to the indicated HDF5
         fp = page_data["contents"][selected_dataset]["fp"]
 
+        # Pick the top five CAGs to display by mean abundance
+        top_five_cags = cag_summary(fp)["mean_abundance"].sort_values(
+            ascending=False
+        ).index.values[:5]
+
         # With a new dataset, select the first five CAGs
-        return [selected_dataset], cag_summary(fp).index.values[:5]
+        return [selected_dataset], top_five_cags
 
     else:
         # Reaching this point in the function, a new dataset has _not_ been selected
@@ -1187,17 +1203,17 @@ def update_heatmap_cag_dropdown_value(
         Input("selected-dataset", "children"),
         Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
         Input("corncob-comparison-parameter-dropdown", "value"),
+        Input({"name": 'volcano-cag-size-slider', "type": "cag-size-slider"}, 'value'),
         Input('volcano-pvalue-slider', 'value'),
         Input('volcano-fdr-radio', 'value'),
-        Input('global-selected-cag', 'children'),
     ])
 def volcano_graph_callback(
     selected_dataset,
     parameter, 
     comparison_parameter,
+    cag_size_range,
     neg_log_pvalue_min, 
     fdr_on_off, 
-    selected_cag_json
 ):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
         return empty_figure()
@@ -1206,11 +1222,12 @@ def volcano_graph_callback(
         fp = page_data["contents"][selected_dataset[0]]["fp"]
         return draw_volcano_graph(
             corncob(fp),
+            cag_summary(fp),
             parameter, 
             comparison_parameter,
+            cag_size_range,
             neg_log_pvalue_min, 
             fdr_on_off, 
-            selected_cag_json
         )
 
 @app.callback(
@@ -1361,9 +1378,9 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
     [
         Input("selected-dataset", "children"),
         Input('cag-tax-ngenes', 'value'),
-        Input('global-selected-cag', 'children'),
+        Input('single-cag-dropdown', 'value'),
     ])
-def update_taxonomy_graph(selected_dataset, min_ngenes, selected_cag_json):
+def update_taxonomy_graph(selected_dataset, min_ngenes, cag_id):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
         marks = {
             n: n
@@ -1374,18 +1391,10 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, selected_cag_json):
     # Get the path to the indicated HDF5
     fp = page_data["contents"][selected_dataset[0]]["fp"]
 
-    # Parse the selected CAG data
-    if selected_cag_json is not None:
-        # Set the points which are selected in the scatter plot
-        cag_id = json.loads(selected_cag_json)["id"]
-    else:
-        # Default CAG to plot
-        cag_id = 1000
-
     # Format the DataFrame as needed to make a go.Sunburst
-    cag_tax_df = cag_taxonomy(cag_id, fp)
+    cag_tax_df = cag_taxonomy(int(cag_id), fp)
 
-    return draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes)
+    return draw_taxonomy_sunburst(cag_tax_df, int(cag_id), min_ngenes)
 ###########################
 # / CAG TAXONOMY CALLBACK #
 ###########################
@@ -1394,9 +1403,43 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, selected_cag_json):
 # SINGLE CAG CALLBACK #
 #######################
 @app.callback(
+    Output('single-cag-dropdown', 'value'),
+    [
+        Input("selected-dataset", "children"),
+    ],
+    [
+        State('single-cag-dropdown', 'value')
+    ]
+)
+def update_single_cag_dropdown_value(
+    selected_dataset, selected_cag
+):
+    # If a new dataset is selected, remove all selected values
+    if isinstance(selected_dataset, list):
+        selected_dataset = selected_dataset[0]
+    selected_dataset = int(selected_dataset)
+
+    # If the Main Menu button has been clicked, just return the existing value
+    if selected_dataset == -1:
+        return selected_cag
+
+    # Otherwise return the most abundant CAG
+    else:
+        
+        # Get the path to the indicated HDF5
+        fp = page_data["contents"][selected_dataset]["fp"]
+
+        # Pick the top CAG to display by mean abundance
+        top_cag = cag_summary(fp)["mean_abundance"].sort_values(
+            ascending=False
+        ).index.values[0]
+
+        # With a new dataset, select the first five CAGs
+        return top_cag
+@app.callback(
     Output('single-cag-graph', 'figure'),
     [
-        Input('global-selected-cag', 'children'),
+        Input('single-cag-dropdown', 'value'),
         Input({'name': 'single-cag-xaxis',
                "type": "metadata-field-dropdown"}, 'value'),
         Input('single-cag-plot-type', 'value'),
@@ -1410,7 +1453,7 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, selected_cag_json):
         State("selected-dataset", "children")
     ])
 def update_single_cag_graph(
-    selected_cag_json,
+    cag_id,
     xaxis,
     plot_type,
     color,
@@ -1428,21 +1471,13 @@ def update_single_cag_graph(
     # Get the filtered manifest from the browser
     plot_manifest_df = parse_manifest_json(manifest_json, manifest(fp))
 
-    # Parse the selected CAG data
-    if selected_cag_json is not None:
-        # Set the points which are selected in the scatter plot
-        cag_id = json.loads(selected_cag_json)["id"]
-    else:
-        # Default CAG to plot
-        cag_id = 1000
-
     plot_df = plot_manifest_df.assign(
         CAG_ABUND = read_cag_abundance(fp, int(cag_id))
     )
 
     return draw_single_cag_graph(
         plot_df,
-        cag_id,
+        int(cag_id),
         xaxis,
         plot_type,
         color,

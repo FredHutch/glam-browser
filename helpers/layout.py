@@ -88,7 +88,7 @@ def experiment_summary_card():
     return html.Div([
         html.Br(),
         dbc.Card([
-            dbc.CardHeader("Experiment"),
+            dbc.CardHeader("Experiment", id="experiment-summary-card-header"),
             dbc.CardBody(html.Div(id="experiment-summary-card"))
         ])
     ])
@@ -603,6 +603,8 @@ def volcano_card():
             dbc.Col(
                 corncob_parameter_dropdown(
                     "volcano-parameter-dropdown",
+                ) + cag_size_slider(
+                    "volcano-cag-size-slider"
                 ) + volcano_pvalue_slider(
                     "volcano-pvalue-slider",
                 ) + log_scale_radio_button(
@@ -638,85 +640,82 @@ panels on this page.
 # / VOLCANO PLOT #
 ##################
 
-#####################
-# CAG TAXONOMY CARD #
-#####################
-def taxonomy_card():
-    return card_wrapper(
-        "CAG Taxonomy",
-        dbc.Row([
-            dbc.Col(
-                dbc.Spinner(dcc.Graph(
-                            id="cag-tax-graph"
-                            )),
-                width=8,
-                align="center",
-            ),
-            dbc.Col(
-                basic_slider(
-                    "cag-tax-ngenes",
-                    "Minimum Number of Genes",
-                    included=False,
-                    default_value=5,
-                ),
-                width=4,
-                align="center",
-            )
-        ]),
-        help_text="""
-The taxonomic annotation of a given CAG is shown as the proportion of
-genes which contain a given taxonomic annotation, out of all genes which
-were given any taxonomic annotation.
-        """
-    )
-#######################
-# / CAG TAXONOMY CARD #
-#######################
-
-
 ###################
 # SINGLE CAG CARD #
 ###################
 def single_cag_card():
     return card_wrapper(
         "Individual CAG Abundance",
-        dbc.Row([
-            dbc.Col(
-                dbc.Spinner(dcc.Graph(
-                            id="single-cag-graph"
-                            )),
-                width=8,
-                align="center",
-            ),
-            dbc.Col(
-                metadata_field_dropdown(
-                    "single-cag-xaxis",
-                    label_text="X-axis",
-                ) + plot_type_dropdown(
-                    "single-cag-plot-type",
-                    options=[
-                        {'label': 'Points', 'value': 'scatter'},
-                        {'label': 'Line', 'value': 'line'},
-                        {'label': 'Boxplot', 'value': 'boxplot'},
-                        {'label': 'Stripplot', 'value': 'strip'},
-                    ]
-                ) + metadata_field_dropdown(
-                    "single-cag-color",
-                    label_text="Color",
-                ) + metadata_field_dropdown(
-                    "single-cag-facet",
-                    label_text="Facet",
-                ) + log_scale_radio_button(
-                    "single-cag-log"
+        [
+            dbc.Row([
+                dbc.Col(
+                    dbc.Spinner(
+                        dcc.Graph(id="single-cag-graph")
+                    ),
+                    width=8,
+                    align="center",
                 ),
-                width=4,
-                align="center",
-            )
-        ]),
+                dbc.Col(
+                    [
+                        html.Label("Display CAG"),
+                        dcc.Dropdown(
+                            id="single-cag-dropdown",
+                            options=[],
+                            value=[],
+                        ),
+                        html.Br(),
+                    ] + metadata_field_dropdown(
+                        "single-cag-xaxis",
+                        label_text="X-axis",
+                    ) + plot_type_dropdown(
+                        "single-cag-plot-type",
+                        options=[
+                            {'label': 'Points', 'value': 'scatter'},
+                            {'label': 'Line', 'value': 'line'},
+                            {'label': 'Boxplot', 'value': 'boxplot'},
+                            {'label': 'Stripplot', 'value': 'strip'},
+                        ]
+                    ) + metadata_field_dropdown(
+                        "single-cag-color",
+                        label_text="Color",
+                    ) + metadata_field_dropdown(
+                        "single-cag-facet",
+                        label_text="Facet",
+                    ) + log_scale_radio_button(
+                        "single-cag-log"
+                    ),
+                    width=4,
+                    align="center",
+                )
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    dbc.Spinner(dcc.Graph(
+                                id="cag-tax-graph"
+                                )),
+                    width=8,
+                    align="center",
+                ),
+                dbc.Col(
+                    basic_slider(
+                        "cag-tax-ngenes",
+                        "Minimum Number of Genes",
+                        included=False,
+                        default_value=5,
+                    ),
+                    width=4,
+                    align="center",
+                )
+            ]),
+        ],
         help_text="""
 Construct a summary of the abundance of a single CAG in relation to the metadata
 assigned to each specimen. By selecting different types of plots, you may flexibly
 construct any type of summary display.
+
+The taxonomic annotation of a given CAG is shown as the proportion of
+genes which contain a given taxonomic annotation, out of all genes which
+were given any taxonomic annotation.
 
 Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
         """

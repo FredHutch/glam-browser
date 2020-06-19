@@ -274,7 +274,7 @@ def plot_sample_vs_cag_size(
     else:
         # Round the proportional abundance to 4 decimals
         plot_df = plot_df.apply(
-            lambda c: c.apply(lambda v: round(v, 2)) if c.name == "prop" else c
+            lambda c: c.apply(lambda v: round(v, 4)) if c.name == "prop" else c
         )
 
     # Reset the index to put CAG into a columns
@@ -902,6 +902,18 @@ def draw_cag_heatmap(
     plot_df = plot_df.T
     plot_manifest_df = plot_manifest_df.T
 
+    # Group the CAGs based on their abundance
+    plot_df = plot_df.reindex(
+        index=plot_df.index.values[
+            leaves_list(
+                linkage(
+                    plot_df,
+                    method="ward"
+                )
+            )
+        ]
+    )
+
     # Set the figure width
     figure_width = 800
     # Set the figure height
@@ -1192,15 +1204,27 @@ def draw_cag_abund_heatmap_panel(
 #################
 def draw_volcano_graph(
     corncob_df,
+    cag_summary_df,
     parameter, 
     comparison_parameter,
+    cag_size_range,
     neg_log_pvalue_min, 
     fdr_on_off, 
-    selected_cag_json
 ):
     if corncob_df is None or neg_log_pvalue_min is None:
         return go.Figure()
 
+    # Filter the corncob_df by CAG size
+    corncob_df = corncob_df.loc[
+        corncob_df["CAG"].isin(
+            cag_summary_df.query(
+                "size >= {}".format(10**cag_size_range[0])
+            ).query(
+                "size <= {}".format(10**cag_size_range[1])
+            ).index.values
+        )
+    ]
+    
     # If a comparison parameter was selected, plot the p-values against each other
     if comparison_parameter != "coef":
         return draw_double_volcano_graph(
@@ -1209,7 +1233,6 @@ def draw_volcano_graph(
             comparison_parameter,
             neg_log_pvalue_min,
             fdr_on_off,
-            selected_cag_json
         )
 
     # Subset to just this parameter
@@ -1218,15 +1241,6 @@ def draw_volcano_graph(
     ).query(
         "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
     )
-
-    # Parse the selected CAG data
-    if selected_cag_json is not None:
-        # Set the points which are selected in the scatter plot
-        selectedpoints = np.where(
-            plot_df["CAG"].values == json.loads(selected_cag_json)["id"]
-        )
-    else:
-        selectedpoints = None
 
     if fdr_on_off == "off":
         plot_y = "neg_log_pvalue"
@@ -1246,7 +1260,6 @@ def draw_volcano_graph(
             hovertemplate=hovertemplate,
             mode="markers",
             opacity=0.5,
-            selectedpoints=selectedpoints,
         ),
     )
 
@@ -1273,7 +1286,6 @@ def draw_double_volcano_graph(
     comparison_parameter,
     neg_log_pvalue_min, 
     fdr_on_off, 
-    selected_cag_json
 ):
 
     # Set the metric to plot
@@ -1306,15 +1318,6 @@ def draw_double_volcano_graph(
         inplace=True
     )
 
-    # Parse the selected CAG data
-    if selected_cag_json is not None:
-        # Set the points which are selected in the scatter plot
-        selectedpoints = np.where(
-            plot_df.index.values == json.loads(selected_cag_json)["id"]
-        )
-    else:
-        selectedpoints = None
-
     fig = go.Figure(
         data=go.Scattergl(
             x=plot_df[comparison_parameter],
@@ -1324,7 +1327,6 @@ def draw_double_volcano_graph(
             hovertemplate=hovertemplate,
             mode="markers",
             opacity=0.5,
-            selectedpoints=selectedpoints,
         ),
     )
 
