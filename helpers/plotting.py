@@ -1204,14 +1204,27 @@ def draw_cag_abund_heatmap_panel(
 #################
 def draw_volcano_graph(
     corncob_df,
+    cag_summary_df,
     parameter, 
     comparison_parameter,
+    cag_size_range,
     neg_log_pvalue_min, 
     fdr_on_off, 
 ):
     if corncob_df is None or neg_log_pvalue_min is None:
         return go.Figure()
 
+    # Filter the corncob_df by CAG size
+    corncob_df = corncob_df.loc[
+        corncob_df["CAG"].isin(
+            cag_summary_df.query(
+                "size >= {}".format(10**cag_size_range[0])
+            ).query(
+                "size <= {}".format(10**cag_size_range[1])
+            ).index.values
+        )
+    ]
+    
     # If a comparison parameter was selected, plot the p-values against each other
     if comparison_parameter != "coef":
         return draw_double_volcano_graph(

@@ -603,6 +603,8 @@ def volcano_card():
             dbc.Col(
                 corncob_parameter_dropdown(
                     "volcano-parameter-dropdown",
+                ) + cag_size_slider(
+                    "volcano-cag-size-slider"
                 ) + volcano_pvalue_slider(
                     "volcano-pvalue-slider",
                 ) + log_scale_radio_button(

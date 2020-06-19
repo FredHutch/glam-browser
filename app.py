@@ -1203,6 +1203,7 @@ def update_heatmap_cag_dropdown_value(
         Input("selected-dataset", "children"),
         Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
         Input("corncob-comparison-parameter-dropdown", "value"),
+        Input({"name": 'volcano-cag-size-slider', "type": "cag-size-slider"}, 'value'),
         Input('volcano-pvalue-slider', 'value'),
         Input('volcano-fdr-radio', 'value'),
     ])
@@ -1210,6 +1211,7 @@ def volcano_graph_callback(
     selected_dataset,
     parameter, 
     comparison_parameter,
+    cag_size_range,
     neg_log_pvalue_min, 
     fdr_on_off, 
 ):
@@ -1220,8 +1222,10 @@ def volcano_graph_callback(
         fp = page_data["contents"][selected_dataset[0]]["fp"]
         return draw_volcano_graph(
             corncob(fp),
+            cag_summary(fp),
             parameter, 
             comparison_parameter,
+            cag_size_range,
             neg_log_pvalue_min, 
             fdr_on_off, 
         )
