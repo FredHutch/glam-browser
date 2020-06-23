@@ -492,7 +492,7 @@ def cag_heatmap_card():
                     [
                         html.Label("Display CAGs"),
                         dcc.Dropdown(
-                            id="cag-heatmap-cag-dropdown",
+                            id="cag-heatmap-multiselector",
                             options=[],
                             value=[],
                             multi=True
@@ -659,7 +659,7 @@ def single_cag_card():
                     [
                         html.Label("Display CAG"),
                         dcc.Dropdown(
-                            id="single-cag-dropdown",
+                            id="single-cag-multiselector",
                             options=[],
                             value=[],
                         ),
