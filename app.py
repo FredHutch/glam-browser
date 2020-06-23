@@ -1015,7 +1015,7 @@ def cag_summary_save_click_data(clickData):
 @app.callback(
     Output('cag-heatmap-graph', 'figure'),
     [
-        Input('cag-heatmap-cag-dropdown', 'value'),
+        Input('cag-heatmap-multiselector', 'value'),
         Input('cag-heatmap-metadata-dropdown', 'value'),
         Input('cag-heatmap-abundance-metric', 'value'),
         Input('cag-heatmap-cluster', 'value'),
@@ -1097,42 +1097,50 @@ def update_heatmap_metadata_dropdown(
 
     return options, []
 
+def get_cag_multiselector_options(
+    selected_dataset
+):
+    """Function to make a list of all of the CAGs for a given dataset."""
+    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+        options = [{
+            "label": "None",
+            "value": 0
+        }]
+
+    else:
+
+        # Get the path to the indicated HDF5
+        fp = page_data["contents"][selected_dataset[0]]["fp"]
+
+        # Get the list of all CAGs
+        cag_id_list = cag_summary(fp).index.values
+
+        # Get the list of CAGs
+        options = [
+            {
+                "label": "CAG {}".format(cag_id),
+                "value": cag_id
+            }
+            for cag_id in cag_id_list
+        ]
+
+    return options
+
 @app.callback(
-    [
-        Output('cag-heatmap-cag-dropdown', 'options'),
-        Output('single-cag-dropdown', 'options'),
-    ],
+    Output("cag-heatmap-multiselector", 'options'),
     [
         Input("selected-dataset", "children"),
     ])
-def update_cag_dropdown_options(
-    selected_dataset,
+def update_cag_heatmap_multiselector_options(
+    selected_dataset
 ):
     """When a new dataset is selected, fill in the names of all the CAGs as options."""
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return [], []
-
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
-
-    # Get the list of all CAGs
-    cag_id_list = cag_summary(fp).index.values
-
-    # Get the list of CAGs
-    options = [
-        {
-            "label": "CAG {}".format(cag_id),
-            "value": cag_id
-        }
-        for cag_id in cag_id_list
-    ]
-
-    return options, options
+    return get_cag_multiselector_options(selected_dataset)
 
 @app.callback(
     [
         Output("cag-heatmap-selected-dataset", "children"),
-        Output('cag-heatmap-cag-dropdown', 'value'),
+        Output('cag-heatmap-multiselector', 'value'),
     ],
     [
         Input("selected-dataset", "children"),
@@ -1140,7 +1148,7 @@ def update_cag_dropdown_options(
     ],
     [
         State("cag-heatmap-selected-dataset", "children"),
-        State("cag-heatmap-cag-dropdown", "value"),
+        State("cag-heatmap-multiselector", "value"),
     ])
 def update_heatmap_cag_dropdown_value(
     selected_dataset,
@@ -1378,7 +1386,7 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
     [
         Input("selected-dataset", "children"),
         Input('cag-tax-ngenes', 'value'),
-        Input('single-cag-dropdown', 'value'),
+        Input('single-cag-multiselector', 'value'),
     ])
 def update_taxonomy_graph(selected_dataset, min_ngenes, cag_id):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
@@ -1403,12 +1411,22 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, cag_id):
 # SINGLE CAG CALLBACK #
 #######################
 @app.callback(
-    Output('single-cag-dropdown', 'value'),
+    Output("single-cag-multiselector", 'options'),
+    [
+        Input("selected-dataset", "children"),
+    ])
+def update_single_cag_multiselector_options(
+    selected_dataset
+):
+    """When a new dataset is selected, fill in the names of all the CAGs as options."""
+    return get_cag_multiselector_options(selected_dataset)
+@app.callback(
+    Output('single-cag-multiselector', 'value'),
     [
         Input("selected-dataset", "children"),
     ],
     [
-        State('single-cag-dropdown', 'value')
+        State('single-cag-multiselector', 'value')
     ]
 )
 def update_single_cag_dropdown_value(
@@ -1439,7 +1457,7 @@ def update_single_cag_dropdown_value(
 @app.callback(
     Output('single-cag-graph', 'figure'),
     [
-        Input('single-cag-dropdown', 'value'),
+        Input('single-cag-multiselector', 'value'),
         Input({'name': 'single-cag-xaxis',
                "type": "metadata-field-dropdown"}, 'value'),
         Input('single-cag-plot-type', 'value'),
