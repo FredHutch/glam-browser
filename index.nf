@@ -29,16 +29,37 @@ def helpMessage() {
     
     Arguments:
       --input               Geneshot results (".hdf5") file to process
-      --output              Location for output GLAM index (".hdf5")
+      --output_folder       Folder for output GLAM index
+      --output_prefix       Prefix used to name the GLAM index (".index.hdf5" will be appended)
 
     """.stripIndent()
 }
 
 // Show help message if the user specifies the --help flag at runtime
-if (params.help || params.input == false || params.output == false){
+if (params.help || params.input == false || params.output_folder == false || params.output_prefix == false){
     // Invoke the function above which prints the help message
     helpMessage()
     // Exit out and do not run anything else
     exit 0
 }
 
+// Make CAGs for each set of samples, with the subset of genes for this shard
+process indexGeneshotResults {
+    container "quay.io/fhcrc-microbiome/python-pandas:v1.0.3"
+    label "mem_medium"
+    publishDir "${params.output_folder}"
+
+    input:
+    path input_hdf from file(params.input)
+
+    output:
+    file "${params.output_prefix}.index.hdf5"
+
+    """#!/bin/bash
+
+python3 ${input_hdf} ${params.output_prefix}.index.hdf5
+
+    """
+}
+
+container__pandas = ""

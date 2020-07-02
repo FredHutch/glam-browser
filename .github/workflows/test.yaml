@@ -27,4 +27,4 @@ jobs:
           curl -s -L https://github.com/Golob-Minot/geneshot/releases/download/v0.6.3/geneshot.results.tar.gz --output geneshot.results.tar.gz && tar xzf geneshot.results.tar.gz
       - name:  Index geneshot results
         run: |
-          nextflow run index.nf -profile testing --input output/geneshot.results.hdf5 --output geneshot.index.hdf5 -with-docker ubuntu:latest
+          nextflow run index.nf -profile testing --input output/geneshot.results.hdf5 --output_folder ./ --output_prefix glam -with-docker ubuntu:latest
