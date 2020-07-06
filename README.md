@@ -170,3 +170,23 @@ The abundance of a single CAG across samples can be displayed in many different 
 The complete list of specimens in the manifest is provided as an interactive table. The user can filter and sort the table in a fairly complete manner. Crucially, by deselecting the checkbox on any row, that specimen is temporarily masked from all of the other displays in GLAM.
 
 ![Manifest](https://github.com/FredHutch/glam-browser/blob/master/assets/manifest_example.png?raw=true)
+
+### Details
+
+## Details on GLAM indexing
+
+The `index.nf` utility creates an HDF5 file by (1) running the `index.py` script on the `geneshot` results file to create a new HDF5 file and then (2) repacking that HDF5 to reduce storage size. The tables in the GLAM index are:
+
+* `/manifest`: A subset of the original manifest file, but with FASTQ input paths removed (`R1`, `R2`, `I1`, and `I2`) explicitly requiring that every `specimen` only has a single entry (row) in the table.
+* `/experiment_metrics`: A direct copy of `/summary/experiment` in the input, containing information on the parameters used to run the experiment.
+* `/specimen_metrics`: A direct copy of `/summary/all` table in the input, but with the `prop_reads` column added (`aligned_reads / n_reads`). Contains information on the number of genes aligned, number of genes assembled, number of reads, etc. for each specimen in the analysis.
+* `/analysis_metrics`: A small summary of the analysis, including flags for whether there was taxonomic analysis, functional analysis, corncob analysis, and betta enrichment analysis included in the outputs. This makes it easier to execute logic to only display those results which are available.
+* `/cag_annotations`: A direct copy of `/annot/cag/all` in the input, but with the `size_log10` column added (`log10(size)`).
+* `/cag_abundances`: A direct copy of (`/abund/cag/wide`) in the input.
+* `/distances/*`: A direct copy of all of the distance matrices in the input.
+* `/cag_associations/results/{parameter}`: For each of the `parameter` values in the input (from `/stats/cag/corncob`), a table with those corncob results.
+* `/cag_associations/manifest`: A small table with the list of parameters which were computed in the corncob analysis.
+* `/enrichments/results/{parameter}/{annotation_group}`: For each of the `parameter` values and `annotation_group` values in the input (from `/stats/enrichment/betta`), a table with those functional enrichment results.
+* `/enrichments/manifest`: A small table with the list of parameters and annotation groups which were computed in the analysis.
+* `/gene_annotations/detailed`: A direct copy of `/annot/gene/all` in the input. This is a very large table, and so we will make sure to index by the `CAG` column. GLAM will only read in subsets of this table for a particular CAG at a time.
+* `/gene_annotations/summary/parameter/{}`: For each `parameter` in the analysis, the table will include a summary of the number of genes which had a given annotation (taxonomic and functional) for each CAG. Notably, this will only include those CAGs which pass the FDR threshold of 0.01 for that parameter. By limiting the number of CAGs in this table, we will be able to read the complete table into GLAM and keep it in memory to render figures from.
