@@ -89,6 +89,8 @@ def parse_cag_annotations(store):
     # Compute `prop_reads`
     return df.assign(
         size_log10 = df["size"].apply(np.log10)
+    ).drop(
+        columns=["std_abundance"]
     )
 
 
@@ -342,17 +344,6 @@ def get_cags_to_include(dat, top_n=10000):
 
 def filter_data_to_selected_cags(dat, cags_to_include):
     """Reduce the size of the data that will be saved by filtering to these CAGs."""
-
-    # ANNOTATIONS #    
-    # Only show annotations for CAGs in the list
-    logging.info("Retaining annotations for {:,} / {:,} CAGs".format(
-        len(cags_to_include), dat["/cag_annotations"].shape[0]
-    ))
-    dat["/cag_annotations"] = dat["/cag_annotations"].loc[
-        dat["/cag_annotations"]["CAG"].isin(cags_to_include)
-    ]
-    # Every CAG should have an annotation
-    assert dat["/cag_annotations"].shape[0] == len(cags_to_include)
 
     # ABUNDANCES #
     # Only keep abundances for the CAGs in the list
