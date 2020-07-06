@@ -7,12 +7,12 @@ import os
 import pandas as pd
 
 
-def parse_manifest(input_fp):
+def parse_manifest(store):
     """Read in the manifest and filter columns for visualization."""
 
     # Read the whole manifest
     logging.info("Reading in the manifest")
-    manifest = pd.read_hdf(input_fp, "/manifest")
+    manifest = pd.read_hdf(store, "/manifest")
     logging.info("Read in data from {:,} rows and {:,} columns".format(
         manifest.shape[0],
         manifest.shape[1],
@@ -50,9 +50,12 @@ def index_geneshot_results(input_fp, output_fp):
 
     # Keep all of the data in a dict linking the key to the table
     dat = {}
-    
-    # Read in the manifest
-    dat["manifest"] = parse_manifest(input_fp)
+
+    # Open a connection to the input HDF5
+    with pd.HDFStore(input_fp, "r") as store:
+
+        # Read in the manifest
+        dat["manifest"] = parse_manifest(store)
 
     # Write out all of the tables to HDF5
     with pd.HDFStore(output_fp, "w") as store:
