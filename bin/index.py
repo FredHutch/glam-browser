@@ -474,8 +474,13 @@ def index_geneshot_results(input_fp, output_fp):
         # If we have corncob results, make aggregate tables for each parameter
         # which include all CAGs with FDR alpha=0.01 and summarize the number
         # of genes from each CAG which have a given annotation
-        for parameter, parameter_df in parse_gene_annotation_summaries(store, dat):
-            dat["/gene_annotations/parameter/{}".format(parameter)] = parameter_df
+        items_to_add = {
+            "/gene_annotations/parameter/{}".format(parameter): parameter_df
+            for parameter, parameter_df in parse_gene_annotation_summaries(store, dat)
+        }
+        # Add those items to the larger `dat` object as a second isolated step
+        for k, v in items_to_add.items():
+            dat[k] = v
 
     # Assemble the `analysis_features` table
     dat["/analysis_metrics"] = pd.DataFrame(
