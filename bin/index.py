@@ -296,7 +296,7 @@ def get_cags_to_include(dat, top_n=10000):
         # Table with the abundances of each CAG
         elif key_name == "/cag_abundances":
 
-            logging.info("Selecting the top {:,} CAGs by maximum size".format(
+            logging.info("Selecting the top {:,} CAGs by maximum abundance".format(
                 top_n
             ))
 
@@ -366,6 +366,7 @@ def filter_data_to_selected_cags(dat, cags_to_include):
     assert dat["/cag_abundances"].shape[0] == len(cags_to_include)
 
     # Iterate over the tables to access programmatically named tables
+    tables_to_delete = []
     for table_name in dat:
         # ASSOCIATIONS #
         # Consider all of the CAG association tables
@@ -383,7 +384,10 @@ def filter_data_to_selected_cags(dat, cags_to_include):
 
             # Delete tables for CAGs that aren't in this list
             if cag_id not in cags_to_include:
-                del dat[table_name]
+                tables_to_delete.append(table_name)
+
+    for key_name in tables_to_delete:
+        del dat[key_name]
 
 
 def index_geneshot_results(input_fp, output_fp):
