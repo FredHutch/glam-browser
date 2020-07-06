@@ -26,7 +26,7 @@ nextflow \
     run \
     index.nf \
     -profile testing \
-    --input testing/geneshot.results.hdf5 \
+    --input testing/output/geneshot.results.hdf5 \
     --output_folder testing/ \
     --output_prefix glam \
     -with-docker ubuntu:latest

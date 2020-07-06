@@ -50,3 +50,4 @@ data/
 testing/
 .nextflow*
 .nextflow/*
+work/

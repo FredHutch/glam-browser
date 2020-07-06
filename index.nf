@@ -21,6 +21,9 @@ params.input = false
 params.output = false
 params.help = false
 
+// Set the containers to user
+container__pandas = "quay.io/fhcrc-microbiome/python-pandas:v1.0.3"
+
 // Function which prints help message text
 def helpMessage() {
     log.info"""
@@ -46,21 +49,57 @@ if (params.help || params.input == false || params.output_folder == false || par
 
 // Make CAGs for each set of samples, with the subset of genes for this shard
 process indexGeneshotResults {
-    container "quay.io/fhcrc-microbiome/python-pandas:v1.0.3"
+    container "${container__pandas}"
     label "mem_medium"
-    publishDir "${params.output_folder}"
 
     input:
-    path input_hdf from file(params.input)
+    path input_hdf
 
     output:
     file "${params.output_prefix}.index.hdf5"
 
     """#!/bin/bash
 
-python3 ${input_hdf} ${params.output_prefix}.index.hdf5
+index.py ${input_hdf} ${params.output_prefix}.index.hdf5
 
     """
 }
 
-container__pandas = ""
+// Repack an HDF5 file
+process repackHDF {
+
+    container "${container__pandas}"
+    label "mem_medium"
+    publishDir "${params.output_folder}", mode: "copy", overwrite: true
+    
+    input:
+    file output_hdf5
+        
+    output:
+    file "${output_hdf5}"
+
+    """
+#!/bin/bash
+
+set -e
+
+[ -s ${output_hdf5} ]
+
+h5repack -f GZIP=5 ${output_hdf5} TEMP && mv TEMP ${output_hdf5}
+    """
+}
+
+
+workflow {
+
+  // Index the input file
+  indexGeneshotResults(
+    Channel.fromPath(params.input)
+  )
+
+  // Repack the output file
+  repackHDF(
+    indexGeneshotResults.out
+  )
+
+}
