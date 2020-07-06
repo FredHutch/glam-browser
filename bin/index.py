@@ -319,8 +319,9 @@ def get_cags_to_include(dat, top_n=10000):
         # Table with CAG association metrics
         elif key_name.startswith("/cag_associations"):
 
-            logging.info("Selecting the top {:,} CAGs by absolute Wald".format(
-                top_n
+            logging.info("Selecting the top {:,} CAGs by absolute Wald ({})".format(
+                top_n,
+                key_name
             ))
 
             # Keep the top_n CAGs by absolute Wald metric
