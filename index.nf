@@ -19,6 +19,7 @@ nextflow.preview.dsl=2
 // This is useful for the if/then control syntax below
 params.input = false
 params.output = false
+params.help = false
 
 // Function which prints help message text
 def helpMessage() {
