@@ -483,29 +483,15 @@ def update_ordination_graph(
         primary_pc = 1
         secondary_pc = 2
 
-    # Make a plot with two panels, one on top of the other, sharing the x-axis
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True
-    )
+    # Set up the figure, which will be populated below
+    fig = go.Figure()
 
     # The plot will depend on whether metadata has been selected
     if metadata == "none":
 
         # No metadata
 
-        # Histogram on the bottom panel
-        fig.add_trace(
-            go.Histogram(
-                x=plot_df[plot_df.columns.values[primary_pc - 1]],
-                hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
-            ),
-            row=2, col=1
-        )
-        fig.update_yaxes(
-            title_text="Number of Specimens",
-            row=2, col=1
-        )
-        # Scatter on the top panel
+        # Scatter plot
         fig.add_trace(
             go.Scatter(
                 x=plot_df[plot_df.columns.values[primary_pc - 1]],
@@ -515,8 +501,7 @@ def update_ordination_graph(
                 hovertemplate="%{id}<extra></extra>",
                 mode="markers",
                 marker_color="blue"
-            ),
-            row=1, col=1
+            )
         )
 
     else:
@@ -528,23 +513,12 @@ def update_ordination_graph(
             metadata
         )
 
-        # Scatterplot or Boxplot on the bottom panel
+        # Limited number of unique metadata values
         if plot_df[metadata].unique().shape[0] <= 5:
 
             # Iterate over each of the metadata groups
             for metadata_label, metadata_plot_df in plot_df.groupby(metadata):
-                # Boxplot on the bottom panel
-                fig.add_trace(
-                    go.Box(
-                        x=metadata_plot_df[
-                            plot_df.columns.values[primary_pc - 1]
-                        ],
-                        name=metadata_label,
-                        marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
-                    ),
-                    row=2, col=1
-                )
-                # Scatter on the top panel
+                # Scatter plot
                 fig.add_trace(
                     go.Scatter(
                         x=metadata_plot_df[
@@ -561,30 +535,12 @@ def update_ordination_graph(
                         hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                         mode="markers",
                         marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
-                    ),
-                    row=1, col=1
+                    )
                 )
 
         else:
-            # Scatter on the bottom panel
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_df[
-                        plot_df.columns.values[primary_pc - 1]
-                    ],
-                    y=plot_df[metadata],
-                    ids=plot_df.index.values,
-                    text=plot_df[metadata].apply(
-                        lambda n: "{}: {}".format(metadata, n)
-                    ),
-                    hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
-                    mode="markers",
-                    marker_color=plot_df["METADATA_COLOR"],
-                ),
-                row=2, col=1
-            )
 
-            # Scatter on the top panel
+            # Scatter plot
             fig.add_trace(
                 go.Scatter(
                     x=plot_df[plot_df.columns.values[primary_pc - 1]],
@@ -596,34 +552,25 @@ def update_ordination_graph(
                     hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
-                ),
-                row=1, col=1
+                )
             )
 
         fig.update_yaxes(
             title_text=metadata,
-            row=1, col=1
         )
 
 
     fig.update_xaxes(
         title_text=plot_df.columns.values[primary_pc - 1],
-        row=2, col=1
-    )
-    fig.update_xaxes(
-        title_text=plot_df.columns.values[primary_pc - 1],
-        row=1, col=1
     )
     fig.update_yaxes(
         title_text=plot_df.columns.values[secondary_pc - 1],
-        row=1, col=1
     )
 
     fig.update_layout(
         showlegend=False,
         template="simple_white",
-        height=800,
-        width=600,
+        height=500,
     )
 
     return fig
