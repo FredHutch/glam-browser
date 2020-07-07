@@ -475,7 +475,7 @@ def index_geneshot_results(input_fp, output_fp):
             dat[k] = v
 
     # Assemble the `analysis_features` table
-    dat["/analysis_metrics"] = pd.DataFrame(
+    dat["/analysis_features"] = pd.DataFrame(
         analysis_features
     ).drop_duplicates()
 
