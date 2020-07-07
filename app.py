@@ -272,7 +272,7 @@ def valid_parameters(fp):
     ).query(
         "group == 'cag_associations'"
     ).query(
-        "key == 'parameters'"
+        "key == 'parameter'"
     )["value"].tolist()
 
 def valid_enrichments(fp):
