@@ -1101,8 +1101,8 @@ def draw_volcano_graph(
         data=go.Scattergl(
             x=plot_df["estimate"],
             y=plot_df[plot_y],
-            ids=plot_df["CAG"].values,
-            text=plot_df["CAG"].values,
+            ids=plot_df.index.values,
+            text=plot_df.index.values,
             hovertemplate=hovertemplate,
             mode="markers",
             opacity=0.5,

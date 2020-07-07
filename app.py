@@ -1343,11 +1343,11 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
             fp, 
             parameter
         )
-        assert "neg_log_pvalue" in df.columns.values, df.columns.values
+        assert "neg_log10_pvalue" in df.columns.values, df.columns.values
         max_value = cag_associations(
             fp, 
             parameter
-        )["neg_log_pvalue"].max()
+        )["neg_log10_pvalue"].max()
 
     if np.isnan(max_value):
         max_value = 1
