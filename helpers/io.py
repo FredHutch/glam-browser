@@ -69,10 +69,6 @@ def parse_directory(folder_path):
 def hdf5_get_item(
     fp, 
     key_path, 
-    index_col=None, 
-    f=None, 
-    where=None, 
-    columns=None,
     timeout=5, 
     retry=5,
 ):
@@ -88,9 +84,7 @@ def hdf5_get_item(
                 try:
                     df = pd.read_hdf(
                         store,
-                        key_path,
-                        where=where,
-                        columns=columns
+                        key_path
                     )
                 except KeyError:
                     return None
@@ -100,82 +94,19 @@ def hdf5_get_item(
         return hdf5_get_item(
             fp, 
             key_path, 
-            index_col=index_col,
-            f=f,
-            where=where,
-            columns=columns,
             timeout=timeout,
             retry=retry,
         )
 
-    # Set the index
-    if index_col is not None:
-        df.set_index(
-            index_col,
-            inplace=True
-        )
-    # Apply a function
-    if f is not None:
-        df = f(df)
-
     return df
 
 
-def hdf5_manifest(fp):
-    df = hdf5_get_item(fp, "/manifest")
-    for k in ["R1", "R2", "I1", "I2"]:
-        if k in df:
-            df = df.drop(columns=k)
-    return df.drop_duplicates().set_index("specimen")
-
-def hdf5_richness(fp):
-    return hdf5_get_item(
-        fp,
-        "/summary/all", 
-        index_col="specimen", 
-        f=hdf5_richness_f
-    )
-
-def hdf5_richness_f(df):
-    return df.assign(
-        prop_reads_aligned=df["aligned_reads"] / df["n_reads"]
-    )
-
-def hdf5_cag_summary(fp):
-    return hdf5_get_item(fp, "/annot/cag/all", index_col="CAG", f=hdf5_cag_summary_f)
-
-def hdf5_cag_summary_f(df):
-    return df.assign(
-        size_log10=df["size"].apply(np.log10)
-    )
-
-def hdf5_metrics(fp):
-    return hdf5_get_item(
-        fp,
-        "/summary/experiment", 
-        index_col="variable"
-    )["value"]
-
-def hdf5_distances(fp, metric):
-    return hdf5_get_item(
-        fp,
-        "/distances/{}".format(metric),
-        index_col="specimen"
-    )
-
-def hdf5_corncob(fp):
-    return hdf5_get_item(fp, "/stats/cag/corncob", f=hdf5_corncob_f)
-def hdf5_corncob_f(df):
-    return df.assign(
-        neg_log_pvalue=df["p_value"].apply(np.log10) * -1,
-        neg_log_qvalue=df["q_value"].apply(np.log10) * -1,
-    )
-
 def hdf5_taxonomy(fp):
-    return hdf5_get_item(fp, "/ref/taxonomy", f=hdf5_taxonomy_f)
-def hdf5_taxonomy_f(df):
-    # Format the parent tax ID as an integer
-    return df.apply(
-        lambda c: c.fillna(0).apply(float).apply(
-            int) if c.name in ["parent", "tax_id"] else c,
-    ).set_index("tax_id")
+    return hdf5_get_item(
+        fp, 
+        "/taxonomy"
+    ).apply(
+        lambda c: c.fillna(0).apply(float).apply(int) if c.name in ["parent", "tax_id"] else c,
+    ).set_index(
+        "tax_id"
+    )

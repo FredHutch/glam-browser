@@ -137,7 +137,7 @@ def update_richness_graph(
     
     # Calculate the percent of reads aligned
     plot_richness_df = plot_richness_df.assign(
-        pct_reads_aligned = (plot_richness_df["prop_reads_aligned"] * 100).apply(lambda v: round(v, 2))
+        pct_reads_aligned = (plot_richness_df["prop_reads"] * 100).apply(lambda v: round(v, 2))
     )
 
     # If metadata was selected, add it to the plot
@@ -246,7 +246,7 @@ def update_richness_graph(
 # SINGLE SAMPLE GRAPH #
 #######################
 def plot_sample_vs_cag_size(
-    sample_abund_df,
+    sample_abund,
     sample_name,
     cag_summary_df,
     display_metric,
@@ -255,7 +255,7 @@ def plot_sample_vs_cag_size(
     plot_df = cag_summary_df.reindex(
         columns=["size", "size_log10"]
     ).assign(
-        prop=sample_abund_df[sample_name]
+        prop=sample_abund
     ).query(
         "prop > 0"
     )
@@ -483,29 +483,15 @@ def update_ordination_graph(
         primary_pc = 1
         secondary_pc = 2
 
-    # Make a plot with two panels, one on top of the other, sharing the x-axis
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True
-    )
+    # Set up the figure, which will be populated below
+    fig = go.Figure()
 
     # The plot will depend on whether metadata has been selected
     if metadata == "none":
 
         # No metadata
 
-        # Histogram on the bottom panel
-        fig.add_trace(
-            go.Histogram(
-                x=plot_df[plot_df.columns.values[primary_pc - 1]],
-                hovertemplate="Range: %{x}<br>Count: %{y}<extra></extra>",
-            ),
-            row=2, col=1
-        )
-        fig.update_yaxes(
-            title_text="Number of Specimens",
-            row=2, col=1
-        )
-        # Scatter on the top panel
+        # Scatter plot
         fig.add_trace(
             go.Scatter(
                 x=plot_df[plot_df.columns.values[primary_pc - 1]],
@@ -515,8 +501,7 @@ def update_ordination_graph(
                 hovertemplate="%{id}<extra></extra>",
                 mode="markers",
                 marker_color="blue"
-            ),
-            row=1, col=1
+            )
         )
 
     else:
@@ -528,23 +513,12 @@ def update_ordination_graph(
             metadata
         )
 
-        # Scatterplot or Boxplot on the bottom panel
+        # Limited number of unique metadata values
         if plot_df[metadata].unique().shape[0] <= 5:
 
             # Iterate over each of the metadata groups
             for metadata_label, metadata_plot_df in plot_df.groupby(metadata):
-                # Boxplot on the bottom panel
-                fig.add_trace(
-                    go.Box(
-                        x=metadata_plot_df[
-                            plot_df.columns.values[primary_pc - 1]
-                        ],
-                        name=metadata_label,
-                        marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
-                    ),
-                    row=2, col=1
-                )
-                # Scatter on the top panel
+                # Scatter plot
                 fig.add_trace(
                     go.Scatter(
                         x=metadata_plot_df[
@@ -561,30 +535,12 @@ def update_ordination_graph(
                         hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                         mode="markers",
                         marker_color=metadata_plot_df["METADATA_COLOR"].values[0],
-                    ),
-                    row=1, col=1
+                    )
                 )
 
         else:
-            # Scatter on the bottom panel
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_df[
-                        plot_df.columns.values[primary_pc - 1]
-                    ],
-                    y=plot_df[metadata],
-                    ids=plot_df.index.values,
-                    text=plot_df[metadata].apply(
-                        lambda n: "{}: {}".format(metadata, n)
-                    ),
-                    hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
-                    mode="markers",
-                    marker_color=plot_df["METADATA_COLOR"],
-                ),
-                row=2, col=1
-            )
 
-            # Scatter on the top panel
+            # Scatter plot
             fig.add_trace(
                 go.Scatter(
                     x=plot_df[plot_df.columns.values[primary_pc - 1]],
@@ -596,34 +552,25 @@ def update_ordination_graph(
                     hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                     mode="markers",
                     marker_color=plot_df["METADATA_COLOR"],
-                ),
-                row=1, col=1
+                )
             )
 
         fig.update_yaxes(
             title_text=metadata,
-            row=1, col=1
         )
 
 
     fig.update_xaxes(
         title_text=plot_df.columns.values[primary_pc - 1],
-        row=2, col=1
-    )
-    fig.update_xaxes(
-        title_text=plot_df.columns.values[primary_pc - 1],
-        row=1, col=1
     )
     fig.update_yaxes(
         title_text=plot_df.columns.values[secondary_pc - 1],
-        row=1, col=1
     )
 
     fig.update_layout(
         showlegend=False,
         template="simple_white",
-        height=800,
-        width=600,
+        height=500,
     )
 
     return fig
@@ -687,32 +634,12 @@ def print_anosim(
 def draw_cag_summary_graph_hist(
     cag_summary_df,
     metric_primary,
-    size_range,
-    entropy_range,
-    prevalence_range,
-    abundance_range,
     nbinsx,
     log_scale,
     metric,
 ):
     # Apply the filters
-    plot_df = cag_summary_df.query(
-        "size >= {}".format(10**size_range[0])
-    ).query(
-        "size <= {}".format(10**size_range[1])
-    ).query(
-        "prevalence >= {}".format(prevalence_range[0])
-    ).query(
-        "prevalence <= {}".format(prevalence_range[1])
-    ).query(
-        "mean_abundance >= {}".format(abundance_range[0])
-    ).query(
-        "mean_abundance <= {}".format(abundance_range[1])
-    ).query(
-        "entropy >= {}".format(entropy_range[0])
-    ).query(
-        "entropy <= {}".format(entropy_range[1])
-    ).assign(
+    plot_df = cag_summary_df.assign(
         CAGs = 1
     )
 
@@ -755,87 +682,10 @@ def draw_cag_summary_graph_hist(
     return fig
 
 
-def draw_cag_summary_graph_scatter(
-    cag_summary_df,
-    metric_primary,
-    metric_secondary,
-    size_range,
-    entropy_range,
-    prevalence_range,
-    abundance_range,
-    selected_cag_json,
-):
-    # Apply the filters
-    plot_df = cag_summary_df.query(
-        "size >= {}".format(10**size_range[0])
-    ).query(
-        "size <= {}".format(10**size_range[1])
-    ).query(
-        "prevalence >= {}".format(prevalence_range[0])
-    ).query(
-        "prevalence <= {}".format(prevalence_range[1])
-    ).query(
-        "mean_abundance >= {}".format(abundance_range[0])
-    ).query(
-        "mean_abundance <= {}".format(abundance_range[1])
-    ).query(
-        "entropy >= {}".format(entropy_range[0])
-    ).query(
-        "entropy <= {}".format(entropy_range[1])
-    ).apply(
-        lambda c: c.apply(np.log10) if c.name == "size" else c
-    )
-
-    axis_names = {
-        "CAG": "CAG ID",
-        "size": "Number of Genes (log10)",
-        "mean_abundance": "Mean Abundance",
-        "std_abundance": "Std. Abundance",
-        "prevalence": "Prevalence",
-        "entropy": "Entropy",
-    }
-
-    # Parse the selected CAG data
-    if selected_cag_json is not None:
-        # Set the points which are selected in the scatter plot
-        selectedpoints = np.where(
-            plot_df.index.values == json.loads(selected_cag_json)["id"]
-        )
-    else:
-        selectedpoints = None
-
-    # Draw a scatter plot
-    fig = go.Figure(
-        go.Scattergl(
-            x=plot_df[metric_primary],
-            y=plot_df[metric_secondary],
-            ids=plot_df.index.values,
-            text=plot_df.index.values,
-            marker_color="blue",
-            hovertemplate="CAG %{id}<br>X-value: %{x}<br>Y-value: %{y}<extra></extra>",
-            mode="markers",
-            opacity=0.5,
-            selectedpoints=selectedpoints
-        )
-    )
-
-    # Set the style of the entire plot
-    fig.update_layout(
-        xaxis_title=axis_names[metric_primary],
-        yaxis_title=axis_names[metric_secondary],
-        template="simple_white",
-        showlegend=False,
-        height=400,
-        width=600,
-    )
-
-    return fig
-
-
 ###############
 # CAG HEATMAP #
 ###############
-def draw_cag_heatmap(
+def draw_cag_abundance_heatmap(
     cag_abund_df,
     metadata_selected,
     abundance_metric,
@@ -1215,15 +1065,13 @@ def draw_volcano_graph(
         return go.Figure()
 
     # Filter the corncob_df by CAG size
-    corncob_df = corncob_df.loc[
-        corncob_df["CAG"].isin(
-            cag_summary_df.query(
-                "size >= {}".format(10**cag_size_range[0])
-            ).query(
-                "size <= {}".format(10**cag_size_range[1])
-            ).index.values
-        )
-    ]
+    corncob_df = corncob_df.assign(
+        size = cag_summary_df["size"]
+    ).query(
+        "size >= {}".format(10**cag_size_range[0])
+    ).query(
+        "size <= {}".format(10**cag_size_range[1])
+    )
     
     # If a comparison parameter was selected, plot the p-values against each other
     if comparison_parameter != "coef":
@@ -1235,10 +1083,9 @@ def draw_volcano_graph(
             fdr_on_off,
         )
 
-    # Subset to just this parameter
+    # Subset to the pvalue threshold
+    assert "neg_log_pvalue" in corncob_df.columns.values, corncob_df.columns.values
     plot_df = corncob_df.query(
-        "parameter == '{}'".format(parameter)
-    ).query(
         "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
     )
 
@@ -1299,6 +1146,7 @@ def draw_double_volcano_graph(
         axis_suffix = "q-value (-log10)"
 
     # Subset to these two parameters and pivot to be wide
+    assert "neg_log_pvalue" in corncob_df.columns.values, corncob_df.columns.values
     plot_df = pd.concat([
         corncob_df.query(
             "parameter == '{}'".format(param_name)
