@@ -137,7 +137,7 @@ def update_richness_graph(
     
     # Calculate the percent of reads aligned
     plot_richness_df = plot_richness_df.assign(
-        pct_reads_aligned = (plot_richness_df["prop_reads_aligned"] * 100).apply(lambda v: round(v, 2))
+        pct_reads_aligned = (plot_richness_df["prop_reads"] * 100).apply(lambda v: round(v, 2))
     )
 
     # If metadata was selected, add it to the plot
@@ -246,7 +246,7 @@ def update_richness_graph(
 # SINGLE SAMPLE GRAPH #
 #######################
 def plot_sample_vs_cag_size(
-    sample_abund_df,
+    sample_abund,
     sample_name,
     cag_summary_df,
     display_metric,
@@ -255,7 +255,7 @@ def plot_sample_vs_cag_size(
     plot_df = cag_summary_df.reindex(
         columns=["size", "size_log10"]
     ).assign(
-        prop=sample_abund_df[sample_name]
+        prop=sample_abund
     ).query(
         "prop > 0"
     )
@@ -1215,15 +1215,13 @@ def draw_volcano_graph(
         return go.Figure()
 
     # Filter the corncob_df by CAG size
-    corncob_df = corncob_df.loc[
-        corncob_df["CAG"].isin(
-            cag_summary_df.query(
-                "size >= {}".format(10**cag_size_range[0])
-            ).query(
-                "size <= {}".format(10**cag_size_range[1])
-            ).index.values
-        )
-    ]
+    corncob_df = corncob_df.assign(
+        size = cag_summary_df["size"]
+    ).query(
+        "size >= {}".format(10**cag_size_range[0])
+    ).query(
+        "size <= {}".format(10**cag_size_range[1])
+    )
     
     # If a comparison parameter was selected, plot the p-values against each other
     if comparison_parameter != "coef":
@@ -1235,10 +1233,9 @@ def draw_volcano_graph(
             fdr_on_off,
         )
 
-    # Subset to just this parameter
+    # Subset to the pvalue threshold
+    assert "neg_log_pvalue" in corncob_df.columns.values, corncob_df.columns.values
     plot_df = corncob_df.query(
-        "parameter == '{}'".format(parameter)
-    ).query(
         "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
     )
 
@@ -1299,6 +1296,7 @@ def draw_double_volcano_graph(
         axis_suffix = "q-value (-log10)"
 
     # Subset to these two parameters and pivot to be wide
+    assert "neg_log_pvalue" in corncob_df.columns.values, corncob_df.columns.values
     plot_df = pd.concat([
         corncob_df.query(
             "parameter == '{}'".format(param_name)
