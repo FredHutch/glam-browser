@@ -100,7 +100,7 @@ def parse_gene_annotations(store):
 
     logging.info("Reading in {}".format(key_name))
 
-    df = pd.read_hdf(store, key_name, stop=1000) # TODO remove stop=1000
+    df = pd.read_hdf(store, key_name)
 
     # Trim the `eggNOG_desc` to 100 characters, if present
     df = df.apply(
@@ -240,7 +240,6 @@ def parse_gene_annotation_summaries(store, dat, annotation_columns=["eggNOG_desc
                 summary_df = [
                     dat["/gene_annotations/CAG/CAG{}".format(cag_id)]
                     for cag_id in cag_id_list
-                    if "/gene_annotations/CAG/CAG{}".format(cag_id) in dat # TODO remove line
                 ]
                 if len(summary_df) > 0:
                     summary_df = pd.concat(summary_df)
