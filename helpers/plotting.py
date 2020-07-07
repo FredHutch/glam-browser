@@ -1084,17 +1084,16 @@ def draw_volcano_graph(
         )
 
     # Subset to the pvalue threshold
-    assert "neg_log_pvalue" in corncob_df.columns.values, corncob_df.columns.values
     plot_df = corncob_df.query(
-        "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
+        "neg_log10_pvalue >= {}".format(neg_log_pvalue_min)
     )
 
     if fdr_on_off == "off":
-        plot_y = "neg_log_pvalue"
+        plot_y = "neg_log10_pvalue"
         hovertemplate = "CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}<extra></extra>"
         yaxis_title = "p-value (-log10)"
     else:
-        plot_y = "neg_log_qvalue"
+        plot_y = "neg_log10_qvalue"
         hovertemplate = "CAG %{id}<br>Estimate: %{x}<br>q-value (-log10): %{y}<extra></extra>"
         yaxis_title = "q-value (-log10)"
 
@@ -1137,21 +1136,20 @@ def draw_double_volcano_graph(
 
     # Set the metric to plot
     if fdr_on_off == "off":
-        plot_y = "neg_log_pvalue"
+        plot_y = "neg_log10_pvalue"
         hovertemplate = "CAG %{id}<br>" + comparison_parameter + " p-value (-log10): %{x}<br>" + parameter + " p-value (-log10): %{y}<extra></extra>"
         axis_suffix = "p-value (-log10)"
     else:
-        plot_y = "neg_log_qvalue"
+        plot_y = "neg_log10_qvalue"
         hovertemplate = "CAG %{id}<br>" + comparison_parameter + " q-value (-log10): %{x}<br>" + parameter + " q-value (-log10): %{y}<extra></extra>"
         axis_suffix = "q-value (-log10)"
 
     # Subset to these two parameters and pivot to be wide
-    assert "neg_log_pvalue" in corncob_df.columns.values, corncob_df.columns.values
     plot_df = pd.concat([
         corncob_df.query(
             "parameter == '{}'".format(param_name)
         ).query(
-            "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
+            "neg_log10_pvalue >= {}".format(neg_log_pvalue_min)
         )
         for param_name in [parameter, comparison_parameter]
     ]).pivot_table(
