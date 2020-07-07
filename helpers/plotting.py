@@ -634,32 +634,12 @@ def print_anosim(
 def draw_cag_summary_graph_hist(
     cag_summary_df,
     metric_primary,
-    size_range,
-    entropy_range,
-    prevalence_range,
-    abundance_range,
     nbinsx,
     log_scale,
     metric,
 ):
     # Apply the filters
-    plot_df = cag_summary_df.query(
-        "size >= {}".format(10**size_range[0])
-    ).query(
-        "size <= {}".format(10**size_range[1])
-    ).query(
-        "prevalence >= {}".format(prevalence_range[0])
-    ).query(
-        "prevalence <= {}".format(prevalence_range[1])
-    ).query(
-        "mean_abundance >= {}".format(abundance_range[0])
-    ).query(
-        "mean_abundance <= {}".format(abundance_range[1])
-    ).query(
-        "entropy >= {}".format(entropy_range[0])
-    ).query(
-        "entropy <= {}".format(entropy_range[1])
-    ).assign(
+    plot_df = cag_summary_df.assign(
         CAGs = 1
     )
 
@@ -698,83 +678,6 @@ def draw_cag_summary_graph_hist(
     # Apply the log transform
     if log_scale == "on":
         fig.update_yaxes(type="log")
-
-    return fig
-
-
-def draw_cag_summary_graph_scatter(
-    cag_summary_df,
-    metric_primary,
-    metric_secondary,
-    size_range,
-    entropy_range,
-    prevalence_range,
-    abundance_range,
-    selected_cag_json,
-):
-    # Apply the filters
-    plot_df = cag_summary_df.query(
-        "size >= {}".format(10**size_range[0])
-    ).query(
-        "size <= {}".format(10**size_range[1])
-    ).query(
-        "prevalence >= {}".format(prevalence_range[0])
-    ).query(
-        "prevalence <= {}".format(prevalence_range[1])
-    ).query(
-        "mean_abundance >= {}".format(abundance_range[0])
-    ).query(
-        "mean_abundance <= {}".format(abundance_range[1])
-    ).query(
-        "entropy >= {}".format(entropy_range[0])
-    ).query(
-        "entropy <= {}".format(entropy_range[1])
-    ).apply(
-        lambda c: c.apply(np.log10) if c.name == "size" else c
-    )
-
-    axis_names = {
-        "CAG": "CAG ID",
-        "size": "Number of Genes (log10)",
-        "mean_abundance": "Mean Abundance",
-        "std_abundance": "Std. Abundance",
-        "prevalence": "Prevalence",
-        "entropy": "Entropy",
-    }
-
-    # Parse the selected CAG data
-    if selected_cag_json is not None:
-        # Set the points which are selected in the scatter plot
-        selectedpoints = np.where(
-            plot_df.index.values == json.loads(selected_cag_json)["id"]
-        )
-    else:
-        selectedpoints = None
-
-    # Draw a scatter plot
-    fig = go.Figure(
-        go.Scattergl(
-            x=plot_df[metric_primary],
-            y=plot_df[metric_secondary],
-            ids=plot_df.index.values,
-            text=plot_df.index.values,
-            marker_color="blue",
-            hovertemplate="CAG %{id}<br>X-value: %{x}<br>Y-value: %{y}<extra></extra>",
-            mode="markers",
-            opacity=0.5,
-            selectedpoints=selectedpoints
-        )
-    )
-
-    # Set the style of the entire plot
-    fig.update_layout(
-        xaxis_title=axis_names[metric_primary],
-        yaxis_title=axis_names[metric_secondary],
-        template="simple_white",
-        showlegend=False,
-        height=400,
-        width=600,
-    )
 
     return fig
 

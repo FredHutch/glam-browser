@@ -24,7 +24,6 @@ from helpers.plotting import print_anosim
 from helpers.plotting import plot_sample_vs_cag_size
 from helpers.plotting import plot_samples_pairwise
 from helpers.plotting import draw_cag_summary_graph_hist
-from helpers.plotting import draw_cag_summary_graph_scatter
 from helpers.plotting import draw_cag_heatmap
 from helpers.plotting import draw_volcano_graph
 from helpers.plotting import draw_taxonomy_sunburst
@@ -968,10 +967,6 @@ def ordination_anosim_callback(
     [
         Input("selected-dataset", "children"),
         Input('cag-summary-metric-primary', 'value'),
-        Input({"name": 'cag-summary-size-slider', "type": "cag-size-slider"}, 'value'),
-        Input({"name": 'cag-summary-entropy-slider', "type": "cag-metric-slider", "metric": "entropy"}, 'value'),
-        Input({"name": 'cag-summary-prevalence-slider', "type": "cag-metric-slider", "metric": "prevalence"}, 'value'),
-        Input({"name": 'cag-summary-abundance-slider', "type": "cag-metric-slider", "metric": "mean_abundance"}, 'value'),
         Input('cag-summary-nbinsx-slider', 'value'),
         Input('cag-summary-histogram-log', 'value'),
         Input('cag-summary-histogram-metric', 'value'),
@@ -979,10 +974,6 @@ def ordination_anosim_callback(
 def cag_summary_graph_hist_callback(
     selected_dataset,
     metric_primary,
-    size_range,
-    entropy_range,
-    prevalence_range,
-    abundance_range,
     nbinsx,
     log_scale,
     hist_metric,
@@ -996,67 +987,11 @@ def cag_summary_graph_hist_callback(
         return draw_cag_summary_graph_hist(
             cag_annotations(fp),
             metric_primary,
-            size_range,
-            entropy_range,
-            prevalence_range,
-            abundance_range,
             nbinsx,
             log_scale,
             hist_metric,
         )
 
-@app.callback(
-    Output('cag-summary-graph-scatter', 'figure'),
-    [
-        Input("selected-dataset", "children"),
-        Input('cag-summary-metric-primary', 'value'),
-        Input('cag-summary-metric-secondary', 'value'),
-        Input({"name": 'cag-summary-size-slider', "type": "cag-size-slider"}, 'value'),
-        Input({"name": 'cag-summary-entropy-slider', "type": "cag-metric-slider", "metric": "entropy"}, 'value'),
-        Input({"name": 'cag-summary-prevalence-slider', "type": "cag-metric-slider", "metric": "prevalence"}, 'value'),
-        Input({"name": 'cag-summary-abundance-slider', "type": "cag-metric-slider", "metric": "mean_abundance"}, 'value'),
-        Input('global-selected-cag', 'children'),
-    ])
-def cag_summary_graph_scatter_callback(
-    selected_dataset,
-    metric_primary,
-    metric_secondary,
-    size_range,
-    entropy_range,
-    prevalence_range,
-    abundance_range,
-    selected_cag_json,
-):
-    # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
-
-    if fp is None:
-        return empty_figure()
-    else:
-        return draw_cag_summary_graph_scatter(
-            cag_annotations(fp),
-            metric_primary,
-            metric_secondary,
-            size_range,
-            entropy_range,
-            prevalence_range,
-            abundance_range,
-            selected_cag_json,
-        )
-
-@app.callback(
-    Output('cag-summary-selected-cag', 'children'),
-    [
-        Input('cag-summary-graph-scatter', 'clickData'),
-    ])
-def cag_summary_save_click_data(clickData):
-    """Only save the click data when a point in a scatter has been selected"""
-    if clickData is not None:
-        for point in clickData["points"]:
-            if "id" in point:
-                # Save the time of the event
-                point["time"] = time()
-                return json.dumps(point, indent=2)
 ################################
 # / CAG SUMMARY CARD CALLBACKS #
 ################################

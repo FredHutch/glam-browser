@@ -346,74 +346,32 @@ def cag_summary_card():
         [
             dbc.Row([
                 dbc.Col(
+                    dbc.Spinner(
+                        dcc.Graph(
+                            id='cag-summary-graph-hist'
+                        )
+                    ),
+                    width = 8,
+                    align = "center"
+                ),
+                dbc.Col(
                     cag_metric_dropdown(
                         "cag-summary-metric-primary",
                         default_value="size",
-                        label_text="Primary Metric (x-axis)",
-                    ) + cag_metric_dropdown(
-                        "cag-summary-metric-secondary",
-                        default_value="entropy",
-                        label_text="Secondary Metric (y-axis)",
-                    ),
-                    width = 4,
-                    align = "center"
-                ),
-                dbc.Col(
-                    cag_size_slider(
-                        "cag-summary-size-slider"
-                    ) + cag_metric_slider(
-                        "cag-summary-entropy-slider",
-                        "entropy",
-                        "CAG Entropy Filter",
-                    ) ,
-                    width = 4,
-                    align = "center"
-                ),
-                dbc.Col(
-                    cag_metric_slider(
-                        "cag-summary-prevalence-slider",
-                        "prevalence",
-                        "CAG Prevalence Filter"
-                    ) + cag_metric_slider(
-                        "cag-summary-abundance-slider",
-                        "mean_abundance",
-                        "CAG Abundance Filter",
-                    ),
-                    width = 4,
-                    align = "center"
-                )
-            ]),
-            dbc.Row([
-                dbc.Col(
-                    [
-                        dbc.Spinner(
-                            dcc.Graph(
-                                id='cag-summary-graph-scatter'
-                            )
-                        ),
-                    ],
-                    width=12,
-                    align="center"
-                )
-            ]),
-            dbc.Row([
-                dbc.Col(
-                    [
+                        label_text="Metric",
+                    ) + [
                         html.Label("Histogram Display"),
                         dcc.Dropdown(
                             id='cag-summary-histogram-metric',
                             options=[
-                                {'label': 'Number of genes', 'value': 'genes'},
-                                {'label': 'Number of CAGs', 'value': 'cags'},
+                                {'label': 'Number of genes',
+                                    'value': 'genes'},
+                                {'label': 'Number of CAGs',
+                                    'value': 'cags'},
                             ],
                             value="genes",
-                        )
-                    ],
-                    width = 4,
-                    align = "center"
-                ),
-                dbc.Col(
-                    [
+                        ),
+                        html.Br(),
                         html.Label("Histogram Log Scale"),
                         dcc.Dropdown(
                             id='cag-summary-histogram-log',
@@ -424,32 +382,15 @@ def cag_summary_card():
                             value="on",
                         ),
                         html.Div(id='global-selected-cag',
-                                style={"display": "none"}),
+                                    style={"display": "none"}),
                         html.Div(id='cag-summary-selected-cag',
-                                style={"display": "none"}),
-                    ],
-                    width = 4,
-                    align = "center"
-                ),
-                dbc.Col(
-                    nbins_slider(
+                                    style={"display": "none"}),
+                        html.Br()
+                    ] + nbins_slider(
                         "cag-summary-nbinsx-slider"
                     ),
-                    width=4,
-                    align="center"
-                )
-            ]),
-            dbc.Row([
-                dbc.Col(
-                    [
-                        dbc.Spinner(
-                            dcc.Graph(
-                                id='cag-summary-graph-hist'
-                            )
-                        ),
-                    ],
-                    width=12,
-                    align="center"
+                    width = 4,
+                    align = "center"
                 )
             ])
         ],
