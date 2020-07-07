@@ -233,7 +233,7 @@ def enrichments(fp, parameter, annotation):
 def gene_annotations_by_cag(fp, cag_id):
     return hdf5_get_item(
         fp,
-        "/gene_annotations/CAG/{}".format(cag_id)
+        "/gene_annotations/CAG/CAG{}".format(cag_id)
     )
 
 @cache.memoize()
