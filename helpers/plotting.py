@@ -685,7 +685,7 @@ def draw_cag_summary_graph_hist(
 ###############
 # CAG HEATMAP #
 ###############
-def draw_cag_heatmap(
+def draw_cag_abundance_heatmap(
     cag_abund_df,
     metadata_selected,
     abundance_metric,

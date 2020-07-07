@@ -12,7 +12,7 @@ from helpers.layout import richness_card
 from helpers.layout import single_sample_card
 from helpers.layout import ordination_card
 from helpers.layout import cag_summary_card
-from helpers.layout import cag_heatmap_card
+from helpers.layout import cag_abundance_heatmap_card
 from helpers.layout import volcano_card
 from helpers.layout import single_cag_card
 from helpers.layout import manifest_card
@@ -24,7 +24,7 @@ from helpers.plotting import print_anosim
 from helpers.plotting import plot_sample_vs_cag_size
 from helpers.plotting import plot_samples_pairwise
 from helpers.plotting import draw_cag_summary_graph_hist
-from helpers.plotting import draw_cag_heatmap
+from helpers.plotting import draw_cag_abundance_heatmap
 from helpers.plotting import draw_volcano_graph
 from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
@@ -347,7 +347,7 @@ app.layout = html.Div(
                 single_sample_card(),
                 ordination_card(),
                 cag_summary_card(),
-                cag_heatmap_card(),
+                cag_abundance_heatmap_card(),
                 volcano_card(),
                 single_cag_card(),
                 manifest_card(),
@@ -997,21 +997,21 @@ def cag_summary_graph_hist_callback(
 ################################
 
 
-#########################
-# CAG HEATMAP CALLBACKS #
-#########################
+###################################
+# CAG ABUNDANCE HEATMAP CALLBACKS #
+###################################
 @app.callback(
-    Output('cag-heatmap-graph', 'figure'),
+    Output('cag-abundance-heatmap-graph', 'figure'),
     [
-        Input('cag-heatmap-multiselector', 'value'),
-        Input('cag-heatmap-metadata-dropdown', 'value'),
-        Input('cag-heatmap-abundance-metric', 'value'),
-        Input('cag-heatmap-cluster', 'value'),
-        Input('cag-heatmap-taxa-rank', 'value'),
+        Input('cag-abundance-heatmap-multiselector', 'value'),
+        Input('cag-abundance-heatmap-metadata-dropdown', 'value'),
+        Input('cag-abundance-heatmap-abundance-metric', 'value'),
+        Input('cag-abundance-heatmap-cluster', 'value'),
+        Input('cag-abundance-heatmap-taxa-rank', 'value'),
         Input('manifest-filtered', 'children'),
     ],
     [State("selected-dataset", "children")])
-def heatmap_graph_callback(
+def abundance_heatmap_graph_callback(
     cags_selected,
     metadata_selected,
     abundance_metric,
@@ -1044,7 +1044,7 @@ def heatmap_graph_callback(
         cag_tax_dict = {}
 
     # Draw the figure
-    return draw_cag_heatmap(
+    return draw_cag_abundance_heatmap(
         cag_abund_df,
         metadata_selected,
         abundance_metric,
@@ -1057,7 +1057,7 @@ def heatmap_graph_callback(
 
 @app.callback(
     [
-        Output('cag-heatmap-metadata-dropdown', value)
+        Output('cag-abundance-heatmap-metadata-dropdown', value)
         for value in ['options', 'value']
     ],
     [
@@ -1114,11 +1114,11 @@ def get_cag_multiselector_options(
     return options
 
 @app.callback(
-    Output("cag-heatmap-multiselector", 'options'),
+    Output("cag-abundance-heatmap-multiselector", 'options'),
     [
         Input("selected-dataset", "children"),
     ])
-def update_cag_heatmap_multiselector_options(
+def update_cag_abundance_heatmap_multiselector_options(
     selected_dataset
 ):
     """When a new dataset is selected, fill in the names of all the CAGs as options."""
@@ -1126,28 +1126,28 @@ def update_cag_heatmap_multiselector_options(
 
 @app.callback(
     [
-        Output("cag-heatmap-selected-dataset", "children"),
-        Output('cag-heatmap-multiselector', 'value'),
+        Output("cag-abundance-heatmap-selected-dataset", "children"),
+        Output('cag-abundance-heatmap-multiselector', 'value'),
     ],
     [
         Input("selected-dataset", "children"),
         Input('global-selected-cag', 'children'),
     ],
     [
-        State("cag-heatmap-selected-dataset", "children"),
-        State("cag-heatmap-multiselector", "value"),
+        State("cag-abundance-heatmap-selected-dataset", "children"),
+        State("cag-abundance-heatmap-multiselector", "value"),
     ])
 def update_heatmap_cag_dropdown_value(
     selected_dataset,
     clicked_cag_json,
-    cag_heatmap_selected_dataset,
+    cag_abundance_heatmap_selected_dataset,
     cags_in_dropdown,
 ):
     # The logic for this callback is a bit involved
     # If a new dataset has been selected, we want to clear the selected values
     # However, if a new CAG has been clicked (global-selected-cag), then add that to the list
 
-    # At the same time, we need to update cag-heatmap-selected-dataset to figure out
+    # At the same time, we need to update cag-abundance-heatmap-selected-dataset to figure out
     # whether selected-dataset has changed or not
 
     # If a new dataset is selected, remove all selected values
@@ -1155,12 +1155,12 @@ def update_heatmap_cag_dropdown_value(
         selected_dataset = selected_dataset[0]
     selected_dataset = int(selected_dataset)
 
-    if isinstance(cag_heatmap_selected_dataset, list):
-        cag_heatmap_selected_dataset = cag_heatmap_selected_dataset[0]
-    cag_heatmap_selected_dataset = int(cag_heatmap_selected_dataset)
+    if isinstance(cag_abundance_heatmap_selected_dataset, list):
+        cag_abundance_heatmap_selected_dataset = cag_abundance_heatmap_selected_dataset[0]
+    cag_abundance_heatmap_selected_dataset = int(cag_abundance_heatmap_selected_dataset)
 
     # A new dataset has been selected
-    if cag_heatmap_selected_dataset != selected_dataset:
+    if cag_abundance_heatmap_selected_dataset != selected_dataset:
         
         # Get the path to the selected dataset
         fp = parse_fp([selected_dataset])

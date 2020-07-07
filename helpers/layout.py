@@ -421,10 +421,10 @@ Note: Click on the camera icon at the top of this plot (or any on this page) to 
 ######################
 
 
-####################
-# CAG HEATMAP CARD #
-####################
-def cag_heatmap_card():
+##############################
+# CAG ABUNDANCE HEATMAP CARD #
+##############################
+def cag_abundance_heatmap_card():
     return card_wrapper(
         "CAG Abundance Heatmap",
         [
@@ -433,7 +433,7 @@ def cag_heatmap_card():
                     [
                         html.Label("Display CAGs"),
                         dcc.Dropdown(
-                            id="cag-heatmap-multiselector",
+                            id="cag-abundance-heatmap-multiselector",
                             options=[],
                             value=[],
                             multi=True
@@ -446,20 +446,20 @@ def cag_heatmap_card():
                     [
                         html.Label("Display Metadata"),
                         dcc.Dropdown(
-                            id="cag-heatmap-metadata-dropdown",
+                            id="cag-abundance-heatmap-metadata-dropdown",
                             options=[],
                             value=[],
                             multi=True
                         ),
                         html.Div(
                             children=[-1],
-                            id="cag-heatmap-selected-dataset",
+                            id="cag-abundance-heatmap-selected-dataset",
                             style={"display": "none"}
                         ),
                         html.Br(),
                         html.Label("Group Specimens"),
                         dcc.Dropdown(
-                            id='cag-heatmap-cluster',
+                            id='cag-abundance-heatmap-cluster',
                             options=[
                                 {'label': 'By Metadata', 'value': 'metadata'},
                                 {'label': 'By CAG Abundances', 'value': 'cag'},
@@ -474,7 +474,7 @@ def cag_heatmap_card():
                     [
                         html.Label("Abundance Metric"),
                         dcc.Dropdown(
-                            id='cag-heatmap-abundance-metric',
+                            id='cag-abundance-heatmap-abundance-metric',
                             options=[
                                 {'label': 'Rel. Abund. (log10)', 'value': 'log10'},
                                 {'label': 'Rel. Abund. (log10) (z-score)', 'value': 'zscore'},
@@ -485,7 +485,7 @@ def cag_heatmap_card():
                         html.Br(),
                         html.Label("Show Taxonomy"),
                         dcc.Dropdown(
-                            id='cag-heatmap-taxa-rank',
+                            id='cag-abundance-heatmap-taxa-rank',
                             options=[
                                 {'label': 'None', 'value': 'none'},
                                 {'label': 'Species', 'value': 'species'},
@@ -504,7 +504,7 @@ def cag_heatmap_card():
             dbc.Row([
                 dbc.Col(
                     dbc.Spinner(dcc.Graph(
-                        id='cag-heatmap-graph'
+                        id='cag-abundance-heatmap-graph'
                     )),
                     width=12,
                     align="center"
