@@ -114,7 +114,7 @@ def parse_gene_annotations(store):
         yield cag_id, gene_annotation_value_counts(cag_df)
 
 
-def gene_annotation_value_counts(cag_df):
+def gene_annotation_value_counts(cag_df, annotation_columns=["eggNOG_desc", "tax_id"]):
     """Count up the unique annotations for a given CAG."""
     return pd.DataFrame([
         {
@@ -122,8 +122,15 @@ def gene_annotation_value_counts(cag_df):
             "value": value,
             "count": count
         }
-        for col_name in ["tax_id", "eggNOG_desc"]
+        for col_name in annotation_columns
+        if col_name in cag_df.columns
         for value, count in cag_df[col_name].dropna().value_counts().items()
+    ] + [
+        {
+            "annotation": "size",
+            "value": "n_genes",
+            "count": cag_df.shape[0]
+        }
     ])
 
 def parse_cag_abundances(store):
@@ -252,31 +259,16 @@ def parse_gene_annotation_summaries(store, dat, annotation_columns=["eggNOG_desc
 
                 # Get the annotations for all of the genes in these CAGs
                 summary_df = [
-                    dat["/gene_annotations/CAG/CAG{}".format(cag_id)]
+                    dat[
+                        "/gene_annotations/CAG/CAG{}".format(cag_id)
+                    ].assign(
+                        CAG = cag_id
+                    )
                     for cag_id in cag_id_list
                 ]
                 if len(summary_df) > 0:
-                    summary_df = pd.concat(summary_df)
 
-                    # If this group of CAGs has any annotations, save it
-                    if any([
-                        k in summary_df.columns.values and summary_df[k].dropna().shape[0] > 0 
-                        for k in annotation_columns
-                    ]):
-
-                        # Compute summary metrics by CAG
-                        yield parameter_name, pd.DataFrame([
-                            {
-                                "CAG": cag_id,
-                                "annotation": col_name,
-                                "key": label,
-                                "count": label_df.shape[0]
-                            }
-                            for cag_id, cag_df in summary_df.groupby("CAG")
-                            for col_name in annotation_columns
-                            if col_name in cag_df.columns.values
-                            for label, label_df in cag_df.groupby(col_name)
-                        ])
+                    yield parameter_name, pd.concat(summary_df)
 
 
 def get_cags_to_include(dat, top_n=10000):
@@ -472,6 +464,10 @@ def index_geneshot_results(input_fp, output_fp):
             # Store the actual betta results
             dat["/enrichments/{}/{}".format(parameter, annotation)] = df
 
+        # Read in the gene annotations
+        for cag_id, cag_annotations in parse_gene_annotations(store):
+            dat["/gene_annotations/CAG/CAG{}".format(cag_id)] = cag_annotations
+
         # If we have corncob results, make aggregate tables for each parameter
         # which include all CAGs with FDR alpha=0.01 and summarize the number
         # of genes from each CAG which have a given annotation
@@ -494,11 +490,6 @@ def index_geneshot_results(input_fp, output_fp):
         len(cags_to_include),
         dat["/cag_abundances"].shape[0]
     ))
-
-    # Add the gene annotations for those selected CAGs
-    for cag_id, cag_annotations in parse_gene_annotations(store):
-        if cag_id in cags_to_include:
-            dat["/gene_annotations/CAG/CAG{}".format(cag_id)] = cag_annotations
 
     # Now actually subset the information to this set of CAGs
     filter_data_to_selected_cags(dat, cags_to_include)
