@@ -777,6 +777,40 @@ def manifest_card():
                                 multi=True,
                             ),
                             html.Br(),
+                            dbc.Button("Bulk Select", id="manifest-table-bulk-select-open"),
+                            dbc.Modal(
+                                [
+                                    dbc.ModalHeader("Filter Specimens by Metadata"),
+                                    dbc.ModalBody(
+                                        [
+                                            dcc.Markdown(
+"""Enter a formula to filter specimens by the metadata in your table.
+
+To select all samples, simply leave the formula empty.
+
+If the formula cannot be parsed or if no samples pass the filter, then all samples will be selected.
+"""
+                                            ),
+                                            dcc.Input(
+                                                id="manifest-table-bulk-select-formula",
+                                                placeholder="e.g., day > 1 and participant != 'Jerry'",
+                                                type="text",
+                                                debounce=True,
+                                                size='50',
+                                            )
+                                        ]
+                                    ),
+                                    dbc.ModalFooter(
+                                        [
+                                            dbc.Button("Apply", id="manifest-table-bulk-select-apply"),
+                                        ]
+                                    ),
+                                ],
+                                id="manifest-table-bulk-select-modal",
+                                centered=True,
+                                keyboard=False,
+                                backdrop="static"
+                            ),
                         ]
                     ),
                     dbc.Col(

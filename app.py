@@ -1592,8 +1592,11 @@ def save_global_selected_cag(cag_summary_click, volcano_click):
     ],
     [
         Input("selected-dataset", "children"),
-    ])
-def update_manifest_table(selected_dataset):
+        Input("manifest-table-bulk-select-apply", "n_clicks")
+    ],
+    [State("manifest-table-bulk-select-formula", "value")]
+)
+def update_manifest_table(selected_dataset, bulk_select_button, bulk_select_formula):
     """Fill in the values of the manifest with the selected dataset."""
 
     # Get the path to the selected dataset
@@ -1625,7 +1628,19 @@ def update_manifest_table(selected_dataset):
 
     data = manifest_df.to_dict('records')
 
+    # By default, select all of the rows
     selected_rows = np.arange(0, manifest_df.shape[0])
+
+    # If the user has used the bulk select feature, apply the provided formula
+    bulk_selected_rows = []
+    if bulk_select_formula is not None and len(bulk_select_formula) > 0:
+        try:
+            bulk_selected_rows = manifest_df.query(bulk_select_formula).index.values
+        except:
+            pass
+    # Only use the results of the formula if some samples were selected
+    if len(bulk_selected_rows) > 0:
+        selected_rows = bulk_selected_rows
 
     options = [
         {
@@ -1698,6 +1713,35 @@ def manifest_update_columns_selected(selected_dataset, selected_columns):
         for n in manifest(fp).columns.values
         if n not in selected_columns
     ]
+
+@app.callback(
+    [
+        Output('manifest-table-bulk-select-open', 'n_clicks'),
+        Output('manifest-table-bulk-select-apply', 'n_clicks'),
+    ],
+    [
+        Input("selected-dataset", "children"),
+    ])
+def manifest_clear_formula(selected_dataset):
+    """Reset the buttons when the dataset changes."""
+    return 0, 0
+
+@app.callback(
+    Output("manifest-table-bulk-select-modal", "is_open"),
+    [
+        Input("manifest-table-bulk-select-open", "n_clicks"),
+        Input("manifest-table-bulk-select-apply", "n_clicks"),
+    ]
+)
+def manifest_bulk_select_toggle_modal(open_n, apply_n):
+    if open_n is None:
+        return False
+
+    dismiss_clicks = 0
+    if apply_n is not None:
+        dismiss_clicks += apply_n
+    
+    return open_n > dismiss_clicks
 ########################
 # / MANIFEST CALLBACKS #
 ########################
