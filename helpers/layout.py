@@ -495,12 +495,11 @@ def cag_abundance_heatmap_card():
                             value="log10",
                         ),
                         html.Br(),
-                        html.Label("Annotate CAGs By"),
+                        html.Label("Taxonomic Annotation"),
                         dcc.Dropdown(
                             id='cag-abundance-heatmap-annotate-cags-by',
                             options=[
                                 {'label': 'None', 'value': 'none'},
-                                {'label': 'Estimated Coefficient', 'value': 'estimate'},
                                 {'label': 'Species', 'value': 'species'},
                                 {'label': 'Genus', 'value': 'genus'},
                                 {'label': 'Family', 'value': 'family'},

@@ -1109,7 +1109,7 @@ def abundance_heatmap_graph_callback(
     metadata_selected,
     abundance_metric,
     cluster_by,
-    annotate_cags_by,
+    taxa_rank,
     manifest_json,
     selected_dataset,
 ):
@@ -1132,31 +1132,29 @@ def abundance_heatmap_graph_callback(
         index=cags_selected
     ).T
 
-    # Get the annotations for the selected CAGs
-    if annotate_cags_by != "none":
-        # If we are going to annotate by parameter, get those values
-        if annotate_cags_by == "estimate":
-            # Look to `select_cags_by` to know which parameter to plot
-            if select_cags_by.startswith("parameter-"):
-                cag_annot_dict = cag_associations(
-                    fp, 
-                    select_cags_by.replace("parameter-", "")
-                ).reindex(
-                    index=cags_selected
-                ).to_dict(
-                    orient="index" # Index by CAG ID, then column name
-                )
-            else:
-                # If no parameter has been selected in `select_cags_by`, skip this
-                cag_annot_dict = {}
-        else:
-            # Otherwise, get the taxonomic IDs for the CAGs
-            cag_annot_dict = {
-                cag_id: cag_taxonomy(fp, cag_id)
-                for cag_id in cags_selected
-            }
+    # If we are selecting CAGs by their association with a given parameter,
+    # we will then plot the estimated coefficient with that parameter
+    if select_cags_by.startswith("parameter-"):
+        cag_estimate_dict = cag_associations(
+            fp, 
+            select_cags_by.replace("parameter-", "")
+        ).reindex(
+            index=cags_selected
+        ).to_dict(
+            orient="index" # Index by CAG ID, then column name
+        )
     else:
-        cag_annot_dict = {}
+        cag_estimate_dict = None
+
+    # Get the taxonomic annotations for the selected CAGs
+    if taxa_rank != "none":
+        # Otherwise, get the taxonomic IDs for the CAGs
+        cag_taxa_dict = {
+            cag_id: cag_taxonomy(fp, cag_id)
+            for cag_id in cags_selected
+        }
+    else:
+        cag_taxa_dict = {}
 
     # Draw the figure
     return draw_cag_abundance_heatmap(
@@ -1164,10 +1162,11 @@ def abundance_heatmap_graph_callback(
         metadata_selected,
         abundance_metric,
         cluster_by,
-        annotate_cags_by,
+        taxa_rank,
         manifest_json,
         manifest(fp),
-        cag_annot_dict,
+        cag_taxa_dict,
+        cag_estimate_dict,
     )
 
 @app.callback(
