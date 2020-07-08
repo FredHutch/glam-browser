@@ -855,6 +855,8 @@ def draw_cag_abund_heatmap_with_tax(
     fig.add_trace(
         draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank), row=1, col=2
     )
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
 
     return fig
 
@@ -943,6 +945,8 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
     fig.add_trace(
         draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank), row=2, col=2
     )
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
 
     # Plot the metadata on the top-left
     fig.add_trace(
