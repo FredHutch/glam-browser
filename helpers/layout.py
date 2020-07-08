@@ -431,14 +431,26 @@ def cag_abundance_heatmap_card():
             dbc.Row([
                 dbc.Col(
                     [
-                        html.Label("Display CAGs"),
+                        html.Label("Display Top CAGs By"),
                         dcc.Dropdown(
-                            id="cag-abundance-heatmap-multiselector",
-                            options=[],
-                            value=[],
-                            multi=True
-                        )
-                    ],
+                            id="cag-abundance-heatmap-select-cags-by",
+                            options=[
+                                {"label": "Average Relative Abundance", "value": "abundance"},
+                                {"label": "Size (Number of Genes)", "value": "size"},
+                            ],
+                            value="abundance"
+                        ),
+                        html.Br()
+                    ] + basic_slider(
+                        "cag-abundance-heatmap-ncags",
+                        "Number of CAGs to Display",
+                        min_value=5,
+                        max_value=50,
+                        default_value=10,
+                        marks=[5, 10, 25, 50]
+                    ) + cag_size_slider(
+                        "cag-abundance-heatmap-size-range"
+                    ),
                     width=4,
                     align="center",
                 ),

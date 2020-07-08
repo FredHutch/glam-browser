@@ -1001,9 +1001,82 @@ def cag_summary_graph_hist_callback(
 # CAG ABUNDANCE HEATMAP CALLBACKS #
 ###################################
 @app.callback(
+    [
+        Output('cag-abundance-heatmap-select-cags-by', 'options'),
+        Output('cag-abundance-heatmap-select-cags-by', 'value'),
+    ],
+    [
+        Input("selected-dataset", "children"),
+    ])
+def abundance_heatmap_graph_callback(selected_dataset):
+    """Add the corncob parameters to the CAG abundance heatmap options."""
+
+    # Set the base options
+    options = [
+        {"label": "Average Relative Abundance", "value": "abundance"},
+        {"label": "Size (Number of Genes)", "value": "size"}
+    ]
+
+    # Get the path to the selected dataset
+    fp = parse_fp(selected_dataset)
+
+    if fp is None:
+        # Return the base options if no dataset is selected
+        return options, "abundance"
+    else:
+        # TODO Add the default parameter from the manifest, if specified
+        # Add the parameters
+        return options + [
+            {"label": parameter, "value": "parameter-{}".format(parameter)}
+            for parameter in valid_parameters(fp)
+        ], "abundance"
+
+
+def get_cags_selected_by_criterion(fp, select_cags_by, n_cags, cag_size_range):
+    """Function to select the top N CAGs based on a particular criterion."""
+    # Either select based on a parameter, or based on some CAG annotation metric
+
+    if select_cags_by.startswith("parameter-"):
+        # Parse the parameter name from the value
+        parameter = select_cags_by.replace("parameter-", "")
+        assert parameter in valid_parameters(fp), \
+            "Selecting CAGs by {}, but no parameter found".format(select_cags_by)
+
+        # Get the results for this particular parameter
+        ranked_df = cag_associations(
+            fp, 
+            parameter
+        ).assign(
+            size_log10 = cag_annotations(fp)["size_log10"]
+        ).sort_values(
+            by="abs_wald",
+            ascending=False,
+        )
+    else:
+        # Selecting either based on abundance or size
+        assert select_cags_by in ["abundance", "size"], select_cags_by
+
+        ranked_df = cag_annotations(fp).sort_values(
+            by="mean_abundance" if select_cags_by == "abundance" else "size",
+            ascending=False
+        )
+
+    # Either way, return the set of CAGs in the size range
+    return ranked_df.query(
+        "size_log10 >= {}".format(cag_size_range[0])
+    ).query(
+        "size_log10 <= {}".format(cag_size_range[1])
+    ).head(
+        n_cags
+    ).index.values
+
+
+@app.callback(
     Output('cag-abundance-heatmap-graph', 'figure'),
     [
-        Input('cag-abundance-heatmap-multiselector', 'value'),
+        Input('cag-abundance-heatmap-select-cags-by', 'value'),
+        Input('cag-abundance-heatmap-ncags', 'value'),
+        Input({'name': 'cag-abundance-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
         Input('cag-abundance-heatmap-metadata-dropdown', 'value'),
         Input('cag-abundance-heatmap-abundance-metric', 'value'),
         Input('cag-abundance-heatmap-cluster', 'value'),
@@ -1012,7 +1085,9 @@ def cag_summary_graph_hist_callback(
     ],
     [State("selected-dataset", "children")])
 def abundance_heatmap_graph_callback(
-    cags_selected,
+    select_cags_by,
+    n_cags,
+    cag_size_range,
     metadata_selected,
     abundance_metric,
     cluster_by,
@@ -1025,10 +1100,15 @@ def abundance_heatmap_graph_callback(
 
     if fp is None:
         return empty_figure()
-    
-    if len(cags_selected) == 0:
-        return empty_figure()
 
+    # Get the top CAGs selected by this criterion
+    cags_selected = get_cags_selected_by_criterion(
+        fp,
+        select_cags_by, 
+        n_cags,
+        cag_size_range,
+    )
+    
     # Get the abundance of the selected CAGs
     cag_abund_df = cag_abundances(fp).reindex(
         index=cags_selected
@@ -1112,78 +1192,6 @@ def get_cag_multiselector_options(
         ]
 
     return options
-
-@app.callback(
-    Output("cag-abundance-heatmap-multiselector", 'options'),
-    [
-        Input("selected-dataset", "children"),
-    ])
-def update_cag_abundance_heatmap_multiselector_options(
-    selected_dataset
-):
-    """When a new dataset is selected, fill in the names of all the CAGs as options."""
-    return get_cag_multiselector_options(selected_dataset)
-
-@app.callback(
-    [
-        Output("cag-abundance-heatmap-selected-dataset", "children"),
-        Output('cag-abundance-heatmap-multiselector', 'value'),
-    ],
-    [
-        Input("selected-dataset", "children"),
-        Input('global-selected-cag', 'children'),
-    ],
-    [
-        State("cag-abundance-heatmap-selected-dataset", "children"),
-        State("cag-abundance-heatmap-multiselector", "value"),
-    ])
-def update_heatmap_cag_dropdown_value(
-    selected_dataset,
-    clicked_cag_json,
-    cag_abundance_heatmap_selected_dataset,
-    cags_in_dropdown,
-):
-    # The logic for this callback is a bit involved
-    # If a new dataset has been selected, we want to clear the selected values
-    # However, if a new CAG has been clicked (global-selected-cag), then add that to the list
-
-    # At the same time, we need to update cag-abundance-heatmap-selected-dataset to figure out
-    # whether selected-dataset has changed or not
-
-    # If a new dataset is selected, remove all selected values
-    if isinstance(selected_dataset, list):
-        selected_dataset = selected_dataset[0]
-    selected_dataset = int(selected_dataset)
-
-    if isinstance(cag_abundance_heatmap_selected_dataset, list):
-        cag_abundance_heatmap_selected_dataset = cag_abundance_heatmap_selected_dataset[0]
-    cag_abundance_heatmap_selected_dataset = int(cag_abundance_heatmap_selected_dataset)
-
-    # A new dataset has been selected
-    if cag_abundance_heatmap_selected_dataset != selected_dataset:
-        
-        # Get the path to the selected dataset
-        fp = parse_fp([selected_dataset])
-
-        # Pick the top five CAGs to display by mean abundance
-        top_five_cags = cag_annotations(fp)["mean_abundance"].sort_values(
-            ascending=False
-        ).index.values[:5]
-
-        # With a new dataset, select the first five CAGs
-        return [selected_dataset], top_five_cags
-
-    else:
-        # Reaching this point in the function, a new dataset has _not_ been selected
-        # That means that a new CAG has been clicked on somewhere in the display
-        if clicked_cag_json is not None:
-            # Add the clicked point to the list of selected CAGs in the heatmap
-            cags_in_dropdown.append(
-                json.loads(clicked_cag_json)["id"]
-            )
-        return [selected_dataset], cags_in_dropdown
-
-
 ###########################
 # / CAG HEATMAP CALLBACKS #
 ###########################
