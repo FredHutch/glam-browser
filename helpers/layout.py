@@ -473,10 +473,10 @@ def cag_abundance_heatmap_card():
                         dcc.Dropdown(
                             id='cag-abundance-heatmap-cluster',
                             options=[
-                                {'label': 'By Metadata', 'value': 'metadata'},
                                 {'label': 'By CAG Abundances', 'value': 'cag'},
+                                {'label': 'By Metadata', 'value': 'metadata'},
                             ],
-                            value="metadata",
+                            value="cag",
                         ),
                     ],
                     width=4,
@@ -495,11 +495,12 @@ def cag_abundance_heatmap_card():
                             value="log10",
                         ),
                         html.Br(),
-                        html.Label("Show Taxonomy"),
+                        html.Label("Annotate CAGs By"),
                         dcc.Dropdown(
-                            id='cag-abundance-heatmap-taxa-rank',
+                            id='cag-abundance-heatmap-annotate-cags-by',
                             options=[
                                 {'label': 'None', 'value': 'none'},
+                                {'label': 'Estimated Coefficient', 'value': 'estimate'},
                                 {'label': 'Species', 'value': 'species'},
                                 {'label': 'Genus', 'value': 'genus'},
                                 {'label': 'Family', 'value': 'family'},

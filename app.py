@@ -285,7 +285,7 @@ def valid_enrichments(fp):
     )["value"].tolist()
 
 @cache.memoize()
-def cag_taxonomy(cag_id, fp):
+def cag_taxonomy(fp, cag_id):
     # Skip if there is no taxonomy
     taxonomy_df = taxonomy(fp)
     if taxonomy_df is None:
@@ -298,8 +298,26 @@ def cag_taxonomy(cag_id, fp):
     if cag_df is None:
         return None
 
+    # Subset down to just the tax IDs
+    cag_taxids = cag_df.query(
+        "annotation == 'tax_id'"
+    )
+
+    # Skip if there are no taxonomic assignments for this CAG
+    if cag_taxids.shape[0] == 0:
+        return None
+
+    # Format as a vector of value counts
+    cag_taxids = cag_taxids.reindex(
+        columns=["value", "count"]
+    ).applymap(
+        int
+    ).set_index(
+        "value"
+    )["count"]
+
     # Format the DataFrame as needed to make a go.Sunburst
-    return make_cag_tax_df(cag_df["tax_id"], taxonomy_df)
+    return make_cag_tax_df(cag_taxids, taxonomy_df)
 ######################
 # PLOTTING FUNCTIONS #
 ######################
@@ -1008,8 +1026,8 @@ def cag_summary_graph_hist_callback(
     [
         Input("selected-dataset", "children"),
     ])
-def abundance_heatmap_graph_callback(selected_dataset):
-    """Add the corncob parameters to the CAG abundance heatmap options."""
+def abundance_heatmap_graph_select_cags_callback(selected_dataset):
+    """Add the corncob parameters to the CAG abundance heatmap CAG selection options."""
 
     # Set the base options
     options = [
@@ -1080,7 +1098,7 @@ def get_cags_selected_by_criterion(fp, select_cags_by, n_cags, cag_size_range):
         Input('cag-abundance-heatmap-metadata-dropdown', 'value'),
         Input('cag-abundance-heatmap-abundance-metric', 'value'),
         Input('cag-abundance-heatmap-cluster', 'value'),
-        Input('cag-abundance-heatmap-taxa-rank', 'value'),
+        Input('cag-abundance-heatmap-annotate-cags-by', 'value'),
         Input('manifest-filtered', 'children'),
     ],
     [State("selected-dataset", "children")])
@@ -1091,7 +1109,7 @@ def abundance_heatmap_graph_callback(
     metadata_selected,
     abundance_metric,
     cluster_by,
-    taxa_rank,
+    annotate_cags_by,
     manifest_json,
     selected_dataset,
 ):
@@ -1114,14 +1132,31 @@ def abundance_heatmap_graph_callback(
         index=cags_selected
     ).T
 
-    # Get the taxonomic hits for the selected CAGs
-    if taxa_rank != "none":
-        cag_tax_dict = {
-            cag_id: cag_taxonomy(cag_id, fp)
-            for cag_id in cags_selected
-        }
+    # Get the annotations for the selected CAGs
+    if annotate_cags_by != "none":
+        # If we are going to annotate by parameter, get those values
+        if annotate_cags_by == "estimate":
+            # Look to `select_cags_by` to know which parameter to plot
+            if select_cags_by.startswith("parameter-"):
+                cag_annot_dict = cag_associations(
+                    fp, 
+                    select_cags_by.replace("parameter-", "")
+                ).reindex(
+                    index=cags_selected
+                ).to_dict(
+                    orient="index" # Index by CAG ID, then column name
+                )
+            else:
+                # If no parameter has been selected in `select_cags_by`, skip this
+                cag_annot_dict = {}
+        else:
+            # Otherwise, get the taxonomic IDs for the CAGs
+            cag_annot_dict = {
+                cag_id: cag_taxonomy(fp, cag_id)
+                for cag_id in cags_selected
+            }
     else:
-        cag_tax_dict = {}
+        cag_annot_dict = {}
 
     # Draw the figure
     return draw_cag_abundance_heatmap(
@@ -1129,10 +1164,10 @@ def abundance_heatmap_graph_callback(
         metadata_selected,
         abundance_metric,
         cluster_by,
-        taxa_rank,
+        annotate_cags_by,
         manifest_json,
         manifest(fp),
-        cag_tax_dict,
+        cag_annot_dict,
     )
 
 @app.callback(
@@ -1402,7 +1437,7 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, cag_id):
         return empty_figure(), 1, marks
 
     # Format the DataFrame as needed to make a go.Sunburst
-    cag_tax_df = cag_taxonomy(int(cag_id), fp)
+    cag_tax_df = cag_taxonomy(fp, int(cag_id))
 
     return draw_taxonomy_sunburst(cag_tax_df, int(cag_id), min_ngenes)
 ###########################

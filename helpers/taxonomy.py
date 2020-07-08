@@ -26,7 +26,7 @@ def path_to_root(tax_id, taxonomy_df, max_steps=100):
     return visited
 
 
-def make_cag_tax_df(tax_id_list, taxonomy_df, ranks_to_keep=["phylum", "class", "order", "family", "genus", "species"]):
+def make_cag_tax_df(taxa_vc, taxonomy_df, ranks_to_keep=["phylum", "class", "order", "family", "genus", "species"]):
     """Return a nicely formatted taxonomy table from a list of tax IDs."""
 
     # We will construct a table with all of the taxa in the tree, containing
@@ -41,7 +41,7 @@ def make_cag_tax_df(tax_id_list, taxonomy_df, ranks_to_keep=["phylum", "class", 
     ancestors = {}
 
     # To do so, start by iterating over every observed taxon
-    for tax_id in tax_id_list.apply(int).unique():
+    for tax_id in taxa_vc.index.values:
 
         # Skip taxa which aren't in the taxonomy
         if tax_id not in taxonomy_df.index.values:
@@ -67,7 +67,7 @@ def make_cag_tax_df(tax_id_list, taxonomy_df, ranks_to_keep=["phylum", "class", 
     total_genes_assigned = 0
 
     # Iterate over each terminal leaf
-    for tax_id, n_genes in tax_id_list.apply(int).value_counts().items():
+    for tax_id, n_genes in taxa_vc.items():
 
         # Skip taxa which aren't in the taxonomy
         if tax_id not in taxonomy_df.index.values:

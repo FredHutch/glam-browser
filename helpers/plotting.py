@@ -690,10 +690,10 @@ def draw_cag_abundance_heatmap(
     metadata_selected,
     abundance_metric,
     cluster_by,
-    taxa_rank,
+    annotate_cags_by,
     manifest_json,
     full_manifest_df,
-    cag_tax_dict,
+    cag_annot_dict,
 ):
     # Get the filtered manifest from the browser
     plot_manifest_df = parse_manifest_json(manifest_json, full_manifest_df)
@@ -777,7 +777,18 @@ def draw_cag_abundance_heatmap(
     # Metadata + & taxonomic annotations + : three plots, combining tax and metadata
 
     has_metadata = len(metadata_selected) > 0
-    has_taxonomy = (taxa_rank != "none") & any(df is not None for _, df in cag_tax_dict.items())
+
+    # Set the mode of annotation for the CAGs in the plot
+    if annotate_cags_by == "none":
+        annotation_mode = "none"
+    elif len(cag_annot_dict) == 0:
+        annotation_mode = "none"
+    elif all(v is None for v in cag_annot_dict.values()):
+        annotation_mode = "none"
+    elif annotate_cags_by == "estimate":
+        annotation_mode = "estimate"
+    else:
+        annotation_mode = "taxa"
 
     # Set the mouseover text template
     if abundance_metric == "raw":
@@ -787,7 +798,7 @@ def draw_cag_abundance_heatmap(
     elif abundance_metric == "zscore":
         hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (z-score): %{z}<extra></extra>"
 
-    if has_metadata is False and has_taxonomy is False:
+    if has_metadata is False and annotation_mode == "none":
 
         fig = go.Figure(
             data=draw_cag_abund_heatmap_panel(
@@ -796,34 +807,53 @@ def draw_cag_abundance_heatmap(
             ),
         )
 
-    elif has_metadata is False and has_taxonomy:
+    elif has_metadata is False and annotation_mode == "taxa":
 
         fig = draw_cag_abund_heatmap_with_tax(
-            plot_df, cag_tax_dict, taxa_rank,
+            plot_df, cag_annot_dict, taxa_rank,
             hovertemplate=hovertemplate
         )
 
-    elif has_metadata and has_taxonomy is False:
+    elif has_metadata is False and annotation_mode == "estimate":
+
+        fig = draw_cag_abund_heatmap_with_estimate(
+            plot_df, cag_annot_dict,
+            hovertemplate=hovertemplate
+        )
+
+    elif has_metadata and annotation_mode == "none":
 
         fig = draw_cag_abund_heatmap_with_metadata(
             plot_df, plot_manifest_df, metadata_selected,
             hovertemplate=hovertemplate
         )
 
-    else:
+    elif has_metadata and annotation_mode == "taxa":
 
         fig = draw_cag_abund_heatmap_with_metadata_and_tax(
             plot_df, 
             plot_manifest_df, 
             metadata_selected, 
-            cag_tax_dict, 
+            cag_annot_dict, 
             taxa_rank,
+            hovertemplate=hovertemplate,
+        )
+
+    else:
+        assert has_metadata and annotation_mode == "estimate"
+
+        fig = draw_cag_abund_heatmap_with_metadata_and_estimate(
+            plot_df, 
+            plot_manifest_df, 
+            metadata_selected, 
+            cag_annot_dict, 
             hovertemplate=hovertemplate,
         )
 
     fig.update_layout(
         width=figure_width,
         height=figure_height,
+        template="simple_white",
     )
     return fig
 
@@ -854,6 +884,37 @@ def draw_cag_abund_heatmap_with_tax(
     # Plot the taxonomic annotations on the right
     fig.add_trace(
         draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank, cag_abund_df.index.values), row=1, col=2
+    )
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
+
+    return fig
+
+def draw_cag_abund_heatmap_with_estimate(
+    cag_abund_df, 
+    cag_annot_dict,
+    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
+):
+
+    # Make a plot with two panels, side-by-side, sharing the y-axis
+
+    # The estimate plot will be smaller
+    fig = make_subplots(
+        rows=1, cols=2, shared_yaxes=True,
+        column_widths=[
+            0.85, 0.15
+        ],
+        horizontal_spacing=0.005,
+    )
+
+    # Plot the abundances on the left
+    fig.add_trace(
+        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=1, col=1
+    )
+
+    # Plot the estimated coefficients on the right
+    fig.add_trace(
+        draw_cag_estimate_panel(cag_annot_dict, cag_abund_df.index.values), row=1, col=2
     )
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
@@ -955,6 +1016,62 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
 
     return fig
 
+def draw_cag_abund_heatmap_with_metadata_and_estimate(
+    cag_abund_df, 
+    plot_manifest_df, 
+    metadata_selected, 
+    cag_annot_dict, 
+    hovertemplate="Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
+):
+
+    # Make a plot with four panels:
+    # metadata - blank
+    # cag-abun - estimate
+
+    # The relative height of the subplots will be set dynamically
+    metadata_height = max(
+        0.1,
+        min(
+            0.5,
+            len(metadata_selected) / 20.
+        ),
+    )
+
+    fig = make_subplots(
+        rows=2, 
+        cols=2, 
+        shared_xaxes=True,
+        shared_yaxes=True,
+        row_heights=[
+            metadata_height,
+            1 - metadata_height
+        ],
+        vertical_spacing=0.01,
+        column_widths=[
+            0.85, 0.15
+        ],
+        horizontal_spacing=0.005,
+    )
+
+    # Plot the abundances on the bottom-left
+    fig.add_trace(
+        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=2, col=1
+    )
+
+    # Plot the estimated coefficients on the bottom-right
+    fig.add_trace(
+        draw_cag_estimate_panel(cag_annot_dict, cag_abund_df.index.values), row=2, col=2
+    )
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
+
+    # Plot the metadata on the top-left
+    fig.add_trace(
+        draw_metadata_heatmap_panel(plot_manifest_df), row=1, col=1
+    )
+
+    return fig
+
 def draw_cag_abund_taxon_panel(
     cag_tax_dict, 
     taxa_rank,
@@ -992,6 +1109,42 @@ def draw_cag_abund_taxon_panel(
         showscale=False,
         colorscale='Viridis',
         hovertemplate="%{y}<br>%{text}<extra></extra>"
+    )
+
+
+def draw_cag_estimate_panel(
+    cag_annot_dict,
+    cag_order
+):
+    """Render the subplot with the estimated coefficients for each CAG."""
+    # Explicitly order the values for plotting
+    plot_values = {
+        col_name: [
+            cag_annot_dict[cag_id][col_name]
+            for cag_id in cag_order
+        ]
+        for col_name in ["estimate", "std_error"]
+    }
+    # Render the hover text
+    hovertext = [
+        "Wald: {:.2}".format(
+            cag_annot_dict[cag_id]["wald"]
+        )
+        for cag_id in cag_order
+    ]
+    return go.Scatter(
+        x = plot_values["estimate"],
+        y = list(range(len(cag_order))),
+        error_x = dict(
+            type='data',
+            array=plot_values["std_error"],
+            visible=True
+        ),
+        ids = cag_order,
+        text = hovertext,
+        hovertemplate = "CAG %{id}<br>Estimated Coefficient: %{x}<br>%{text}<extra></extra>",
+        mode = "markers",
+        marker_color = "LightSkyBlue",
     )
 
 
