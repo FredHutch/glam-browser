@@ -853,7 +853,7 @@ def draw_cag_abund_heatmap_with_tax(
 
     # Plot the taxonomic annotations on the right
     fig.add_trace(
-        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank), row=1, col=2
+        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank, cag_abund_df.index.values), row=1, col=2
     )
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
@@ -943,7 +943,7 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
 
     # Plot the taxonomic annotations on the bottom-right
     fig.add_trace(
-        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank), row=2, col=2
+        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank, cag_abund_df.index.values), row=2, col=2
     )
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
@@ -957,7 +957,8 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
 
 def draw_cag_abund_taxon_panel(
     cag_tax_dict, 
-    taxa_rank
+    taxa_rank,
+    cag_order,
 ):
 
     # For each CAG, pick out the top hit
@@ -975,6 +976,13 @@ def draw_cag_abund_taxon_panel(
             )).get
         )
     )
+
+    # Reorder the display to match the abundances
+    summary_df = summary_df.set_index(
+        "CAG"
+    ).reindex(
+        index=cag_order
+    ).reset_index()
 
     return go.Heatmap(
         x=[taxa_rank],
@@ -1002,7 +1010,7 @@ def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
     df = cag_tax_df.query("rank == '{}'".format(taxa_rank))
 
     # Sort by 'consistent' hits
-    df.sort_values(by="consistent", inplace=True, ascending=False)
+    df = df.sort_values(by="consistent", ascending=False)
 
     # Return the top hit
     return {
