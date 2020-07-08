@@ -169,8 +169,18 @@ def richness_card():
             )
         ]),
         help_text="""
-Summary of the detection of genes across samples in this dataset.
-For each sample, you may select:
+In order to perform gene-level metagenomic analysis, the first step is to 
+estimate the abundance of every microbial gene in every sample.
+
+The analytical steps needed to perform this analysis include:
+
+- Removal of host sequences by subtractive alignment
+- _De novo_ assembly of every individual sample
+- Deduplication of protein coding sequences across all samples to form a _de novo_ gene catalog
+- Alignment of WGS reads from every sample against that gene catalog
+- Estimation of the relative abundance of every gene as the proportion of reads which align uniquely (normalized by gene length)
+
+To visualize how genes were quantified in each sample, you may select:
 
 - The proportion of reads from each sample which align uniquely to a single protein-coding gene from the catalog
 - The number of genes which were identified by _de novo_ assembly in each sample
@@ -235,7 +245,8 @@ def single_sample_card():
             )
         ]),
         help_text="""
-Summary of the CAGs detected in a single sample. 
+**Summary of the CAGs detected in a single sample.**
+
 You may select any sample to display the relative abundance of every CAG which
 was detected, comparing by default against the size (number of genes) in each CAG. 
 
@@ -317,7 +328,11 @@ def ordination_card():
             )
         ]),
         help_text="""
-Beta-diversity summary of the similarity of community composition across samples.
+**Beta-diversity summary of the similarity of community composition across samples.**
+
+One way to understand the composition of a microbial community is to compare every pair of samples
+on the basis of what microbes were detected. This approach is referred to as 'beta-diversity' analysis.
+
 You may select a distance metric which is used to calculate the similarity of every pair of samples.
 Based on that distance matrix, PCA or t-SNE may be used to summarize the groups of samples which
 are most similar to each other.
@@ -395,22 +410,31 @@ def cag_summary_card():
             ])
         ],
         help_text="""
-Genes were grouped into Co-Abundant Groups (CAGs), and this panel summarizes that set of CAGs on the basis of:
+A key factor in performing efficient gene-level metagenomic analysis is the grouping of genes by co-abundance.
+The term 'co-abundance' is used to describe the degree to which any pair of genes are found at similar relative
+abundances in similar samples. The core concept is that any pair of genes which are always found on the same
+molecule of DNA are expected to have similar relative abundances as measured by WGS metagenomic sequencing.
+
+In this analysis, genes were grouped into Co-Abundant Groups (CAGs) by average linkage clustering using the
+cosine measure of co-abundance across every pair of samples. After constructing CAGs for this dataset, each
+of those CAGs can be summarized on the basis of the aggregate abundance of all genes contained in that CAG.
+(note: every gene can only belong to a single CAG in this approach).
+
+The biological interpretation of CAGs is that they are expected to correspond to groups of genes which are
+consistently found on the same piece of genetic material (chromosome, plasmid, etc.), or that they are found
+in organismsm which are highly co-abundant in this dataset.
+
+This panel summarizes that set of CAGs on the basis of:
 
 - Size: Number of genes contained in each CAG
+- Mean Abundance across all samples (as the sum of the relative abundance of every gene in that CAG)
 - Entropy: The evenness of abundance for a given CAG across all samples
-- Mean Abundance across all samples
 - Prevalence: The proportion of samples in which a CAG was detected at all
 - Standard Deviation of relative abundance values across all samples
 
-*Click on any CAG* to display additional information about that CAG in the panels below.
-
 Note: Masking a sample from the manifest at the bottom of the page does _not_ update the summary CAG metrics displayed here.
 
-You may select to filter which CAGs are displayed using the sliders which are provided.
-You may also change the number of bins used to plot the frequency histogram.
-
-By default, the frequency histogram (top) displays the number of _genes_ found in the group of CAGs that fall
+By default, this frequency histogram displays the number of _genes_ found in the group of CAGs that fall
 within a given range. You may instead choose to display the number of CAGs which fall into each bin.
 
 Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
@@ -524,14 +548,29 @@ def cag_abundance_heatmap_card():
             ]),
         ],
         help_text="""
-The relative abundance of a user-selected group of CAGs is shown in comparison to
-specimen metadata as well as the taxonomic annotation of those CAGs.
+This display lets you compare the relative abundance of a group of CAGs across all samples.
+You may choose to view those CAGs which are most highly abundant, those CAGs containing the
+largest number of genes, or those CAGs which are most consistently associated with a parameter
+in your formula (if provided).
 
-Type in the box to select CAGs to add to the heatmap. Additionally, clicking on a single CAG in any of
-the other displays on this page will add those CAGs to the heatmap.
+If you decide to display those CAGs which are most associated with a parameter in the formula,
+then you will see the estimated coefficient of association for each CAG against that parameter
+displayed to the right of the heatmap.
 
-You may choose to annotate columns by specimen metadata, and you may choose to annotate rows
-by the taxonomic annotation of each CAG, when available.
+You may also choose to display the taxonomic annotation of each CAG at a particular taxonomic
+level (e.g. species). That will add a color label to each row in the heatmap, and you can see
+the name of the organism that represents by moving your mouse over that part of the plot.
+
+The controls at the top of the display help you customize this heatmap. You may choose to include
+a greater or smaller number of CAGs; you may choose to filter CAGs based on their size (the
+number of genes in each CAG); and you may choose to annotate the samples based on user-defined
+metadata from the manifest.
+
+By default, the columns in the heatmap are ordered based on the similarity of CAG abundances
+(average linkage clustering), but you may also choose to set the order according to the sorted
+metadata for each sample.
+
+Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
         """
 )
 ######################
@@ -585,8 +624,7 @@ The estimated association of each CAG with a specified metadata feature is displ
 as a volcano plot. The values shown in this display must be pre-computed by selecting
 the `--formula` flag when running _geneshot_.
 
-Note: Clicking on any CAG in this display will select it for display in the other
-panels on this page.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
         """
     )
 ##################
