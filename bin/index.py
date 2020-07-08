@@ -109,8 +109,22 @@ def parse_gene_annotations(store):
 
     # Yield a table for each individual CAG
     for cag_id, cag_df in df.groupby("CAG"):
-        yield cag_id, cag_df
 
+        # Just save the number of unique values for tax ID and eggNOG annotation
+        yield cag_id, gene_annotation_value_counts(cag_df)
+
+
+def gene_annotation_value_counts(cag_df):
+    """Count up the unique annotations for a given CAG."""
+    return pd.DataFrame([
+        {
+            "annotation": col_name,
+            "value": value,
+            "count": count
+        }
+        for col_name in ["tax_id", "eggNOG_desc"]
+        for value, count in cag_df[col_name].dropna().value_counts().items()
+    ])
 
 def parse_cag_abundances(store):
     """Read in the CAG abundances."""
@@ -458,10 +472,6 @@ def index_geneshot_results(input_fp, output_fp):
             # Store the actual betta results
             dat["/enrichments/{}/{}".format(parameter, annotation)] = df
 
-        # Read in the gene annotations
-        for cag_id, cag_annotations in parse_gene_annotations(store):
-            dat["/gene_annotations/CAG/CAG{}".format(cag_id)] = cag_annotations
-
         # If we have corncob results, make aggregate tables for each parameter
         # which include all CAGs with FDR alpha=0.01 and summarize the number
         # of genes from each CAG which have a given annotation
@@ -484,6 +494,11 @@ def index_geneshot_results(input_fp, output_fp):
         len(cags_to_include),
         dat["/cag_abundances"].shape[0]
     ))
+
+    # Add the gene annotations for those selected CAGs
+    for cag_id, cag_annotations in parse_gene_annotations(store):
+        if cag_id in cags_to_include:
+            dat["/gene_annotations/CAG/CAG{}".format(cag_id)] = cag_annotations
 
     # Now actually subset the information to this set of CAGs
     filter_data_to_selected_cags(dat, cags_to_include)
