@@ -675,29 +675,29 @@ def index_geneshot_results(input_fp, output_fp):
         for k, v in items_to_add.items():
             dat[k] = v
 
-    # Assemble the `analysis_features` table
-    dat["/analysis_features"] = pd.DataFrame(
-        analysis_features
-    ).drop_duplicates()
+        # Assemble the `analysis_features` table
+        dat["/analysis_features"] = pd.DataFrame(
+            analysis_features
+        ).drop_duplicates()
 
-    # Limit the number of CAGs for which we will save information
-    cags_to_include = get_cags_to_include(dat)
-    logging.info("Indexing details for {:,} CAGs out of {:,} total".format(
-        len(cags_to_include),
-        dat["/cag_abundances"].shape[0]
-    ))
+        # Limit the number of CAGs for which we will save information
+        cags_to_include = get_cags_to_include(dat)
+        logging.info("Indexing details for {:,} CAGs out of {:,} total".format(
+            len(cags_to_include),
+            dat["/cag_abundances"].shape[0]
+        ))
 
-    # Subset the previously read information to the set of selected CAGs
-    filter_data_to_selected_cags(dat, cags_to_include)
+        # Subset the previously read information to the set of selected CAGs
+        filter_data_to_selected_cags(dat, cags_to_include)
 
-    # Read in the taxonomy, if present
-    if "/ref/taxonomy" in all_keys:
-        tax_df = parse_taxonomy(store)
-    else:
-        tax_df = None
+        # Read in the taxonomy, if present
+        if "/ref/taxonomy" in all_keys:
+            tax_df = parse_taxonomy(store)
+        else:
+            tax_df = None
 
-    # Read in the gene annotations for just those CAGs
-    functional_annot_df, taxonomic_annot_df = parse_gene_annotations(store, cags_to_include, tax_df)
+        # Read in the gene annotations for just those CAGs
+        functional_annot_df, taxonomic_annot_df = parse_gene_annotations(store, cags_to_include, tax_df)
 
     # Store the summary annotation tables if the annotations are available
     if functional_annot_df is not None:
