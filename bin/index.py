@@ -3,189 +3,209 @@
 # Script used to process a set of geneshot results for visualization in the GLAM Browser
 import argparse
 from collections import defaultdict
+from functools import lru_cache
 import logging
 import os
 import pandas as pd
 import numpy as np
 
 
-def path_to_root(tax_id, taxonomy_df, max_steps=100):
-    """Parse the taxonomy to yield a list with all of the taxa above this one."""
+class Taxonomy:
 
-    visited = set([])
+    def __init__(self, store):
+        """Read in the taxonomy table."""
 
-    for _ in range(max_steps):
+        # Read the taxonomy table
+        logging.info("Reading in /ref/taxonomy")
 
-        # Add to the path we have visited
-        visited.add(tax_id)
+        self.taxonomy_df = pd.read_hdf(
+            store,
+            "/ref/taxonomy"
+        ).apply(
+            lambda c: c.fillna(0).apply(float).apply(
+                int) if c.name in ["parent", "tax_id"] else c,
+        ).set_index(
+            "tax_id"
+        )
 
-        # Get the parent of this taxon
-        parent_id = taxonomy_df.loc[tax_id, "parent"]
+    @lru_cache(maxsize=None)
+    def path_to_root(self, tax_id, max_steps=100):
+        """Parse the taxonomy to yield a list with all of the taxa above this one."""
 
-        # If the chain has ended, stop
-        if parent_id in visited or parent_id == 0:
-            break
+        visited = set([])
 
-        # Otherwise, keep walking up
-        tax_id = parent_id
+        for _ in range(max_steps):
 
-    return visited
+            # Add to the path we have visited
+            visited.add(tax_id)
+
+            # Get the parent of this taxon
+            parent_id = self.taxonomy_df.loc[tax_id, "parent"]
+
+            # If the chain has ended, stop
+            if parent_id in visited or parent_id == 0:
+                break
+
+            # Otherwise, keep walking up
+            tax_id = parent_id
+
+        return visited
 
 
-def make_cag_tax_df(
-    taxa_vc, 
-    taxonomy_df, 
-    ranks_to_keep=["phylum", "class", "order", "family", "genus", "species"],
-    include_consistent=False
-):
-    """Return a nicely formatted taxonomy table from a list of tax IDs and the number of assignments for each."""
+    def make_cag_tax_df(
+        self,
+        taxa_vc, 
+        ranks_to_keep=["phylum", "class", "order", "family", "genus", "species"],
+        include_consistent=False
+    ):
+        """Return a nicely formatted taxonomy table from a list of tax IDs and the number of assignments for each."""
 
-    # We will construct a table with all of the taxa in the tree, containing
-    # The name of that taxon
-    # The rank of that taxon
-    # The name of the parent of that taxon
+        # We will construct a table with all of the taxa in the tree, containing
+        # The name of that taxon
+        # The rank of that taxon
+        # The name of the parent of that taxon
 
-    # The number of genes found at that taxon or in its decendents
-    counts = defaultdict(int)
+        # The number of genes found at that taxon or in its decendents
+        counts = defaultdict(int)
 
-    # Get the ancestors of every observed taxa
-    ancestors = {}
+        # Get the ancestors of every observed taxa
+        ancestors = {}
 
-    # To do so, start by iterating over every observed taxon
-    for tax_id in taxa_vc.index.values:
+        # To do so, start by iterating over every observed taxon
+        for tax_id in taxa_vc.index.values:
 
-        # Skip taxa which aren't in the taxonomy
-        if tax_id not in taxonomy_df.index.values:
-            continue
+            # Skip taxa which aren't in the taxonomy
+            if tax_id not in self.taxonomy_df.index.values:
+                continue
 
-        # Make sure to add the ancestors for all taxids at-or-above those which were observed
-        for anc_tax_id in path_to_root(tax_id, taxonomy_df):
+            # Make sure to add the ancestors for all taxids at-or-above those which were observed
+            for anc_tax_id in self.path_to_root(tax_id):
 
-            # Only add it if we haven't yet
-            ancestors[anc_tax_id] = ancestors.get(
-                anc_tax_id,
-                path_to_root(anc_tax_id, taxonomy_df)
-            )
-
-    if include_consistent:
-        # The 'consistent_counts' are the number of hits to taxa which
-        # are consistent with this taxa, either above or below it in the taxonomy
-        consistent_counts = {
-            tax_id: 0
-            for tax_id, ancestors in ancestors.items()
-        }
-
-    # Keep track of the total number of genes with a valid tax ID
-    total_genes_assigned = 0
-
-    # Iterate over each terminal leaf
-    for tax_id, n_genes in taxa_vc.items():
-
-        # Skip taxa which aren't in the taxonomy
-        if tax_id not in taxonomy_df.index.values:
-            continue
-
-        # Count all genes part of this analysis
-        total_genes_assigned += n_genes
-
-        # Walk up the tree from the leaf to the root
-        for anc_tax_id in ancestors[tax_id]:
-
-            # Add to the sum for every node we visit along the way
-            counts[anc_tax_id] += n_genes
+                # Only add it if we haven't yet
+                ancestors[anc_tax_id] = ancestors.get(
+                    anc_tax_id,
+                    self.path_to_root(anc_tax_id)
+                )
 
         if include_consistent:
-            # Iterate over every observed taxon and add to the
-            # 'consistent_counts' if it is an ancestor or descendent
-            # of this taxon
-            for other_tax_id, other_taxon_ancestors in ancestors.items():
-                if other_tax_id == tax_id:
-                    consistent_counts[other_tax_id] += n_genes
-                elif tax_id in other_taxon_ancestors:
-                    consistent_counts[other_tax_id] += n_genes
-                elif other_tax_id in ancestors[tax_id]:
-                    consistent_counts[other_tax_id] += n_genes
-
-    if len(counts) == 0:
-        pd.DataFrame([{
-            "tax_id": None
-        }])
-
-    if include_consistent:
-        # Make a DataFrame
-        df = pd.DataFrame({
-            "count": counts,
-            "consistent": consistent_counts,
-        }).fillna(
-            0
-        )
-    else:
-        # Make a DataFrame
-        df = pd.DataFrame({
-            "count": counts,
-        })
-
-    # Add the name, parent, rank
-    df = df.assign(
-        tax_id=df.index.values,
-        parent_tax_id=taxonomy_df["parent"],
-        rank=taxonomy_df["rank"],
-    )
-
-    # Set the parent of the root as ""
-    df.loc[0, "parent"] = ""
-
-    # Remove any taxa which aren't at the right rank (but keep the root)
-    df = df.assign(
-        to_remove=df.apply(
-            lambda r: r["rank"] not in (ranks_to_keep) and r["tax_id"] != 0,
-            axis=1
-        )
-    )
-
-    # Remove all of the taxa which aren't at the right rank
-    while df["to_remove"].any():
-        ix_to_remove = df.index.values[df["to_remove"]][0]
-
-        # Drop this row from the filtered table
-        # Also update any rows which include this taxon as a parent
-        df = df.drop(
-            index=ix_to_remove
-        ).replace(to_replace={
-            "parent_tax_id": {
-                df.loc[ix_to_remove, "tax_id"]: df.loc[ix_to_remove, "parent_tax_id"]
+            # The 'consistent_counts' are the number of hits to taxa which
+            # are consistent with this taxa, either above or below it in the taxonomy
+            consistent_counts = {
+                tax_id: 0
+                for tax_id, ancestors in ancestors.items()
             }
-        })
 
-    # Make a dict linking the tax ID with the taxon name
-    tax_names = taxonomy_df["name"].reindex(index=df.index)
+        # Keep track of the total number of genes with a valid tax ID
+        total_genes_assigned = 0
 
-    # Count up the frequency of each name
-    tax_names_vc = tax_names.value_counts()
+        # Iterate over each terminal leaf
+        for tax_id, n_genes in taxa_vc.items():
 
-    # Identify any repeated names
-    repeated_names = tax_names_vc.index.values[tax_names_vc.values > 1]
+            # Skip taxa which aren't in the taxonomy
+            if tax_id not in self.taxonomy_df.index.values:
+                continue
 
-    # Make each name unique by adding the tax ID (if needed)
-    for n in repeated_names:
-        for tax_id in tax_names.index.values[tax_names == n]:
-            tax_names.loc[tax_id] = "{} ({})".format(n, tax_id)
+            # Count all genes part of this analysis
+            total_genes_assigned += n_genes
 
-    # Add this nicely formatted name to the output to replace the tax IDs
-    df = df.assign(
-        name=df["tax_id"].apply(lambda t: tax_names.get(t, "")),
-        parent=df["parent_tax_id"].apply(lambda t: tax_names.get(t, "")),
-        total=total_genes_assigned,
-    )
+            # Walk up the tree from the leaf to the root
+            for anc_tax_id in ancestors[tax_id]:
 
-    if include_consistent:
-        cols_to_return = ["name", "parent", "count", "consistent", "rank", "total"]
-    else:
-        cols_to_return = ["name", "parent", "count", "rank", "total"]
+                # Add to the sum for every node we visit along the way
+                counts[anc_tax_id] += n_genes
 
-    return df.reindex(
-        columns=cols_to_return
-    ).reset_index()
+            if include_consistent:
+                # Iterate over every observed taxon and add to the
+                # 'consistent_counts' if it is an ancestor or descendent
+                # of this taxon
+                for other_tax_id, other_taxon_ancestors in ancestors.items():
+                    if other_tax_id == tax_id:
+                        consistent_counts[other_tax_id] += n_genes
+                    elif tax_id in other_taxon_ancestors:
+                        consistent_counts[other_tax_id] += n_genes
+                    elif other_tax_id in ancestors[tax_id]:
+                        consistent_counts[other_tax_id] += n_genes
+
+        if len(counts) == 0:
+            pd.DataFrame([{
+                "tax_id": None
+            }])
+
+        if include_consistent:
+            # Make a DataFrame
+            df = pd.DataFrame({
+                "count": counts,
+                "consistent": consistent_counts,
+            }).fillna(
+                0
+            )
+        else:
+            # Make a DataFrame
+            df = pd.DataFrame({
+                "count": counts,
+            })
+
+        # Add the name, parent, rank
+        df = df.assign(
+            tax_id=df.index.values,
+            parent_tax_id=self.taxonomy_df["parent"],
+            rank=self.taxonomy_df["rank"],
+        )
+
+        # Set the parent of the root as ""
+        df.loc[0, "parent"] = ""
+
+        # Remove any taxa which aren't at the right rank (but keep the root)
+        df = df.assign(
+            to_remove=df.apply(
+                lambda r: r["rank"] not in (ranks_to_keep) and r["tax_id"] != 0,
+                axis=1
+            )
+        )
+
+        # Remove all of the taxa which aren't at the right rank
+        while df["to_remove"].any():
+            ix_to_remove = df.index.values[df["to_remove"]][0]
+
+            # Drop this row from the filtered table
+            # Also update any rows which include this taxon as a parent
+            df = df.drop(
+                index=ix_to_remove
+            ).replace(to_replace={
+                "parent_tax_id": {
+                    df.loc[ix_to_remove, "tax_id"]: df.loc[ix_to_remove, "parent_tax_id"]
+                }
+            })
+
+        # Make a dict linking the tax ID with the taxon name
+        tax_names = self.taxonomy_df["name"].reindex(index=df.index)
+
+        # Count up the frequency of each name
+        tax_names_vc = tax_names.value_counts()
+
+        # Identify any repeated names
+        repeated_names = tax_names_vc.index.values[tax_names_vc.values > 1]
+
+        # Make each name unique by adding the tax ID (if needed)
+        for n in repeated_names:
+            for tax_id in tax_names.index.values[tax_names == n]:
+                tax_names.loc[tax_id] = "{} ({})".format(n, tax_id)
+
+        # Add this nicely formatted name to the output to replace the tax IDs
+        df = df.assign(
+            name=df["tax_id"].apply(lambda t: tax_names.get(t, "")),
+            parent=df["parent_tax_id"].apply(lambda t: tax_names.get(t, "")),
+            total=total_genes_assigned,
+        )
+
+        if include_consistent:
+            cols_to_return = ["name", "parent", "count", "consistent", "rank", "total"]
+        else:
+            cols_to_return = ["name", "parent", "count", "rank", "total"]
+
+        return df.reindex(
+            columns=cols_to_return
+        ).reset_index()
 
 def parse_manifest(store):
     """Read in the manifest and filter columns for visualization."""
@@ -224,22 +244,6 @@ def parse_manifest(store):
 
     # Return the filtered manifest
     return manifest
-
-
-def parse_taxonomy(store):
-    """Read in the taxonomy table."""
-
-    # Read the taxonomy table
-    logging.info("Reading in /ref/taxonomy")
-
-    return pd.read_hdf(
-        store, 
-        "/ref/taxonomy"
-    ).apply(
-        lambda c: c.fillna(0).apply(float).apply(int) if c.name in ["parent", "tax_id"] else c,
-    ).set_index(
-        "tax_id"
-    )
 
 
 def parse_experiment_metrics(store):
@@ -281,13 +285,17 @@ def parse_cag_annotations(store):
     )
 
 
-def parse_gene_annotations(store, cags_to_include, tax_df):
+def parse_gene_annotations(store, cags_to_include, tax):
     """Make a summary of the gene-level annotations for this subset of CAGs."""
     key_name = "/annot/gene/all"
 
     logging.info("Reading in {}".format(key_name))
 
     df = pd.read_hdf(store, key_name)
+
+    logging.info("Filtering down to annotations from {:,} CAGs".format(
+        len(cags_to_include)
+    ))
 
     # Filter down to the selected CAGs
     df = df.assign(
@@ -298,6 +306,10 @@ def parse_gene_annotations(store, cags_to_include, tax_df):
         columns="INCLUDE"
     )
 
+    logging.info("Retained annotations for {:,} genes".format(
+        df.shape[0]
+    ))
+
     # Trim the `eggNOG_desc` to 100 characters, if present
     df = df.apply(
         lambda c: c.apply(lambda n: n[:100] if isinstance(n, str) and len(n) > 100 else n) if c.name == "eggNOG_desc" else c
@@ -305,25 +317,26 @@ def parse_gene_annotations(store, cags_to_include, tax_df):
 
     # Summarize the number of genes with each functional annotation, if available
     if "eggNOG_desc" in df.columns.values:
+        logging.info("Summarizing functional annotations")
         functional_df = summarize_annotations(df, "eggNOG_desc")
     else:
         functional_df = None
 
     # Summarize the number of genes with each taxonomic annotation, if available
     # This function also does some taxonomy parsing to count the assignments to higher levels
-    if "tax_id" in df.columns.values and tax_df is not None:
-        taxonomic_df = summarize_taxonomic_annotations(df, tax_df)
+    if "tax_id" in df.columns.values and tax is not None:
+        logging.info("Summarizing taxonomic annotations")
+        taxonomic_df = summarize_taxonomic_annotations(df, tax)
     else:
         taxonomic_df = None
 
     return functional_df, taxonomic_df
 
 
-def summarize_taxonomic_annotations(df, tax_df):
+def summarize_taxonomic_annotations(df, tax):
     return pd.concat([
-        make_cag_tax_df(
-            cag_df["tax_id"].value_counts(), 
-            tax_df
+        tax.make_cag_tax_df(
+            cag_df["tax_id"].value_counts()
         ).assign(
             CAG = cag_id
         )
@@ -656,12 +669,12 @@ def index_geneshot_results(input_fp, output_fp):
 
         # Read in the taxonomy, if present
         if "/ref/taxonomy" in all_keys:
-            tax_df = parse_taxonomy(store)
+            tax = Taxonomy(store)
         else:
-            tax_df = None
+            tax = None
 
         # Read in the gene annotations for just those CAGs
-        functional_annot_df, taxonomic_annot_df = parse_gene_annotations(store, cags_to_include, tax_df)
+        functional_annot_df, taxonomic_annot_df = parse_gene_annotations(store, cags_to_include, tax)
 
     # Store the summary annotation tables if the annotations are available
     if functional_annot_df is not None:
