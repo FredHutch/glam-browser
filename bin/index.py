@@ -107,7 +107,9 @@ def make_cag_tax_df(
                     consistent_counts[other_tax_id] += n_genes
 
     if len(counts) == 0:
-        return
+        pd.DataFrame([{
+            "tax_id": None
+        }])
 
     if include_consistent:
         # Make a DataFrame
@@ -183,7 +185,7 @@ def make_cag_tax_df(
 
     return df.reindex(
         columns=cols_to_return
-    )
+    ).reset_index()
 
 def parse_manifest(store):
     """Read in the manifest and filter columns for visualization."""
@@ -331,7 +333,7 @@ def summarize_taxonomic_annotations(df, tax_df):
         ).groupby(
             "CAG"
         )
-    ])
+    ]).dropna()
 
 
 def summarize_annotations(df, col_name):
