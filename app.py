@@ -3,7 +3,6 @@
 from collections import defaultdict
 from helpers.io import parse_directory
 from helpers.io import hdf5_get_item
-from helpers.io import hdf5_taxonomy
 from helpers.layout import navbar_simple
 from helpers.layout import dataset_summary_card
 from helpers.layout import experiment_summary_card
@@ -15,6 +14,7 @@ from helpers.layout import cag_summary_card
 from helpers.layout import cag_abundance_heatmap_card
 from helpers.layout import cag_annotation_heatmap_card
 from helpers.layout import volcano_card
+from helpers.layout import annotation_enrichment_card
 from helpers.layout import single_cag_card
 from helpers.layout import manifest_card
 from helpers.plotting import update_richness_graph
@@ -28,10 +28,10 @@ from helpers.plotting import draw_cag_summary_graph_hist
 from helpers.plotting import draw_cag_abundance_heatmap
 from helpers.plotting import draw_cag_annotation_heatmap
 from helpers.plotting import draw_volcano_graph
+from helpers.plotting import draw_enrichment_graph
 from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
 from helpers.plotting import parse_manifest_json
-from helpers.taxonomy import make_cag_tax_df
 from flask_caching import Cache
 import dash
 import dash_bootstrap_components as dbc
@@ -234,23 +234,17 @@ def enrichments(fp, parameter, annotation):
     return df
 
 @cache.memoize()
-def gene_annotations_by_cag(fp, cag_id):
+def functional_gene_annotations(fp):
     return hdf5_get_item(
         fp,
-        "/gene_annotations/CAG/CAG{}".format(cag_id)
+        "/gene_annotations/functional"
     )
 
 @cache.memoize()
-def gene_annotations_by_parameter(fp, parameter):
+def taxonomic_gene_annotations(fp):
     return hdf5_get_item(
         fp,
-        "/gene_annotations/parameter/{}".format(parameter)
-    )
-
-@cache.memoize()
-def taxonomy(fp):
-    return hdf5_taxonomy(
-        fp
+        "/gene_annotations/taxonomic"
     )
 
 ############################################
@@ -290,38 +284,20 @@ def valid_enrichments(fp):
 
 @cache.memoize()
 def cag_taxonomy(fp, cag_id):
-    # Skip if there is no taxonomy
-    taxonomy_df = taxonomy(fp)
-    if taxonomy_df is None:
+    # Skip if there are no taxonomic annotations
+    tax_annot_df = taxonomic_gene_annotations(fp)
+    if tax_annot_df is None:
         return None
 
-    # Read in the taxonomic annotations for this CAG
-    cag_df = gene_annotations_by_cag(fp, cag_id)
+    # Subset to the taxonomic annotations for this CAG
+    cag_df = tax_annot_df.query("CAG == {}".format(cag_id))
 
-    # No CAG has been selected (or no annotations are available)
-    if cag_df is None:
+    # If there are no annotations, skip this
+    if cag_df.shape[0] == 0:
         return None
 
-    # Subset down to just the tax IDs
-    cag_taxids = cag_df.query(
-        "annotation == 'tax_id'"
-    )
+    return cag_df
 
-    # Skip if there are no taxonomic assignments for this CAG
-    if cag_taxids.shape[0] == 0:
-        return None
-
-    # Format as a vector of value counts
-    cag_taxids = cag_taxids.reindex(
-        columns=["value", "count"]
-    ).applymap(
-        int
-    ).set_index(
-        "value"
-    )["count"]
-
-    # Format the DataFrame as needed to make a go.Sunburst
-    return make_cag_tax_df(cag_taxids, taxonomy_df)
 ######################
 # PLOTTING FUNCTIONS #
 ######################
@@ -372,6 +348,7 @@ app.layout = html.Div(
                 volcano_card(),
                 cag_abundance_heatmap_card(),
                 cag_annotation_heatmap_card(),
+                annotation_enrichment_card(),
                 single_cag_card(),
                 manifest_card(),
             ],
@@ -1201,35 +1178,6 @@ def update_heatmap_metadata_dropdown(
     ]
 
     return options, []
-
-def get_cag_multiselector_options(
-    selected_dataset
-):
-    """Function to make a list of all of the CAGs for a given dataset."""
-    # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
-
-    if fp is None:
-        options = [{
-            "label": "None",
-            "value": 0
-        }]
-
-    else:
-
-        # Get the list of all CAGs
-        cag_id_list = cag_annotations(fp).index.values
-
-        # Get the list of CAGs
-        options = [
-            {
-                "label": "CAG {}".format(cag_id),
-                "value": cag_id
-            }
-            for cag_id in cag_id_list
-        ]
-
-    return options
 #####################################
 # / CAG ABUNDANCE HEATMAP CALLBACKS #
 #####################################
@@ -1272,14 +1220,33 @@ def annotation_heatmap_graph_callback(
         cag_size_range,
     )
 
+    # Get the full table of CAG annotations
+    if annotation_type == "eggNOG_desc":
+
+        # Read in the functional annotations for all CAGs in the index
+        cag_annot_df = functional_gene_annotations(fp)
+
+    else:
+
+        # Read in the full set of taxonomic annotations
+        cag_annot_df = taxonomic_gene_annotations(
+            fp
+        ).query(  # Subset to the indicated taxonomic rank
+            "rank == '{}'".format(annotation_type)
+        )
+
+    # Subset to just the CAGs in this list
+    cag_annot_df = cag_annot_df.loc[
+        cag_annot_df["CAG"].isin(cags_selected)
+    ]
+
     # If the CAGs are selected by parameter, then fetch the annotations by parameter
     if select_cags_by.startswith("parameter-"):
 
+        # Parse the parameter from the `select_cags_by` value
         parameter = select_cags_by.replace("parameter-", "")
-        cag_annot_df = gene_annotations_by_parameter(fp, parameter)
-        cag_annot_df = cag_annot_df.loc[cag_annot_df["CAG"].isin(cags_selected)]
 
-        # Also read in the enrichments by parameter
+        # Read in the enrichments of each annotation according to this parameter
         enrichment_df = enrichments(
             fp, 
             parameter, 
@@ -1299,39 +1266,12 @@ def annotation_heatmap_graph_callback(
     else:
 
         parameter = None
-        # Get the annotations of the selected CAGs
-        cag_annot_df = pd.concat([
-            gene_annotations_by_cag(fp, cag_id).assign(CAG = cag_id)
-            for cag_id in cags_selected
-        ])
 
         # Do not show any enrichments for annotations
         enrichment_df = None
 
         # Do not show any estimates for CAGs
         cag_estimate_dict = None
-
-    # If the annotation type is taxonomic, make a summary of the aggregate counts at each level
-    if annotation_type != "eggNOG_desc":
-        # Read the taxonomy
-        taxonomy_df = taxonomy(fp)
-
-        # Use the `make_cag_tax_df()` function to parse the taxonomy to compute 'consistent' and 'count' (specific) assignments
-        cag_annot_df = pd.concat([
-            make_cag_tax_df(
-                single_cag_annot_df.reindex(
-                    columns=["value", "count"]
-                ).applymap(
-                    int
-                ).set_index("value")["count"],
-                taxonomy_df, 
-            ).assign(CAG = cag_id)
-            for cag_id, single_cag_annot_df in cag_annot_df.query(
-                "annotation == 'tax_id'"
-            ).groupby("CAG")
-        ]).query( # Subset to the indicated taxonomic rank
-            "rank == '{}'".format(annotation_type)
-        )
 
     # Draw the figure
     return draw_cag_annotation_heatmap(
@@ -1357,6 +1297,89 @@ def annotation_heatmap_show_hide_checkbox(annotation_type):
 ######################################
 # / CAG ANNOTATION HEATMAP CALLBACKS #
 ######################################
+
+
+###################################
+# ANNOTATION ENRICHMENT CALLBACKS #
+###################################
+@app.callback(
+    Output("annotation-enrichment-graph", "figure"),
+    [
+        Input("annotation-enrichment-type", "value"),
+        Input({
+            "type": "corncob-parameter-dropdown",
+            "name": "annotation-enrichment-parameter"
+        }, "value"),
+        Input("annotation-enrichment-plotn", "value"),
+        Input("annotation-enrichment-show-pos-neg", "value"),
+        Input("annotation-enrichment-page-num", "value"),
+    ],
+    [State("selected-dataset", "children")]
+)
+def annotation_enrichment_graph_callback(
+    annotation,
+    parameter,
+    selected_dataset,
+    plotn,
+    show_pos_neg,
+    page_num,
+):
+    """Render the graph for the annotation enrichment card."""
+    
+    # Get the path to the selected dataset
+    fp = parse_fp(selected_dataset)
+
+    # No dataset has been selected or no parameter has been selected
+    if fp is None or parameter == "none":
+        return empty_figure()
+    else:
+
+        # Read in the enrichments
+        enrichment_df = enrichments(
+            fp, 
+            parameter, 
+            annotation
+        )
+
+        # If there are no enrichments, skip it
+        if enrichment_df is None:
+            return empty_figure()
+
+        # Subset to positive / negative estimated coefficients
+        if show_pos_neg == "negative":
+            enrichment_df = enrichment_df.query(
+                "estimate < 0"
+            )
+        elif show_pos_neg == "positive":
+            enrichment_df = enrichment_df.query(
+                "estimate > 0"
+            )
+
+        # Sort by absolute Wald
+        enrichment_df = enrichment_df.sort_values(
+            by="abs_wald", 
+            ascending=False
+        )
+
+        # Parse the `plotn` and `page_num` parameter
+        if page_num is None or page_num == 1:
+            enrichment_df = enrichment_df.head(plotn)
+        else:
+            enrichment_df = enrichment_df.head(
+                plotn * page_num
+            ).tail(
+                plotn
+            )
+
+        return draw_enrichment_graph(
+            enrichment_df,
+            annotation,
+            parameter, 
+        )
+
+#####################################
+# / ANNOTATION ENRICHMENT CALLBACKS #
+#####################################
 
 
 #####################
@@ -1550,9 +1573,12 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, cag_id):
         return empty_figure(), 1, marks
 
     # Format the DataFrame as needed to make a go.Sunburst
-    cag_tax_df = cag_taxonomy(fp, int(cag_id))
+    cag_tax_df = taxonomic_gene_annotations(fp).query("CAG == {}".format(cag_id))
+    if cag_tax_df.shape[0] > 0:
 
-    return draw_taxonomy_sunburst(cag_tax_df, int(cag_id), min_ngenes)
+        return draw_taxonomy_sunburst(cag_tax_df, int(cag_id), min_ngenes)
+    else:
+        return empty_figure()
 ###########################
 # / CAG TAXONOMY CALLBACK #
 ###########################
@@ -1569,7 +1595,32 @@ def update_single_cag_multiselector_options(
     selected_dataset
 ):
     """When a new dataset is selected, fill in the names of all the CAGs as options."""
-    return get_cag_multiselector_options(selected_dataset)
+
+    # Get the path to the selected dataset
+    fp = parse_fp(selected_dataset)
+
+    if fp is None:
+        options = [{
+            "label": "None",
+            "value": 0
+        }]
+
+    else:
+
+        # Get the list of all CAGs
+        cag_id_list = cag_annotations(fp).index.values
+
+        # Get the list of CAGs
+        options = [
+            {
+                "label": "CAG {}".format(cag_id),
+                "value": cag_id
+            }
+            for cag_id in cag_id_list
+        ]
+
+    return options
+    
 @app.callback(
     Output('single-cag-multiselector', 'value'),
     [

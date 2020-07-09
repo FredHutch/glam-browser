@@ -190,7 +190,7 @@ Data may be summarized either by a single point per sample or with a frequency h
 
 To mask any sample from this plot, deselect it in the manifest at the bottom of the page.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 ###################
@@ -257,7 +257,7 @@ Abundance metrics:
 - Relative Abundance (default): The proportion of gene copies detected in a sample which are assigned to each CAG
 - Centered Log-Ratio: The log10 transformed relative abundance of each CAG divided by the geometric mean of relative abundance of all CAGs detected in that sample
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 ########################
@@ -344,7 +344,7 @@ The lower scatter plot shows two axes, and metadata from the manifest can be ove
 
 To mask any sample from this plot, deselect it in the manifest at the bottom of the page.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 #####################
@@ -437,7 +437,7 @@ Note: Masking a sample from the manifest at the bottom of the page does _not_ up
 By default, this frequency histogram displays the number of _genes_ found in the group of CAGs that fall
 within a given range. You may instead choose to display the number of CAGs which fall into each bin.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 ######################
@@ -565,7 +565,7 @@ By default, the columns in the heatmap are ordered based on the similarity of CA
 (average linkage clustering), but you may also choose to set the order according to the sorted
 metadata for each sample.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
 )
 ################################
@@ -670,7 +670,7 @@ The controls at the top of the display help you customize this heatmap. You may 
 a greater or smaller number of CAGs; you may choose to filter CAGs based on their size (the
 number of genes in each CAG); and you may choose to display either taxonomic or functional annotations.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
 )
 #################################
@@ -724,7 +724,7 @@ The estimated association of each CAG with a specified metadata feature is displ
 as a volcano plot. The values shown in this display must be pre-computed by selecting
 the `--formula` flag when running _geneshot_.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 ##################
@@ -808,12 +808,99 @@ The taxonomic annotation of a given CAG is shown as the proportion of
 genes which contain a given taxonomic annotation, out of all genes which
 were given any taxonomic annotation.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 #####################
 # / SINGLE CAG CARD #
 #####################
+
+
+##############################
+# ANNOTATION ENRICHMENT CARD #
+##############################
+def annotation_enrichment_card():
+    return card_wrapper(
+        "Estimated Coefficients by Annotation",
+        [
+            dbc.Row([
+                dbc.Col(
+                    dbc.Spinner(
+                        dcc.Graph(id="annotation-enrichment-graph")
+                    ),
+                    width=8,
+                    align="center",
+                ),
+                dbc.Col(
+                    [
+                        html.Label("Annotation Group"),
+                        dcc.Dropdown(
+                            id="annotation-enrichment-type",
+                            options=[
+                                {'label': 'Functional', 'value': 'eggNOG_desc'},
+                                {'label': 'Taxonomic Species', 'value': 'species'},
+                                {'label': 'Taxonomic Genus', 'value': 'genus'},
+                                {'label': 'Taxonomic Family', 'value': 'family'},
+                            ],
+                            value='eggNOG_desc',
+                        ),
+                        html.Br(),
+                    ] + corncob_parameter_dropdown(
+                        "annotation-enrichment-parameter"
+                    ) + basic_slider(
+                        "annotation-enrichment-plotn",
+                        "Number of Annotations per Plot",
+                        min_value=5,
+                        max_value=50,
+                        default_value=10,
+                        marks=[5, 25, 50]
+                    ) + [
+                        html.Label("Show Positive / Negative"),
+                        dcc.Dropdown(
+                            id="annotation-enrichment-show-pos-neg",
+                            options=[
+                                {'label': 'Both', 'value': 'both'},
+                                {'label': 'Positive', 'value': 'positive'},
+                                {'label': 'Negative', 'value': 'negative'},
+                            ],
+                            value="both",
+                        ),
+                        html.Br(),
+                        html.Label("Page Number"),
+                        dcc.Input(
+                            id="annotation-enrichment-page-num",
+                            type="number",
+                            min=1, 
+                            step=1,
+                        ),
+                    ],
+                    width=4,
+                    align="center",
+                )
+            ])
+        ],
+        help_text="""
+After estimating the coefficient of association for every individual CAG, we are able to
+aggregate those estimated coefficients on the basis of the annotations assigned to the genes
+found within those CAGs.
+
+The reasoning for this analysis is that a single CAG may be strongly associated with
+parameter X, and that CAG may contain a gene which has been taxonomically assigned to
+species Y. In that case, we are interested in testing whether _all_ CAGs which contain
+any gene which has been taxonomically assigned to the same species Y are estimated to
+have an association with parameter X _in aggregate_.
+
+In this analysis we show the estimated coefficient of association for the groups of CAGs
+constructed for every unique annotation in the analysis. This may include functional
+annotations generated with eggNOG-mapper, as well as taxonomic assignments generated
+by alignment against RefSeq.
+
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
+        """
+    )
+################################
+# / ANNOTATION ENRICHMENT CARD #
+################################
 
 
 #################

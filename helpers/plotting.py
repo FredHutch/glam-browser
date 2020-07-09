@@ -1609,6 +1609,45 @@ def draw_double_volcano_graph(
     return fig
 
 
+####################
+# ENRICHMENT GRAPH #
+####################
+
+def draw_enrichment_graph(
+    enrichment_df, 
+    annotation, 
+    parameter,
+):
+    fig = go.Figure(
+        data=go.Scatter(
+            x = enrichment_df["estimate"],
+            y = list(range(enrichment_df.shape[0])),
+            error_x = dict(
+                type='data',
+                array=enrichment_df["std_error"],
+                visible=True
+            ),
+            ids = enrichment_df["label"],
+            text = enrichment_df.apply(
+                lambda r: "FDR-adjusted p-value: {:.2E}".format(r['q_value']),
+                axis=1
+            ),
+            hovertemplate = "%{id}<br>Estimated Coefficient: %{x}<br>%{text}<extra></extra>",
+            mode = "markers",
+            marker_color = "LightSkyBlue",
+        )
+    ) 
+
+    fig.update_layout(
+        xaxis_title="Estimated Coefficient of Association",
+        template="simple_white",
+        height=600,
+        width=600
+    )
+
+    return fig
+
+
 ##################
 # TAXONOMY GRAPH #
 ##################
