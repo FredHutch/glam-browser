@@ -457,7 +457,7 @@ def cag_abundance_heatmap_card():
                     [
                         html.Label("Display Top CAGs By"),
                         dcc.Dropdown(
-                            id="cag-abundance-heatmap-select-cags-by",
+                            id={"type": "heatmap-select-cags-by", "parent": "abundance-heatmap"},
                             options=[
                                 {"label": "Average Relative Abundance", "value": "abundance"},
                                 {"label": "Size (Number of Genes)", "value": "size"},
@@ -486,11 +486,6 @@ def cag_abundance_heatmap_card():
                             options=[],
                             value=[],
                             multi=True
-                        ),
-                        html.Div(
-                            children=[-1],
-                            id="cag-abundance-heatmap-selected-dataset",
-                            style={"display": "none"}
                         ),
                         html.Br(),
                         html.Label("Group Specimens"),
@@ -573,9 +568,114 @@ metadata for each sample.
 Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
         """
 )
-######################
-# / CAG HEATMAP CARD #
-######################
+################################
+# / CAG ABUNDANCE HEATMAP CARD #
+################################
+
+
+###############################
+# CAG ANNOTATION HEATMAP CARD #
+###############################
+def cag_annotation_heatmap_card():
+    return card_wrapper(
+        "CAG Annotation Heatmap",
+        [
+            dbc.Row([
+                dbc.Col(
+                    [
+                        html.Label("Display Top CAGs By"),
+                        dcc.Dropdown(
+                            id={"type": "heatmap-select-cags-by", "parent": "annotation-heatmap"},
+                            options=[
+                                {"label": "Average Relative Abundance", "value": "abundance"},
+                                {"label": "Size (Number of Genes)", "value": "size"},
+                            ],
+                            value="abundance"
+                        ),
+                        html.Br()
+                    ],
+                    width=4,
+                    align="center",
+                ),
+                dbc.Col(
+                    basic_slider(
+                        "cag-annotation-heatmap-ncags",
+                        "Number of CAGs to Display",
+                        min_value=5,
+                        max_value=50,
+                        default_value=10,
+                        marks=[5, 10, 25, 50]
+                    ) + cag_size_slider(
+                        "cag-annotation-heatmap-size-range"
+                    ),
+                    width=4,
+                    align="center",
+                ),
+                dbc.Col(
+                    [
+                        html.Label("Annotation Type"),
+                        dcc.Dropdown(
+                            id="cag-annotation-heatmap-annotation-type",
+                            options=[
+                                {'label': 'Functional', 'value': 'eggNOG_desc'},
+                                {'label': 'Species', 'value': 'species'},
+                                {'label': 'Genus', 'value': 'genus'},
+                                {'label': 'Family', 'value': 'family'},
+                            ],
+                            value='species',
+                        ),
+                        html.Br(),
+                        dcc.Checklist(
+                            options=[
+                                {'label': 'Include Non-Specific Assignments', 'value': 'include'}
+                            ],
+                            value=[],
+                            id="cag-annotation-heatmap-include-nonspecific-taxa"
+                        )  
+                    ] + basic_slider(
+                        "cag-annotation-heatmap-nannots",
+                        "Number of Annotations to Display",
+                        min_value=10,
+                        max_value=100,
+                        default_value=20,
+                        marks=[10, 30, 50, 70, 90]
+                    ),
+                    width=4,
+                    align="center",
+                ),
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    dbc.Spinner(dcc.Graph(
+                        id='cag-annotation-heatmap-graph'
+                    )),
+                    width=12,
+                    align="center"
+                )
+            ]),
+        ],
+        help_text="""
+This display lets you compare the taxonomic or functional annotations of a group of CAGs.
+
+You may choose to view those CAGs which are most highly abundant, those CAGs containing the
+largest number of genes, or those CAGs which are most consistently associated with a parameter
+in your formula (if provided).
+
+If you decide to display those CAGs which are most associated with a parameter in the formula,
+then you will see the estimated coefficient of association for each CAG against that parameter
+displayed to the right of the heatmap. In addition, you will see the aggregate association of
+each selected annotation against that same parameter from the formula.
+
+The controls at the top of the display help you customize this heatmap. You may choose to include
+a greater or smaller number of CAGs; you may choose to filter CAGs based on their size (the
+number of genes in each CAG); and you may choose to display either taxonomic or functional annotations.
+
+Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+        """
+)
+#################################
+# / CAG ANNOTATION HEATMAP CARD #
+#################################
 
 
 ################

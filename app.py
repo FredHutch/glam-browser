@@ -13,6 +13,7 @@ from helpers.layout import single_sample_card
 from helpers.layout import ordination_card
 from helpers.layout import cag_summary_card
 from helpers.layout import cag_abundance_heatmap_card
+from helpers.layout import cag_annotation_heatmap_card
 from helpers.layout import volcano_card
 from helpers.layout import single_cag_card
 from helpers.layout import manifest_card
@@ -25,6 +26,7 @@ from helpers.plotting import plot_sample_vs_cag_size
 from helpers.plotting import plot_samples_pairwise
 from helpers.plotting import draw_cag_summary_graph_hist
 from helpers.plotting import draw_cag_abundance_heatmap
+from helpers.plotting import draw_cag_annotation_heatmap
 from helpers.plotting import draw_volcano_graph
 from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
@@ -220,14 +222,16 @@ def cag_associations(fp, parameter):
 @cache.memoize()
 def enrichments(fp, parameter, annotation):
     # Make sure that this parameter is valid
-    assert parameter in valid_parameters(fp)
+    if parameter not in valid_parameters(fp):
+        return None
 
-    return hdf5_get_item(
+    df = hdf5_get_item(
         fp,
         "/enrichments/{}/{}".format(parameter, annotation)
-    ).set_index(
-        "label"
     )
+    if df is not None:
+        df.set_index("label", inplace=True)
+    return df
 
 @cache.memoize()
 def gene_annotations_by_cag(fp, cag_id):
@@ -367,6 +371,7 @@ app.layout = html.Div(
                 cag_summary_card(),
                 volcano_card(),
                 cag_abundance_heatmap_card(),
+                cag_annotation_heatmap_card(),
                 single_cag_card(),
                 manifest_card(),
             ],
@@ -655,8 +660,6 @@ def show_hide_summary_display(selected_dataset):
 
 ##############################
 # SHOW / HIDE DETAIL DISPLAY #
-##############################
-        ##############################        
 ##############################
 @app.callback(
     Output("detail-display", 'style'),
@@ -1020,13 +1023,14 @@ def cag_summary_graph_hist_callback(
 ###################################
 @app.callback(
     [
-        Output('cag-abundance-heatmap-select-cags-by', 'options'),
-        Output('cag-abundance-heatmap-select-cags-by', 'value'),
+        Output({"type": "heatmap-select-cags-by", "parent": MATCH}, 'options'),
+        Output({"type": "heatmap-select-cags-by", "parent": MATCH}, 'value'),
     ],
     [
         Input("selected-dataset", "children"),
-    ])
-def abundance_heatmap_graph_select_cags_callback(selected_dataset):
+    ],
+    [State({"type": "heatmap-select-cags-by", "parent": MATCH}, 'value')])
+def abundance_heatmap_graph_select_cags_callback(selected_dataset, _):
     """Add the corncob parameters to the CAG abundance heatmap CAG selection options."""
 
     # Set the base options
@@ -1092,7 +1096,7 @@ def get_cags_selected_by_criterion(fp, select_cags_by, n_cags, cag_size_range):
 @app.callback(
     Output('cag-abundance-heatmap-graph', 'figure'),
     [
-        Input('cag-abundance-heatmap-select-cags-by', 'value'),
+        Input({"type": "heatmap-select-cags-by", "parent": "abundance-heatmap"}, 'value'),
         Input('cag-abundance-heatmap-ncags', 'value'),
         Input({'name': 'cag-abundance-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
         Input('cag-abundance-heatmap-metadata-dropdown', 'value'),
@@ -1226,9 +1230,133 @@ def get_cag_multiselector_options(
         ]
 
     return options
-###########################
-# / CAG HEATMAP CALLBACKS #
-###########################
+#####################################
+# / CAG ABUNDANCE HEATMAP CALLBACKS #
+#####################################
+
+
+####################################
+# CAG ANNOTATION HEATMAP CALLBACKS #
+####################################
+@app.callback(
+    Output('cag-annotation-heatmap-graph', 'figure'),
+    [
+        Input({"type": "heatmap-select-cags-by", "parent": "annotation-heatmap"}, 'value'),
+        Input('cag-annotation-heatmap-ncags', 'value'),
+        Input({'name': 'cag-annotation-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
+        Input('cag-annotation-heatmap-annotation-type', 'value'),
+        Input('cag-annotation-heatmap-nannots', 'value'),
+        Input('cag-annotation-heatmap-include-nonspecific-taxa', 'value'),
+    ],
+    [State("selected-dataset", "children")])
+def annotation_heatmap_graph_callback(
+    select_cags_by,
+    n_cags,
+    cag_size_range,
+    annotation_type,
+    n_annots,
+    include_nonspecific_taxa,
+    selected_dataset,
+):
+    # Get the path to the selected dataset
+    fp = parse_fp(selected_dataset)
+
+    if fp is None:
+        return empty_figure()
+
+    # Get the top CAGs selected by this criterion
+    cags_selected = get_cags_selected_by_criterion(
+        fp,
+        select_cags_by,
+        n_cags,
+        cag_size_range,
+    )
+
+    # If the CAGs are selected by parameter, then fetch the annotations by parameter
+    if select_cags_by.startswith("parameter-"):
+
+        parameter = select_cags_by.replace("parameter-", "")
+        cag_annot_df = gene_annotations_by_parameter(fp, parameter)
+        cag_annot_df = cag_annot_df.loc[cag_annot_df["CAG"].isin(cags_selected)]
+
+        # Also read in the enrichments by parameter
+        enrichment_df = enrichments(
+            fp, 
+            parameter, 
+            annotation_type
+        )
+
+        # If we are selecting CAGs by their association with a given parameter,
+        # we will then plot the estimated coefficient with that parameter
+        cag_estimate_dict = cag_associations(
+            fp,
+            parameter
+        ).reindex(
+            index=cags_selected
+        ).to_dict(
+            orient="index"  # Index by CAG ID, then column name
+        )
+    else:
+
+        parameter = None
+        # Get the annotations of the selected CAGs
+        cag_annot_df = pd.concat([
+            gene_annotations_by_cag(fp, cag_id).assign(CAG = cag_id)
+            for cag_id in cags_selected
+        ])
+
+        # Do not show any enrichments for annotations
+        enrichment_df = None
+
+        # Do not show any estimates for CAGs
+        cag_estimate_dict = None
+
+    # If the annotation type is taxonomic, make a summary of the aggregate counts at each level
+    if annotation_type != "eggNOG_desc":
+        # Read the taxonomy
+        taxonomy_df = taxonomy(fp)
+
+        # Use the `make_cag_tax_df()` function to parse the taxonomy to compute 'consistent' and 'count' (specific) assignments
+        cag_annot_df = pd.concat([
+            make_cag_tax_df(
+                single_cag_annot_df.reindex(
+                    columns=["value", "count"]
+                ).applymap(
+                    int
+                ).set_index("value")["count"],
+                taxonomy_df, 
+            ).assign(CAG = cag_id)
+            for cag_id, single_cag_annot_df in cag_annot_df.query(
+                "annotation == 'tax_id'"
+            ).groupby("CAG")
+        ]).query( # Subset to the indicated taxonomic rank
+            "rank == '{}'".format(annotation_type)
+        )
+
+    # Draw the figure
+    return draw_cag_annotation_heatmap(
+        cag_annot_df,
+        annotation_type,
+        len(include_nonspecific_taxa) == 1,
+        enrichment_df,
+        cag_estimate_dict,
+        n_annots,
+    )
+
+# Only show the checkbox if a taxonomic rank is selected for the annotation heatmap
+@app.callback(
+    Output("cag-annotation-heatmap-include-nonspecific-taxa", "style"),
+    [Input('cag-annotation-heatmap-annotation-type', 'value')]
+)
+def annotation_heatmap_show_hide_checkbox(annotation_type):
+    """Show or hide the checkbox to include non-specific taxonomic hits as appropriate."""
+    if annotation_type == "eggNOG_desc":
+        return {"display": "none"}
+    else:
+        return {"display": "block"}
+######################################
+# / CAG ANNOTATION HEATMAP CALLBACKS #
+######################################
 
 
 #####################
@@ -1268,20 +1396,6 @@ def volcano_graph_callback(
             neg_log_pvalue_min, 
             fdr_on_off, 
         )
-
-@app.callback(
-    Output('volcano-selected-cag', 'children'),
-    [
-        Input('volcano-graph', 'clickData'),
-    ])
-def volcano_save_click_data(clickData):
-    """Only save the click data when a point in a scatter has been selected"""
-    if clickData is not None:
-        for point in clickData["points"]:
-            if "id" in point:
-                # Save the time of the event
-                point["time"] = time()
-                return json.dumps(point, indent=2)
 
 @app.callback(
     Output({"type": "corncob-parameter-dropdown","name": MATCH}, "options"),

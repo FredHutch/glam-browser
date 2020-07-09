@@ -1359,6 +1359,118 @@ def draw_cag_abund_heatmap_panel(
         hovertemplate=hovertemplate,
     )
 
+##########################
+# CAG ANNOTATION HEATMAP #
+##########################
+def draw_cag_annotation_heatmap(
+    cag_annot_df,
+    annotation_type,
+    include_nonspecific_taxa,
+    enrichment_df,
+    cag_estimate_dict,
+    n_annots,
+):
+    """Render the heatmap with CAG annotations."""
+    if cag_annot_df is None:
+        return go.Figure()
+
+    # Format the annotation table
+    plot_df = format_annot_df(
+        cag_annot_df, 
+        annotation_type, 
+        include_nonspecific_taxa, 
+        enrichment_df, 
+        n_annots
+    )
+
+    # Sort the rows and columns with linkage clustering
+    plot_df = cluster_dataframe(plot_df)
+
+    # Lacking functional/taxonomic enrichments or CAG-level estimated coefficients of association
+    if enrichment_df is None or cag_estimate_dict is None or len(cag_estimate_dict) == 0:
+        # Make a very simple plot
+        fig = go.Figure(
+            data=draw_cag_annotation_panel(
+                plot_df
+            )
+        )
+
+    return fig
+
+
+def format_annot_df(cag_annot_df, annotation_type, include_nonspecific_taxa, enrichment_df, n_annots):
+    """Format the table of CAG annotations."""
+
+    # If the annotations are functional, we can just pivot across those functions
+    if annotation_type == "eggNOG_desc":
+
+        wide_df = cag_annot_df.query(
+            "annotation == 'eggNOG_desc'"
+        ).pivot_table(
+            index="CAG",
+            columns="value",
+            values="count"
+        ).fillna(
+            0
+        )
+    else:
+        # Otherwise, the gene annotations are in tax ID space, while the annotation type is either 'species', 'genus', or 'family'
+        
+        # If we are including the non-specific taxa, use the 'consistent' number of hits, otherwise use 'counts'
+        wide_df = cag_annot_df.pivot_table(
+            index="CAG",
+            columns="name",
+            values="consistent" if include_nonspecific_taxa else "count"
+        ).fillna(
+            0
+        )
+
+    # If enrichments are provided, keep the top `n_annots` by enrichment (absolute Wald)
+    if enrichment_df is not None:
+        wide_df = wide_df.reindex(
+            columns = enrichment_df.reindex(
+                index=wide_df.columns.values
+            ).dropna(
+            )[
+                "abs_wald"
+            ].sort_values(
+                ascending=False
+            ).head(
+                n_annots
+            ).index.values
+        )
+
+    # Otherwise keep the most abundant annotations (normalizing to the total number of genes per CAG)
+    else:
+        wide_df = wide_df.reindex(
+            columns = (
+                wide_df.T / wide_df.sum(axis=1)
+            ).T.sum().sort_values(
+                ascending=False
+            ).head(
+                n_annots
+            ).index.values
+        )
+
+    return wide_df
+
+def draw_cag_annotation_panel(plot_df):
+
+    # Calculate the proportion of genes with each assignment
+    prop_df = 100 * (plot_df.T / plot_df.sum(axis=1)).T
+
+    return go.Heatmap(
+        text=plot_df.values,
+        z=prop_df.values,
+        y=["CAG {} -".format(i) for i in plot_df.index.values],
+        x=plot_df.columns.values,
+        colorbar={"title": "Percent of gene assignments"},
+        colorscale='blues',
+        hovertemplate = "%{y}<br>%{x}<br>%{text} genes assigned (%{z} pct)<extra></extra>",
+        zmin=0.,
+        zmax=1.,
+    )
+
 #################
 # VOLCANO GRAPH #
 #################
@@ -1700,25 +1812,7 @@ def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
     )
 
     # Sort the rows and columns with linkage clustering
-    if plot_df.shape[0] > 3:
-        plot_df = plot_df.reindex(
-            index=plot_df.index.values[
-                leaves_list(linkage(
-                    plot_df,
-                    method="ward"
-                ))
-            ]
-        )
-    if plot_df.shape[1] > 3:
-        plot_df = plot_df.reindex(
-            columns=plot_df.columns.values[
-                leaves_list(linkage(
-                    plot_df.T,
-                    method="ward"
-                ))
-            ],
-        )
-
+    plot_df = cluster_dataframe(plot_df)
 
     # Make the text display
     text_df = pd.DataFrame({
@@ -1776,3 +1870,25 @@ def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
     fig.update_yaxes(automargin=True)
 
     return fig
+
+def cluster_dataframe(plot_df):
+    if plot_df.shape[0] > 3:
+        plot_df = plot_df.reindex(
+            index=plot_df.index.values[
+                leaves_list(linkage(
+                    plot_df,
+                    method="ward"
+                ))
+            ]
+        )
+    if plot_df.shape[1] > 3:
+        plot_df = plot_df.reindex(
+            columns=plot_df.columns.values[
+                leaves_list(linkage(
+                    plot_df.T,
+                    method="ward"
+                ))
+            ],
+        )
+
+    return plot_df
