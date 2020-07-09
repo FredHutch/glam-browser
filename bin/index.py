@@ -460,33 +460,6 @@ def add_neg_log10_values(df):
     return df
 
 
-def parse_gene_annotation_summaries(store, dat, annotation_columns=["eggNOG_desc", "tax_id"]):
-    """If we have corncob results, make a summary table for CAGs passing FDR for each."""
-    for key_name, df in dat.items():
-        if key_name.startswith("/cag_associations/"):
-            parameter_name = key_name.replace("/cag_associations/", "")
-
-            # Get the list of CAGs which pass the FDR threshold
-            cag_id_list = df.query(
-                "q_value <= 0.01"
-            )["CAG"].tolist()
-
-            if len(cag_id_list) > 0:
-
-                # Get the annotations for all of the genes in these CAGs
-                summary_df = [
-                    dat[
-                        "/gene_annotations/CAG/CAG{}".format(cag_id)
-                    ].assign(
-                        CAG = cag_id
-                    )
-                    for cag_id in cag_id_list
-                ]
-                if len(summary_df) > 0:
-
-                    yield parameter_name, pd.concat(summary_df)
-
-
 def get_cags_to_include(dat, top_n=10000):
     """Limit the number of CAGs for which we will save information."""
     cags_to_include = set([])
@@ -663,17 +636,6 @@ def index_geneshot_results(input_fp, output_fp):
 
             # Store the actual betta results
             dat["/enrichments/{}/{}".format(parameter, annotation)] = df
-
-        # If we have corncob results, make aggregate tables for each parameter
-        # which include all CAGs with FDR alpha=0.01 and summarize the number
-        # of genes from each CAG which have a given annotation
-        items_to_add = {
-            "/gene_annotations/parameter/{}".format(parameter): parameter_df
-            for parameter, parameter_df in parse_gene_annotation_summaries(store, dat)
-        }
-        # Add those items to the larger `dat` object as a second isolated step
-        for k, v in items_to_add.items():
-            dat[k] = v
 
         # Assemble the `analysis_features` table
         dat["/analysis_features"] = pd.DataFrame(
