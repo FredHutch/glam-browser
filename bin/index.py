@@ -28,6 +28,8 @@ class Taxonomy:
             "tax_id"
         )
 
+        self.all_taxids = set(self.taxonomy_df.index.values)
+
     @lru_cache(maxsize=None)
     def path_to_root(self, tax_id, max_steps=100):
         """Parse the taxonomy to yield a list with all of the taxa above this one."""
@@ -35,6 +37,10 @@ class Taxonomy:
         visited = []
 
         for _ in range(max_steps):
+
+            # Skip taxa which are missing
+            if tax_id not in self.all_taxids:
+                break
 
             # Add to the path we have visited
             visited.append(tax_id)
