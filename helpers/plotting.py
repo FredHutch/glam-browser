@@ -1308,20 +1308,16 @@ def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
     df = cag_tax_df.query("rank == '{}'".format(taxa_rank))
 
     # Sort by 'consistent' hits
-    df = df.sort_values(by="consistent", ascending=False)
+    df = df.sort_values(by="counts", ascending=False)
 
     # Return the top hit
     return {
         "CAG": cag_id,
         "name": df["name"].values[0],
-        "label": "{}<br>{:,} / {:,} genes assigned at the {} level or above<br>{:,} / {:,} genes consistent with {}".format(
+        "label": "{}<br>{:,} genes assigned at the {} level or above".format(
             df["name"].values[0],
             int(df["count"].values[0]),
-            df["total"].values[0],
             taxa_rank,
-            int(df["consistent"].values[0]),
-            df["total"].values[0],
-            df["name"].values[0],
         )
     }
 
@@ -1618,6 +1614,7 @@ def draw_enrichment_graph(
     annotation, 
     parameter,
 ):
+
     fig = go.Figure(
         data=go.Scatter(
             x = enrichment_df["estimate"],
@@ -1627,7 +1624,7 @@ def draw_enrichment_graph(
                 array=enrichment_df["std_error"],
                 visible=True
             ),
-            ids = enrichment_df["label"],
+            ids = enrichment_df.index.values,
             text = enrichment_df.apply(
                 lambda r: "FDR-adjusted p-value: {:.2E}".format(r['q_value']),
                 axis=1
@@ -1636,13 +1633,51 @@ def draw_enrichment_graph(
             mode = "markers",
             marker_color = "LightSkyBlue",
         )
-    ) 
+    )
+
+    # Add a vertical dashed line at x=0 
+    fig.add_shape(
+        dict(
+            type="line",
+            x0=0,
+            y0=0,
+            x1=0,
+            y1=enrichment_df.shape[0],
+            line=dict(
+                dash="dash",
+                width=1,
+            )
+        )
+    )
+    # # Adjust the axis limits so that it is visible
+    xmin = (enrichment_df["estimate"] - (enrichment_df["std_error"] / 2)).min()
+    if xmin > 0:
+        xmin = 0
+    xmax = (enrichment_df["estimate"] + (enrichment_df["std_error"] / 2)).max()
+    if xmax < 0:
+        xmax = 0
+    xpadding = (xmax - xmin) * 0.05
+    fig.update_xaxes(
+        range=[
+            xmin - xpadding,
+            xmax + xpadding,
+        ]
+    )
 
     fig.update_layout(
         xaxis_title="Estimated Coefficient of Association",
         template="simple_white",
         height=600,
-        width=600
+        width=600,
+        yaxis = dict(
+            tickmode = "array",
+            tickvals = list(range(enrichment_df.shape[0])),
+            ticktext=[
+                n[:30] + "..." if len(n) > 30 else n
+                for n in enrichment_df.index.values
+            ],
+            automargin = True,
+        )
     )
 
     return fig
@@ -1660,14 +1695,37 @@ def draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes):
         )
         return fig, 1, {}
 
+    # Add the tax ID to the name (to ensure that every name is unique)
+    cag_tax_df = cag_tax_df.assign(
+        unique_name = cag_tax_df.apply(
+            lambda r: "{} (NCBI ID {})".format(
+                r["name"], int(r["tax_id"])
+            ),
+            axis=1
+        )
+    )
+
+    # Now use that name to fill in the name of the parent (which is currently encoded as a tax ID)
+    cag_tax_df = cag_tax_df.assign(
+        parent_name = cag_tax_df[
+            "parent"
+        ].fillna(
+            0
+        ).apply(
+            int
+        ).apply(
+            cag_tax_df.set_index("tax_id")["unique_name"].get
+        )
+    )
+
     # Filter by the number of genes
     if (cag_tax_df["count"] >= min_ngenes).any():
         cag_tax_df = cag_tax_df.query("count >= {}".format(min_ngenes))
 
     fig = go.Figure(
         data=go.Sunburst(
-            labels=cag_tax_df["name"],
-            parents=cag_tax_df["parent"],
+            labels=cag_tax_df["unique_name"],
+            parents=cag_tax_df["parent_name"],
             values=cag_tax_df["count"],
             branchvalues="total",
         )

@@ -850,10 +850,10 @@ def annotation_enrichment_card():
                     ) + basic_slider(
                         "annotation-enrichment-plotn",
                         "Number of Annotations per Plot",
-                        min_value=5,
+                        min_value=10,
                         max_value=50,
-                        default_value=10,
-                        marks=[5, 25, 50]
+                        default_value=20,
+                        marks=[10, 30, 50]
                     ) + [
                         html.Label("Show Positive / Negative"),
                         dcc.Dropdown(
@@ -866,12 +866,28 @@ def annotation_enrichment_card():
                             value="both",
                         ),
                         html.Br(),
-                        html.Label("Page Number"),
-                        dcc.Input(
-                            id="annotation-enrichment-page-num",
-                            type="number",
-                            min=1, 
-                            step=1,
+                        dbc.Button(
+                            "Next", 
+                            id='annotation-enrichment-button-next', 
+                            n_clicks=0,
+                            color="light",
+                        ),
+                        dbc.Button(
+                            "Previous", 
+                            id='annotation-enrichment-button-previous', 
+                            n_clicks=0,
+                            color="light",
+                        ),
+                        dbc.Button(
+                            "First", 
+                            id='annotation-enrichment-button-first', 
+                            n_clicks=0,
+                            color="light",
+                        ),
+                        html.Div(
+                            children=[1],
+                            id='annotation-enrichment-page-num',
+                            style={"display": "none"},
                         ),
                     ],
                     width=4,
