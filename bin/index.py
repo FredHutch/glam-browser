@@ -201,7 +201,7 @@ def parse_cag_annotations(store):
     )
 
 
-def parse_gene_annotations(store, cags_to_include, tax):
+def parse_gene_annotations(store, tax):
     """Make a summary of the gene-level annotations for this subset of CAGs."""
     key_name = "/annot/gene/all"
 
@@ -209,22 +209,7 @@ def parse_gene_annotations(store, cags_to_include, tax):
 
     df = pd.read_hdf(store, key_name)
 
-    logging.info("Filtering down to annotations from {:,} CAGs".format(
-        len(cags_to_include)
-    ))
-
-    # Filter down to the selected CAGs
-    df = df.assign(
-        INCLUDE = df["CAG"].isin(cags_to_include)
-    ).query(
-        "INCLUDE"
-    ).drop(
-        columns="INCLUDE"
-    )
-
-    logging.info("Retained annotations for {:,} genes".format(
-        df.shape[0]
-    ))
+    logging.info("Read in annotations for {:,} CAGs".format(df.shape[0]))
 
     # Trim the `eggNOG_desc` to 100 characters, if present
     df = df.apply(
@@ -424,110 +409,6 @@ def add_neg_log10_values(df):
     return df
 
 
-def get_cags_to_include(dat, top_n=10000):
-    """Limit the number of CAGs for which we will save information."""
-    cags_to_include = set([])
-
-    for key_name, df in dat.items():
-
-        # Table with CAG annotations
-        if key_name == "/cag_annotations":
-
-            # Keep the top_n CAGs by size and mean abundance
-            for col_name in ["size", "mean_abundance"]:
-                
-                logging.info("Selecting the top {:,} CAGs by {}".format(
-                    top_n,
-                    col_name
-                ))
-
-                cags_to_include.update(set(
-                    df.sort_values(
-                        by=col_name,
-                        ascending=False
-                    ).head(
-                        top_n
-                    )["CAG"].tolist()
-                ))
-                logging.info("Total number of CAGs to display: {:,}".format(
-                    len(cags_to_include)
-                ))
-
-        # Table with the abundances of each CAG
-        elif key_name == "/cag_abundances":
-
-            logging.info("Selecting the top {:,} CAGs by maximum abundance".format(
-                top_n
-            ))
-
-            # Compute the maximum relative abundance of every CAG
-            max_abund = df.set_index("CAG").max(axis=1)
-
-            # Keep the top_n CAGs by maximum relative abundances
-            cags_to_include.update(set(
-                [
-                    cag_id
-                    for cag_id in max_abund.sort_values(
-                        ascending=False
-                    ).head(top_n).index.values
-                ]
-            ))
-            logging.info("Total number of CAGs to display: {:,}".format(
-                len(cags_to_include)
-            ))
-
-        # Table with CAG association metrics
-        elif key_name.startswith("/cag_associations"):
-
-            logging.info("Selecting the top {:,} CAGs by absolute Wald ({})".format(
-                top_n,
-                key_name
-            ))
-
-            # Keep the top_n CAGs by absolute Wald metric
-            cags_to_include.update(set(
-                df.sort_values(
-                    by="abs_wald",
-                    ascending=False
-                ).head(
-                    top_n
-                )["CAG"].tolist()
-            ))
-            logging.info("Total number of CAGs to display: {:,}".format(
-                len(cags_to_include)
-            ))
-
-    return cags_to_include
-
-
-def filter_data_to_selected_cags(dat, cags_to_include):
-    """Reduce the size of the data that will be saved by filtering to these CAGs."""
-
-    # ABUNDANCES #
-    # Only keep abundances for the CAGs in the list
-    logging.info("Retaining abundances for {:,} / {:,} CAGs".format(
-        len(cags_to_include), dat["/cag_abundances"].shape[0]
-    ))
-    # Subset the table 
-    dat["/cag_abundances"] = dat["/cag_abundances"].loc[
-        dat["/cag_abundances"]["CAG"].isin(cags_to_include)
-    ]
-    # Every CAG should have an annotation
-    assert dat["/cag_abundances"].shape[0] == len(cags_to_include)
-
-    # Iterate over the tables to access programmatically named tables
-    for table_name in dat:
-        # ASSOCIATIONS #
-        # Consider all of the CAG association tables
-        if table_name.startswith("/cag_associations/"):
-            # Subset the table
-            dat[table_name] = dat[table_name].loc[
-                dat[table_name]["CAG"].isin(cags_to_include)
-            ]
-            # Every set of associations should have some CAGs included
-            assert dat[table_name].shape[0] > 0
-
-
 def index_geneshot_results(input_fp, output_fp):
 
     # Keep all of the data in a dict linking the key to the table
@@ -606,16 +487,6 @@ def index_geneshot_results(input_fp, output_fp):
             analysis_features
         ).drop_duplicates()
 
-        # Limit the number of CAGs for which we will save information
-        cags_to_include = get_cags_to_include(dat)
-        logging.info("Indexing details for {:,} CAGs out of {:,} total".format(
-            len(cags_to_include),
-            dat["/cag_abundances"].shape[0]
-        ))
-
-        # Subset the previously read information to the set of selected CAGs
-        filter_data_to_selected_cags(dat, cags_to_include)
-
         # Read in the taxonomy, if present
         if "/ref/taxonomy" in all_keys:
             tax = Taxonomy(store)
@@ -623,7 +494,7 @@ def index_geneshot_results(input_fp, output_fp):
             tax = None
 
         # Read in the gene annotations for just those CAGs
-        functional_annot_df, counts_df, rank_summaries = parse_gene_annotations(store, cags_to_include, tax)
+        functional_annot_df, counts_df, rank_summaries = parse_gene_annotations(store, tax)
 
     # Store the summary annotation tables if the annotations are available
     if functional_annot_df is not None:
