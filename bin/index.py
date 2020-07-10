@@ -67,6 +67,10 @@ class Taxonomy:
         if tax_id in self.all_taxids:
             return self.taxonomy_df.loc[tax_id, "name"]
 
+    def parent(self, tax_id):
+        if tax_id in self.all_taxids:
+            return self.taxonomy_df.loc[tax_id, "parent"]
+
     def make_cag_tax_df(
         self,
         taxa_vc, 
@@ -281,6 +285,18 @@ def summarize_taxonomic_annotations(df, tax):
         )
         for rank in ["phylum", "class", "order", "family", "genus", "species"]
     }
+
+    # Add the name and parents
+    counts_df = counts_df.assign(
+        name=counts_df["tax_id"].apply(tax.name),
+        parent=counts_df["tax_id"].apply(tax.parent),
+    )
+
+    # Just add the name to the rank summaries
+    for rank in rank_summaries:
+        rank_summaries[rank] = rank_summaries[rank].assign(
+            name=rank_summaries[rank]["tax_id"].apply(tax.name)
+        )
 
     return counts_df, rank_summaries
 
@@ -505,9 +521,7 @@ def index_geneshot_results(input_fp, output_fp):
         dat["/gene_annotations/taxonomic/all"] = counts_df
 
         for rank, rank_df in rank_summaries.items():
-            dat["/gene_annotations/taxonomic/{}".format(rank)] = rank_df.assign(
-                name = rank_df["tax_id"].apply(tax.name)
-            )
+            dat["/gene_annotations/taxonomic/{}".format(rank)] = rank_df
 
     # Write out all of the tables to HDF5
     with pd.HDFStore(output_fp, "w") as store:
