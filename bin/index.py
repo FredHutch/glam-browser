@@ -608,7 +608,7 @@ def index_geneshot_results(input_fp, output_fp):
             tax = None
 
         # Read in the gene annotations for just those CAGs
-        functional_df, counts_df, rank_summaries = parse_gene_annotations(store, cags_to_include, tax)
+        functional_annot_df, counts_df, rank_summaries = parse_gene_annotations(store, cags_to_include, tax)
 
     # Store the summary annotation tables if the annotations are available
     if functional_annot_df is not None:
