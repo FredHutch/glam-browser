@@ -251,9 +251,18 @@ def taxonomic_gene_annotations(fp, rank="all", cag_id=None):
         return
     
     if cag_id is not None:
-        df = df.query("CAG == {}".format(cag_id))
+        df = df.query(
+            "CAG == {}".format(cag_id)
+        )
+
         if df.shape[0] == 0:
             return
+
+        # Sort by number of hits
+        df = df.sort_values(
+            by="count", 
+            ascending=False
+        )
 
     return df
 ############################################
@@ -1124,7 +1133,7 @@ def abundance_heatmap_graph_callback(
     if taxa_rank != "none":
         # Otherwise, get the taxonomic IDs for the CAGs
         cag_taxa_dict = {
-            cag_id: taxonomic_gene_annotations(fp, cag_id=cag_id)
+            cag_id: taxonomic_gene_annotations(fp, cag_id=cag_id, rank=taxa_rank)
             for cag_id in cags_selected
         }
     else:

@@ -1225,7 +1225,7 @@ def draw_cag_abund_taxon_panel(
 
     # For each CAG, pick out the top hit
     summary_df = pd.DataFrame([
-        summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank)
+        summarize_cag_taxa(cag_id, cag_tax_df)
         for cag_id, cag_tax_df in cag_tax_dict.items()
     ])
 
@@ -1293,31 +1293,24 @@ def draw_cag_estimate_panel(
     )
 
 
-def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
+def summarize_cag_taxa(cag_id, cag_tax_df):
     """Helper function to summarize the top hit at a given rank."""
 
     # If there are no hits at this level, return None
-    if cag_tax_df is None or ((cag_tax_df["rank"] == taxa_rank).sum() == 0):
+    if cag_tax_df is None:
         return {
             "CAG": cag_id,
             "name": 'none',
             "label": "No genes assigned at this level"
         }
 
-    # Filter down to this rank
-    df = cag_tax_df.query("rank == '{}'".format(taxa_rank))
-
-    # Sort by 'consistent' hits
-    df = df.sort_values(by="counts", ascending=False)
-
     # Return the top hit
     return {
         "CAG": cag_id,
-        "name": df["name"].values[0],
-        "label": "{}<br>{:,} genes assigned at the {} level or above".format(
-            df["name"].values[0],
-            int(df["count"].values[0]),
-            taxa_rank,
+        "name": cag_tax_df["name"].values[0],
+        "label": "{}<br>{:,} genes assigned".format(
+            cag_tax_df["name"].values[0],
+            int(cag_tax_df["count"].values[0])
         )
     }
 
@@ -1412,7 +1405,7 @@ def format_annot_df(cag_annot_df, annotation_type, include_nonspecific_taxa, enr
     else:
         # Otherwise, the gene annotations are in tax ID space, while the annotation type is either 'species', 'genus', or 'family'
         
-        # If we are including the non-specific taxa, use the 'consistent' number of hits, otherwise use 'counts'
+        # If we are including the non-specific taxa, use the 'consistent' number of hits, otherwise use 'count'
         wide_df = cag_annot_df.pivot_table(
             index="CAG",
             columns="name",
