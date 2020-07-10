@@ -51,6 +51,11 @@ class Taxonomy:
 
         return visited
 
+    @lru_cache(maxsize=None)
+    def anc_at_rank(self, tax_id, rank):
+        for anc_tax_id in self.path_to_root(tax_id):
+            if self.taxonomy_df.loc[anc_tax_id, "rank"] == rank:
+                return self.taxonomy_df.loc[anc_tax_id, "name"]
 
     def make_cag_tax_df(
         self,
@@ -88,7 +93,7 @@ class Taxonomy:
                 counts[anc_tax_id] += n_genes
 
         if len(counts) == 0:
-            pd.DataFrame([{
+            return pd.DataFrame([{
                 "tax_id": None
             }])
 
@@ -227,27 +232,55 @@ def parse_gene_annotations(store, cags_to_include, tax):
     # This function also does some taxonomy parsing to count the assignments to higher levels
     if "tax_id" in df.columns.values and tax is not None:
         logging.info("Summarizing taxonomic annotations")
-        taxonomic_df = summarize_taxonomic_annotations(df, tax)
+        counts_df, rank_summaries = summarize_taxonomic_annotations(df, tax)
     else:
-        taxonomic_df = None
+        counts_df, rank_summaries = None, None
 
-    return functional_df, taxonomic_df
+    return functional_df, counts_df, rank_summaries
 
 
 def summarize_taxonomic_annotations(df, tax):
-    return pd.concat([
-        tax.make_cag_tax_df(
-            cag_df["tax_id"].value_counts()
-        ).assign(
-            CAG = cag_id
+    # Make a DataFrame with the number of taxonomic annotations per CAG
+    counts_df = pd.concat([
+        pd.DataFrame(
+            [
+                {
+                    "count": c,
+                    "tax_id": tax_id,
+                    "CAG": cag_id
+                }
+                for tax_id, c in cag_df["tax_id"].dropna().apply(int).value_counts().items()
+                if tax_id != 0
+            ]
         )
         for cag_id, cag_df in df.reindex(
             columns=["CAG", "tax_id"]
-        ).dropna(
         ).groupby(
             "CAG"
         )
-    ]).dropna()
+    ]).reset_index(
+        drop=True
+    )
+
+    logging.info("Made tax ID count table")
+
+    rank_summaries = {
+        rank: counts_df.assign(
+            name = counts_df["tax_id"].apply(
+                lambda tax_id: tax.anc_at_rank(tax_id, rank)
+            )
+        ).dropna(
+        ).groupby(
+            ["CAG", "name"]
+        )[
+            "count"
+        ].sum(
+        ).reset_index(
+        )
+        for rank in ["phylum", "class", "order", "family", "genus", "species"]
+    }
+
+    return counts_df, rank_summaries
 
 
 def summarize_annotations(df, col_name):
@@ -575,19 +608,16 @@ def index_geneshot_results(input_fp, output_fp):
             tax = None
 
         # Read in the gene annotations for just those CAGs
-        functional_annot_df, taxonomic_annot_df = parse_gene_annotations(store, cags_to_include, tax)
+        functional_df, counts_df, rank_summaries = parse_gene_annotations(store, cags_to_include, tax)
 
     # Store the summary annotation tables if the annotations are available
     if functional_annot_df is not None:
         dat["/gene_annotations/functional"] = functional_annot_df
-    if taxonomic_annot_df is not None:
-        dat["/gene_annotations/taxonomic/all"] = taxonomic_annot_df
+    if counts_df is not None:
+        dat["/gene_annotations/taxonomic/all"] = counts_df
 
-        for rank, rank_df in taxonomic_annot_df.groupby("rank"):
-            if rank in ["phylum", "class", "order", "family", "genus", "species"]:
-                dat["/gene_annotations/taxonomic/{}".format(rank)] = rank_df.drop(
-                    columns=["rank", "parent_tax_id"]
-                )
+        for rank, rank_df in rank_summaries.items():
+                dat["/gene_annotations/taxonomic/{}".format(rank)] = rank_df
 
     # Write out all of the tables to HDF5
     with pd.HDFStore(output_fp, "w") as store:
