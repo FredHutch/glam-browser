@@ -287,8 +287,6 @@ def summarize_taxonomic_annotations(df, tax):
             "count"
         ].sum(
         ).reset_index(
-        ).drop(
-            columns="tax_id"
         ).rename(
             columns={
                 "anc_tax_id": "tax_id"
