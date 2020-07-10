@@ -61,7 +61,11 @@ class Taxonomy:
     def anc_at_rank(self, tax_id, rank):
         for anc_tax_id in self.path_to_root(tax_id):
             if self.taxonomy_df.loc[anc_tax_id, "rank"] == rank:
-                return self.taxonomy_df.loc[anc_tax_id, "name"]
+                return anc_tax_id
+
+    def name(self, tax_id):
+        if tax_id in self.all_taxids:
+            return self.taxonomy_df.loc[tax_id, "name"]
 
     def make_cag_tax_df(
         self,
@@ -253,7 +257,8 @@ def summarize_taxonomic_annotations(df, tax):
                 {
                     "count": c,
                     "tax_id": tax_id,
-                    "CAG": cag_id
+                    "CAG": cag_id,
+                    "name": tax.name(tax_id),
                 }
                 for tax_id, c in cag_df["tax_id"].dropna().apply(int).value_counts().items()
                 if tax_id != 0
@@ -272,16 +277,22 @@ def summarize_taxonomic_annotations(df, tax):
 
     rank_summaries = {
         rank: counts_df.assign(
-            name = counts_df["tax_id"].apply(
+            anc_tax_id = counts_df["tax_id"].apply(
                 lambda tax_id: tax.anc_at_rank(tax_id, rank)
             )
         ).dropna(
         ).groupby(
-            ["CAG", "name"]
+            ["CAG", "anc_tax_id"]
         )[
             "count"
         ].sum(
         ).reset_index(
+        ).drop(
+            columns="tax_id"
+        ).rename(
+            columns={
+                "anc_tax_id": "tax_id"
+            }
         )
         for rank in ["phylum", "class", "order", "family", "genus", "species"]
     }
@@ -623,7 +634,9 @@ def index_geneshot_results(input_fp, output_fp):
         dat["/gene_annotations/taxonomic/all"] = counts_df
 
         for rank, rank_df in rank_summaries.items():
-                dat["/gene_annotations/taxonomic/{}".format(rank)] = rank_df
+            dat["/gene_annotations/taxonomic/{}".format(rank)] = rank_df.assign(
+                name = rank_df["tax_id"].apply(tax.name)
+            )
 
     # Write out all of the tables to HDF5
     with pd.HDFStore(output_fp, "w") as store:
