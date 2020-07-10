@@ -119,9 +119,10 @@ class Taxonomy:
         # Add the name, parent, rank
         df = df.assign(
             tax_id=df.index.values,
-            parent_tax_id=self.taxonomy_df["parent"],
+            parent=self.taxonomy_df["parent"],
             rank=self.taxonomy_df["rank"],
             name=self.taxonomy_df["name"],
+            total=total_genes_assigned,
         )
 
         return df
@@ -241,17 +242,8 @@ def parse_gene_annotations(store, tax):
 def summarize_taxonomic_annotations(df, tax):
     # Make a DataFrame with the number of taxonomic annotations per CAG
     counts_df = pd.concat([
-        pd.DataFrame(
-            [
-                {
-                    "count": c,
-                    "tax_id": tax_id,
-                    "CAG": cag_id,
-                    "name": tax.name(tax_id),
-                }
-                for tax_id, c in cag_df["tax_id"].dropna().apply(int).value_counts().items()
-                if tax_id != 0
-            ]
+        tax.make_cag_tax_df(
+            cag_df["tax_id"].dropna().apply(int).value_counts()
         )
         for cag_id, cag_df in df.reindex(
             columns=["CAG", "tax_id"]
@@ -265,38 +257,13 @@ def summarize_taxonomic_annotations(df, tax):
     logging.info("Made tax ID count table")
 
     rank_summaries = {
-        rank: counts_df.assign(
-            anc_tax_id = counts_df["tax_id"].apply(
-                lambda tax_id: tax.anc_at_rank(tax_id, rank)
-            )
-        ).dropna(
-        ).groupby(
-            ["CAG", "anc_tax_id"]
-        )[
-            "count"
-        ].sum(
-        ).reset_index(
-        ).rename(
-            columns={
-                "anc_tax_id": "tax_id"
-            }
-        ).applymap(
-            int
+        rank: counts_df.query(
+            "rank == '{}'".format(rank)
+        ).drop(
+            columns=["rank", "parent"]
         )
         for rank in ["phylum", "class", "order", "family", "genus", "species"]
     }
-
-    # Add the name and parents
-    counts_df = counts_df.assign(
-        name=counts_df["tax_id"].apply(tax.name),
-        parent=counts_df["tax_id"].apply(tax.parent),
-    )
-
-    # Just add the name to the rank summaries
-    for rank in rank_summaries:
-        rank_summaries[rank] = rank_summaries[rank].assign(
-            name=rank_summaries[rank]["tax_id"].apply(tax.name)
-        )
 
     return counts_df, rank_summaries
 
