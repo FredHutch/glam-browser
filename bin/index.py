@@ -276,6 +276,8 @@ def summarize_taxonomic_annotations(df, tax):
             columns={
                 "anc_tax_id": "tax_id"
             }
+        ).applymap(
+            int
         )
         for rank in ["phylum", "class", "order", "family", "genus", "species"]
     }
