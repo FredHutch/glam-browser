@@ -244,6 +244,8 @@ def summarize_taxonomic_annotations(df, tax):
     counts_df = pd.concat([
         tax.make_cag_tax_df(
             cag_df["tax_id"].dropna().apply(int).value_counts()
+        ).assign(
+            CAG = cag_id
         )
         for cag_id, cag_df in df.reindex(
             columns=["CAG", "tax_id"]
