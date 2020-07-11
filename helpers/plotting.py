@@ -1380,6 +1380,44 @@ def draw_cag_annotation_heatmap(
                 plot_df
             )
         )
+    elif enrichment_df is not None:
+
+        # Make a plot with association metrics on both the rows and columns        
+        # Four panels, side-by-side, sharing the x-axis and y-axis
+
+        # The estimate plots will be smaller
+        fig = make_subplots(
+            rows=2, 
+            cols=2, 
+            shared_xaxes=True,
+            shared_yaxes=True,
+            column_widths=[
+                0.85, 0.15
+            ],
+            row_heights=[
+                0.85, 0.15
+            ],
+            horizontal_spacing=0.005,
+        )
+
+        # Plot the abundances on the left
+        fig.add_trace(
+            draw_cag_annotation_panel(
+                plot_df
+            ),
+            row=1, 
+            col=1
+        )
+
+        # Plot the estimated coefficients on the right
+        fig.add_trace(
+            draw_cag_estimate_panel(
+                cag_estimate_dict, 
+                plot_df.index.values
+            ), 
+            row=1, 
+            col=2,
+        )
 
     fig.update_layout(
         width=figure_width,
@@ -1453,9 +1491,9 @@ def draw_cag_annotation_panel(plot_df):
     # Format the mouseover text
     text_df = plot_df.apply(
         lambda c: [
-            "{:,} genes assigned to {} from CAG {}".format(
-                ncounts,
+            "{}<br>{:,} genes assigned from CAG {}".format(
                 c.name,
+                int(ncounts),
                 cag_id
             )
             for cag_id, ncounts in c.items()
@@ -1696,7 +1734,19 @@ def draw_enrichment_graph(
 ##################
 # TAXONOMY GRAPH #
 ##################
-def draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes):
+def draw_taxonomy_sunburst(
+    cag_tax_df, 
+    cag_id, 
+    min_ngenes,
+    ranks_to_plot = [
+        "phylum",
+        "class",
+        "order",
+        "family",
+        "genus",
+        "species",
+    ]
+):
     # If no assignments were made, just show an empty plot
     if cag_tax_df is None:
         fig = go.Figure(data=[])
@@ -1705,32 +1755,69 @@ def draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes):
         )
         return fig, 1, {}
 
-    # Add the tax ID to the name (to ensure that every name is unique)
+    # Set the index on the tax ID
+    cag_tax_df = cag_tax_df.set_index("tax_id")
+
+    # Make sure that the parent column is formatted as an integer
+    cag_tax_df = cag_tax_df.apply(
+        lambda c: c.fillna(0).apply(int) if c.name == "parent" else c
+    )
+
+    # Add the tax ID to any duplicated names (to make them unique)
+    # This makes a Series with the name assigned to tax ID, 
+    # but does not add to the table itself
+    name_vc = cag_tax_df["name"].value_counts()
+    name_dict = {
+        tax_id: r["name"] if name_vc[r["name"]] == 1 else "{} (NCBI ID {})".format(
+            r["name"], tax_id
+        )
+        for tax_id, r in cag_tax_df.iterrows()
+    }
+
+    # Remove any rows which are below the threshold, or are at the wrong rank
+    taxa_to_remove = [
+        tax_id
+        for tax_id, r in cag_tax_df.iterrows()
+        if r["count"] < min_ngenes or r["rank"] not in ranks_to_plot
+    ]
+
+    # Make sure that we have some data left to plot
+    if len(taxa_to_remove) == cag_tax_df.shape[0]:
+        fig = go.Figure(data=[])
+        fig.update_layout(
+            template="simple_white",
+        )
+        return fig, 1, {}
+
+    # Walk through and remove the rows, reassigning the 'parent' for each
+    for tax_id in taxa_to_remove:
+        # Get the parent of this taxon
+        parent_tax_id = cag_tax_df.loc[tax_id, "parent"]
+
+        # For any taxa which have this taxon (to be removed) as the parent,
+        # replace that value with the parent of this taxon 
+        if tax_id in cag_tax_df["parent"].values:
+            cag_tax_df = cag_tax_df.replace(
+                to_replace={
+                    "parent": {
+                        tax_id: parent_tax_id
+                    }
+                }
+            ).drop(
+                index=tax_id
+            )
+
+    # Now we will fill in the name of the parent
+    #  (which is currently encoded as a tax ID)
+    # Crucially, set the 'parent_name' to None for any taxon
+    #  which is its own parent
     cag_tax_df = cag_tax_df.assign(
-        unique_name = cag_tax_df.apply(
-            lambda r: "{} (NCBI ID {})".format(
-                r["name"], int(r["tax_id"])
-            ),
+        unique_name = pd.Series(name_dict),
+        parent_name = cag_tax_df.apply(
+            lambda r: name_dict[r["parent"]] if r["parent"] != r.name else None,
             axis=1
-        )
+        ),
     )
-
-    # Now use that name to fill in the name of the parent (which is currently encoded as a tax ID)
-    cag_tax_df = cag_tax_df.assign(
-        parent_name = cag_tax_df[
-            "parent"
-        ].fillna(
-            0
-        ).apply(
-            int
-        ).apply(
-            cag_tax_df.set_index("tax_id")["unique_name"].get
-        )
-    )
-
-    # Filter by the number of genes
-    if (cag_tax_df["count"] >= min_ngenes).any():
-        cag_tax_df = cag_tax_df.query("count >= {}".format(min_ngenes))
 
     fig = go.Figure(
         data=go.Sunburst(
