@@ -1196,7 +1196,6 @@ def update_heatmap_metadata_dropdown(
         Input({'name': 'cag-annotation-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
         Input('cag-annotation-heatmap-annotation-type', 'value'),
         Input('cag-annotation-heatmap-nannots', 'value'),
-        Input('cag-annotation-heatmap-include-nonspecific-taxa', 'value'),
     ],
     [State("selected-dataset", "children")])
 def annotation_heatmap_graph_callback(
@@ -1205,7 +1204,6 @@ def annotation_heatmap_graph_callback(
     cag_size_range,
     annotation_type,
     n_annots,
-    include_nonspecific_taxa,
     selected_dataset,
 ):
     # Get the path to the selected dataset
@@ -1275,7 +1273,6 @@ def annotation_heatmap_graph_callback(
     return draw_cag_annotation_heatmap(
         cag_annot_df,
         annotation_type,
-        len(include_nonspecific_taxa) == 1,
         enrichment_df,
         cag_estimate_dict,
         n_annots,

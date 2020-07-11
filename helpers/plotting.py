@@ -1367,7 +1367,6 @@ def draw_cag_annotation_heatmap(
     plot_df = format_annot_df(
         cag_annot_df, 
         annotation_type, 
-        include_nonspecific_taxa, 
         enrichment_df, 
         n_annots
     )
@@ -1387,7 +1386,7 @@ def draw_cag_annotation_heatmap(
     return fig
 
 
-def format_annot_df(cag_annot_df, annotation_type, include_nonspecific_taxa, enrichment_df, n_annots):
+def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
     """Format the table of CAG annotations."""
 
     # If the annotations are functional, we can just pivot across those functions
@@ -1409,7 +1408,7 @@ def format_annot_df(cag_annot_df, annotation_type, include_nonspecific_taxa, enr
         wide_df = cag_annot_df.pivot_table(
             index="CAG",
             columns="name",
-            values="consistent" if include_nonspecific_taxa else "count"
+            values="count"
         ).fillna(
             0
         )

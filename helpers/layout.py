@@ -625,13 +625,6 @@ def cag_annotation_heatmap_card():
                             value='species',
                         ),
                         html.Br(),
-                        dcc.Checklist(
-                            options=[
-                                {'label': 'Include Non-Specific Assignments', 'value': 'include'}
-                            ],
-                            value=[],
-                            id="cag-annotation-heatmap-include-nonspecific-taxa"
-                        )  
                     ] + basic_slider(
                         "cag-annotation-heatmap-nannots",
                         "Number of Annotations to Display",
