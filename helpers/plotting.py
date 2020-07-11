@@ -695,6 +695,8 @@ def draw_cag_abundance_heatmap(
     full_manifest_df,
     cag_taxa_dict,
     cag_estimate_dict,
+    figure_width = 800,
+    figure_height = 800,
 ):
     # Get the filtered manifest from the browser
     plot_manifest_df = parse_manifest_json(manifest_json, full_manifest_df)
@@ -764,11 +766,6 @@ def draw_cag_abundance_heatmap(
             )
         ]
     )
-
-    # Set the figure width
-    figure_width = 800
-    # Set the figure height
-    figure_height = 800
 
     # Depending on whether metadata or taxonomic information has
     # been provided, the plot will be set up in different ways
@@ -1354,10 +1351,11 @@ def draw_cag_abund_heatmap_panel(
 def draw_cag_annotation_heatmap(
     cag_annot_df,
     annotation_type,
-    include_nonspecific_taxa,
     enrichment_df,
     cag_estimate_dict,
     n_annots,
+    figure_width=800,
+    figure_height=800,
 ):
     """Render the heatmap with CAG annotations."""
     if cag_annot_df is None:
@@ -1383,6 +1381,12 @@ def draw_cag_annotation_heatmap(
             )
         )
 
+    fig.update_layout(
+        width=figure_width,
+        height=figure_height,
+        template="simple_white",
+    )
+
     return fig
 
 
@@ -1392,15 +1396,14 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
     # If the annotations are functional, we can just pivot across those functions
     if annotation_type == "eggNOG_desc":
 
-        wide_df = cag_annot_df.query(
-            "annotation == 'eggNOG_desc'"
-        ).pivot_table(
+        wide_df = cag_annot_df.pivot_table(
             index="CAG",
-            columns="value",
+            columns="label",
             values="count"
         ).fillna(
             0
         )
+
     else:
         # Otherwise, the gene annotations are in tax ID space, while the annotation type is either 'species', 'genus', or 'family'
         
@@ -1444,17 +1447,32 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
 
 def draw_cag_annotation_panel(plot_df):
 
-    # Calculate the proportion of genes with each assignment
-    prop_df = 100 * (plot_df.T / plot_df.sum(axis=1)).T
+    # Scale the assignments to the maximum for each CAG
+    prop_df = 100 * (plot_df.T / plot_df.max(axis=1)).T
+
+    # Format the mouseover text
+    text_df = plot_df.apply(
+        lambda c: [
+            "{:,} genes assigned to {} from CAG {}".format(
+                ncounts,
+                c.name,
+                cag_id
+            )
+            for cag_id, ncounts in c.items()
+        ]
+    )
 
     return go.Heatmap(
-        text=plot_df.values,
+        text=text_df.values,
         z=prop_df.values,
         y=["CAG {} -".format(i) for i in plot_df.index.values],
-        x=plot_df.columns.values,
+        x=[
+            n[:30] + "..." if len(n) > 30 else n
+            for n in plot_df.columns.values
+        ],
         colorbar={"title": "Percent of gene assignments"},
         colorscale='blues',
-        hovertemplate = "%{y}<br>%{x}<br>%{text} genes assigned (%{z} pct)<extra></extra>",
+        hovertemplate = "%{text}<extra></extra>",
         zmin=0.,
         zmax=1.,
     )
