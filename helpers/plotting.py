@@ -1210,43 +1210,48 @@ def draw_cag_abund_heatmap_with_metadata_tax_and_estimates(
         ),
     )
 
-    fig = make_subplots(
-        rows=2, 
-        cols=3, 
-        shared_xaxes=True,
-        shared_yaxes=True,
-        row_heights=[
-            metadata_height,
-            1 - metadata_height
-        ],
-        vertical_spacing=0.01,
-        column_widths=[
-            0.8, 0.05, 0.15
-        ],
-        horizontal_spacing=0.005,
+    data = [
+        draw_cag_abund_heatmap_panel(
+            cag_abund_df, 
+            hovertemplate=hovertemplate,
+            xaxis="x",
+            yaxis="y",
+        ),
+        draw_cag_abund_taxon_panel(
+            cag_tax_dict, 
+            taxa_rank, 
+            cag_abund_df.index.values,
+            xaxis="x2",
+            yaxis="y",
+        ),
+        draw_cag_estimate_panel(
+            cag_annot_dict, 
+            cag_abund_df.index.values,
+            xaxis="x3",
+            yaxis="y"
+        ),
+        draw_metadata_heatmap_panel(
+            plot_manifest_df,
+            xaxis="x",
+            yaxis="y2"
+        )
+    ]
+
+    layout = go.Layout(
+        xaxis = dict(domain=[0, 0.8]),
+        xaxis2 = dict(domain=[0.81, 0.85]),
+        xaxis3 = dict(domain=[0.86, 1.0]),
+        yaxis = dict(domain=[0, 0.99 - metadata_height]),
+        yaxis2 = dict(domain=[1 - metadata_height, 1.]),
     )
 
-    # Plot the abundances on the bottom-left
-    fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=2, col=1
+    fig = go.Figure(
+        data=data,
+        layout=layout
     )
 
-    # Plot the taxonomic annotations on the bottom-middle
-    fig.add_trace(
-        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank, cag_abund_df.index.values), row=2, col=2
-    )
-
-    # Plot the estimated coefficients on the bottom-right
-    fig.add_trace(
-        draw_cag_estimate_panel(cag_annot_dict, cag_abund_df.index.values), row=2, col=3
-    )
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
-
-    # Plot the metadata on the top-left
-    fig.add_trace(
-        draw_metadata_heatmap_panel(plot_manifest_df), row=1, col=1
-    )
 
     return fig
 
@@ -1386,7 +1391,7 @@ def draw_metadata_heatmap_panel(
 def draw_cag_abund_heatmap_panel(
     cag_abund_df,
     hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
-    xaxis = "x",
+    xaxis="x",
     yaxis="y",
 ):
     return go.Heatmap(
