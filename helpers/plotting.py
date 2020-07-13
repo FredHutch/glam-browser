@@ -1066,7 +1066,28 @@ def draw_cag_abund_heatmap_with_metadata_and_estimate(
     # metadata - blank
     # cag-abun - estimate
 
-    # The relative height of the subplots will be set dynamically
+    # First set up the data which goes into the plots
+    data = [
+        draw_cag_abund_heatmap_panel(
+            cag_abund_df, 
+            hovertemplate = hovertemplate,
+            xaxis = "x",
+            yaxis = "y",
+        ),
+        draw_metadata_heatmap_panel(
+            plot_manifest_df,
+            xaxis = "x",
+            yaxis = "y2"
+        ),
+        draw_cag_estimate_panel(
+            cag_annot_dict, 
+            cag_abund_df.index.values,
+            xaxis = "x2",
+            yaxis = "y"
+        ),
+    ]
+
+    # Dynamically set the amount of plot area taken up by metadata
     metadata_height = max(
         0.1,
         min(
@@ -1075,38 +1096,32 @@ def draw_cag_abund_heatmap_with_metadata_and_estimate(
         ),
     )
 
-    fig = make_subplots(
-        rows=2, 
-        cols=2, 
-        shared_xaxes=True,
-        shared_yaxes=True,
-        row_heights=[
-            metadata_height,
-            1 - metadata_height
-        ],
-        vertical_spacing=0.01,
-        column_widths=[
-            0.85, 0.15
-        ],
-        horizontal_spacing=0.005,
+    # Now set the relative plot area taken up by each axis
+    # The proportion taken up by each plot also includes 2% internal padding
+    layout = go.Layout(
+        xaxis=dict(
+            domain=[0, 0.84]
+        ),
+        yaxis=dict(
+            domain=[0, 0.99 - metadata_height]
+        ),
+        xaxis2=dict(
+            domain=[0.86, 1.0]
+        ),
+        yaxis2=dict(
+            domain=[1.01 - metadata_height, 1]
+        ),
     )
 
-    # Plot the abundances on the bottom-left
-    fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=2, col=1
+    # Make the figure
+    fig = go.Figure(
+        data=data,
+        layout=layout
     )
 
-    # Plot the estimated coefficients on the bottom-right
-    fig.add_trace(
-        draw_cag_estimate_panel(cag_annot_dict, cag_abund_df.index.values), row=2, col=2
-    )
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
 
-    # Plot the metadata on the top-left
-    fig.add_trace(
-        draw_metadata_heatmap_panel(plot_manifest_df), row=1, col=1
-    )
 
     return fig
 
@@ -1245,7 +1260,7 @@ def draw_cag_abund_taxon_panel(
 
     return go.Heatmap(
         x=[taxa_rank],
-        y=["CAG {} -".format(i) for i in summary_df["CAG"].values],
+        y=["CAG {}".format(i) for i in summary_df["CAG"].values],
         z=summary_df.reindex(columns=["name_scalar"]).values,
         text=summary_df.reindex(columns=["label"]).values,
         showscale=False,
@@ -1256,7 +1271,9 @@ def draw_cag_abund_taxon_panel(
 
 def draw_cag_estimate_panel(
     cag_annot_dict,
-    cag_order
+    cag_order,
+    xaxis = "x",
+    yaxis = "y",
 ):
     """Render the subplot with the estimated coefficients for each CAG."""
     # Explicitly order the values for plotting
@@ -1276,7 +1293,10 @@ def draw_cag_estimate_panel(
     ]
     return go.Scatter(
         x = plot_values["estimate"],
-        y = list(range(len(cag_order))),
+        y = [
+            "CAG {}".format(cag_id)
+            for cag_id in cag_order
+        ],
         error_x = dict(
             type='data',
             array=plot_values["std_error"],
@@ -1287,6 +1307,8 @@ def draw_cag_estimate_panel(
         hovertemplate = "CAG %{id}<br>Estimated Coefficient: %{x}<br>%{text}<extra></extra>",
         mode = "markers",
         marker_color = "LightSkyBlue",
+        xaxis = xaxis,
+        yaxis = yaxis,
     )
 
 
@@ -1315,6 +1337,8 @@ def summarize_cag_taxa(cag_id, cag_tax_df):
 def draw_metadata_heatmap_panel(
     plot_manifest_df,
     hovertemplate="Specimen: %{x}<br>Label: %{y}<br>Value: %{text}<extra></extra>",
+    xaxis="x",
+    yaxis="y",
 ):
     return go.Heatmap(
         z=plot_manifest_df.apply(
@@ -1330,19 +1354,26 @@ def draw_metadata_heatmap_panel(
         colorscale='Viridis',
         showscale=False,
         hovertemplate=hovertemplate,
+        xaxis=xaxis,
+        yaxis=yaxis,
     )
 
 def draw_cag_abund_heatmap_panel(
     cag_abund_df,
     hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
+    xaxis = "x",
+    yaxis="y",
 ):
     return go.Heatmap(
         z=cag_abund_df.values,
-        y=["CAG {} -".format(i) for i in cag_abund_df.index.values],
+        y=["CAG {}".format(i) for i in cag_abund_df.index.values],
         x=["Specimen: {}".format(i) for i in cag_abund_df.columns.values],
         colorbar={"title": "Abundance (log10)"},
         colorscale='blues',
         hovertemplate=hovertemplate,
+        xaxis = xaxis,
+        yaxis = yaxis,
+
     )
 
 ##########################
@@ -1389,7 +1420,7 @@ def draw_cag_annotation_heatmap(
         fig = make_subplots(
             rows=2, 
             cols=2, 
-            shared_xaxes=True,
+            shared_xaxes=False,
             shared_yaxes=True,
             column_widths=[
                 0.85, 0.15
@@ -1503,7 +1534,7 @@ def draw_cag_annotation_panel(plot_df):
     return go.Heatmap(
         text=text_df.values,
         z=prop_df.values,
-        y=["CAG {} -".format(i) for i in plot_df.index.values],
+        y=["CAG {}".format(i) for i in plot_df.index.values],
         x=[
             n[:30] + "..." if len(n) > 30 else n
             for n in plot_df.columns.values
