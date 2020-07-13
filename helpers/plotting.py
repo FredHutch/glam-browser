@@ -1019,38 +1019,48 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
         ),
     )
 
-    fig = make_subplots(
-        rows=2, 
-        cols=2, 
-        shared_xaxes=True,
-        shared_yaxes=True,
-        row_heights=[
-            metadata_height,
-            1 - metadata_height
-        ],
-        vertical_spacing=0.01,
-        column_widths=[
-            0.95, 0.05
-        ],
-        horizontal_spacing=0.005,
+    data = [
+        draw_cag_abund_heatmap_panel(
+            cag_abund_df, 
+            hovertemplate = hovertemplate,
+            xaxis = "x",
+            yaxis = "y"
+        ),
+        draw_cag_abund_taxon_panel(
+            cag_tax_dict, 
+            taxa_rank, 
+            cag_abund_df.index.values,
+            xaxis = "x2",
+            yaxis = "y"
+        ),
+        draw_metadata_heatmap_panel(
+            plot_manifest_df,
+            xaxis = "x",
+            yaxis = "y2"
+        )
+    ]
+
+    layout = go.Layout(
+        xaxis = dict(
+            domain = [0., 0.94]
+        ),
+        xaxis2 = dict(
+            domain = [0.95, 1.]
+        ),
+        yaxis = dict(
+            domain = [0., 0.99 - metadata_height]
+        ),
+        yaxis2 = dict(
+            domain = [1.01 - metadata_height, 1.0]
+        ),
     )
 
-    # Plot the abundances on the bottom-left
-    fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=2, col=1
-    )
-
-    # Plot the taxonomic annotations on the bottom-right
-    fig.add_trace(
-        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank, cag_abund_df.index.values), row=2, col=2
+    fig = go.Figure(
+        data=data,
+        layout=layout
     )
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
-
-    # Plot the metadata on the top-left
-    fig.add_trace(
-        draw_metadata_heatmap_panel(plot_manifest_df), row=1, col=1
-    )
 
     return fig
 
@@ -1136,30 +1146,41 @@ def draw_cag_abund_heatmap_with_tax_and_estimates(
     # Make a plot with three panels:
     # cag-abun - taxa - estimate
 
-    fig = make_subplots(
-        rows=1, 
-        cols=3, 
-        shared_yaxes=True,
-        column_widths=[
-            0.8, 0.05, 0.15
-        ],
-        horizontal_spacing=0.005,
+    data = [
+        draw_cag_abund_heatmap_panel(
+            cag_abund_df, 
+            hovertemplate=hovertemplate,
+            xaxis="x",
+        ),
+        draw_cag_abund_taxon_panel(
+            cag_tax_dict, 
+            taxa_rank, 
+            cag_abund_df.index.values,
+            xaxis="x1",
+        ),
+        draw_cag_estimate_panel(
+            cag_annot_dict, 
+            cag_abund_df.index.values,
+            xaxis="x2",
+        )
+    ]
+
+    layout = go.Layout(
+        xaxis=dict(
+            domain=[0, 0.795]
+        ),
+        xaxis2=dict(
+            domain=[0.805, 0.845]
+        ),
+        xaxis3=dict(
+            domain=[0.855, 1.0]
+        ),
     )
 
-    # Plot the abundances on the left
-    fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=1, col=1
-    )
-    
-    # Plot the taxonomic annotations on the middle
-    fig.add_trace(
-        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank, cag_abund_df.index.values), row=1, col=2
+    fig = go.Figure(
+        data=data, layout=layout
     )
 
-    # Plot the estimated coefficients on the right
-    fig.add_trace(
-        draw_cag_estimate_panel(cag_annot_dict, cag_abund_df.index.values), row=1, col=3
-    )
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
 
@@ -1233,6 +1254,8 @@ def draw_cag_abund_taxon_panel(
     cag_tax_dict, 
     taxa_rank,
     cag_order,
+    xaxis="x",
+    yaxis="y",
 ):
 
     # For each CAG, pick out the top hit
@@ -1265,7 +1288,9 @@ def draw_cag_abund_taxon_panel(
         text=summary_df.reindex(columns=["label"]).values,
         showscale=False,
         colorscale='Viridis',
-        hovertemplate="%{y}<br>%{text}<extra></extra>"
+        hovertemplate="%{y}<br>%{text}<extra></extra>",
+        xaxis=xaxis,
+        yaxis=yaxis,
     )
 
 
@@ -1514,7 +1539,11 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
 
     return wide_df
 
-def draw_cag_annotation_panel(plot_df):
+def draw_cag_annotation_panel(
+    plot_df,
+    xaxis = "x",
+    yaxis = "y",
+):
 
     # Scale the assignments to the maximum for each CAG
     prop_df = 100 * (plot_df.T / plot_df.max(axis=1)).T
@@ -1544,6 +1573,8 @@ def draw_cag_annotation_panel(plot_df):
         hovertemplate = "%{text}<extra></extra>",
         zmin=0.,
         zmax=1.,
+        xaxis=xaxis,
+        yaxis=yaxis,
     )
 
 #################
