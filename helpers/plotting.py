@@ -1456,7 +1456,7 @@ def draw_cag_annotation_heatmap(
         # Three data structures are needed to plot the full taxonomy, the number of counts
         # at each terminal node, the taxonomy linking each terminal node to its parents,
         # and (for convenience) a list of ancestors for each terminal node
-        plot_df, tax_df, path_to_root_dict = format_taxonomic_annot_df(
+        plot_df, tax_df = format_taxonomic_annot_df(
             cag_annot_df,
             enrichment_df,
             n_annots
@@ -1488,7 +1488,6 @@ def draw_cag_annotation_heatmap(
             fig = plot_taxonomic_annotations_without_enrichment(
                 plot_df,
                 tax_df,
-                path_to_root_dict,
             )
 
         # all other plot types
@@ -1508,7 +1507,6 @@ def draw_cag_annotation_heatmap(
             fig = plot_taxonomic_annotations_with_cag_associations_only(
                 plot_df,
                 tax_df,
-                path_to_root_dict,
                 cag_estimate_dict
             )
 
@@ -1528,7 +1526,6 @@ def draw_cag_annotation_heatmap(
             fig = plot_taxonomic_annotations_with_enrichment(
                 plot_df,
                 tax_df,
-                path_to_root_dict,
                 cag_estimate_dict,
                 enrichment_df
             )
@@ -1558,14 +1555,13 @@ def draw_cag_annotation_heatmap(
 def plot_taxonomic_annotations_with_enrichment(
     plot_df,
     tax_df,
-    path_to_root_dict,
     cag_estimate_dict,
     enrichment_df
 ):
     """Plot the number of genes assigned to taxa alongside the tree, with association metrics."""
 
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
-    path_to_root_df = format_path_to_root_df(path_to_root_dict, tax_df)
+    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
 
     # Make the dendrogram
     fig = ff.create_dendrogram(
@@ -1666,13 +1662,12 @@ def plot_taxonomic_annotations_with_enrichment(
 def plot_taxonomic_annotations_with_cag_associations_only(
     plot_df,
     tax_df,
-    path_to_root_dict,
     cag_estimate_dict
 ):
     """Plot the number of genes assigned to taxa alongside the tree, with CAG association metrics only."""
 
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
-    path_to_root_df = format_path_to_root_df(path_to_root_dict, tax_df)
+    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
 
     # Make the dendrogram
     fig = ff.create_dendrogram(
@@ -1753,11 +1748,10 @@ def plot_taxonomic_annotations_with_cag_associations_only(
 def plot_taxonomic_annotations_without_enrichment(
     plot_df,
     tax_df,
-    path_to_root_dict
 ):
     """Plot the number of genes assigned to taxa alongside the tree."""
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
-    path_to_root_df = format_path_to_root_df(path_to_root_dict, tax_df)
+    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
 
     # Make the dendrogram
     fig = ff.create_dendrogram(
@@ -1837,8 +1831,8 @@ def draw_taxonomic_annotation_heatmap_panel(
     # Make the table with text to display
     text_df = plot_df.apply(
         lambda c: pd.Series(
-            ["{:,} genes from CAG {} assigned to {} or its parent taxa".format(
-                count,
+            ["{:,} genes from CAG {} assigned to {} or its constituents".format(
+                int(count),
                 c.name,
                 org_name
             ) for org_name, count in c.items()],
@@ -1867,13 +1861,15 @@ def draw_taxonomic_annotation_heatmap_panel(
     )
 
 
-def format_path_to_root_df(path_to_root_dict, tax_df):
+def format_path_to_root_df(tax_id_list, tax_df):
     return pd.DataFrame({
-        terminal_node: {
-            internal_node: 1
-            for internal_node in internal_node_list
+        tax_id: {
+            anc_tax_id: 1
+            for anc_tax_id in [tax_id] + [
+                t for t in path_to_root(tax_id, tax_df)
+            ]
         }
-        for terminal_node, internal_node_list in path_to_root_dict.items()
+        for tax_id in tax_id_list
     }).T.fillna(
         0
     ).rename(
@@ -2024,12 +2020,17 @@ def format_taxonomic_annot_df(cag_annot_df, enrichment_df, n_annots):
     ).set_index(
         "tax_id"
     )
-    
-    # Keep track of how many terminal nodes we're adding to the plot
-    terminal_nodes = set([])
-    # Keep track of which internal nodes are in the path to root for the terminal nodes
-    internal_nodes = set([])
 
+    # Calculate the number of counts assigned specifically to each taxon
+    cag_annot_df = cag_annot_df.groupby(
+        "CAG"
+    ).apply(
+        find_counts_at_taxon
+    )
+
+    # Keep track of how many nodes we're adding to the plot
+    terminal_nodes = set([])
+    
     # If the enrichment values are provided, add the top n_annots / 2
     if enrichment_df is not None:
 
@@ -2046,85 +2047,80 @@ def format_taxonomic_annot_df(cag_annot_df, enrichment_df, n_annots):
             )
 
             if matched_org.shape[0] == 1:
-                add_tax_node(
+                terminal_nodes.add(
                     matched_org.index.values[0],
-                    terminal_nodes,
-                    internal_nodes,
-                    tax_df
                 )
 
+            # Stop once (or if) the limit on terminal nodes has been reached
+            if len(terminal_nodes) >= int(n_annots / 2.):
+                break
+
     # Now add more taxa according to their frequency in the underlying data
-    for tax_id in cag_annot_df.assign(
-        prop = cag_annot_df["count"] / cag_annot_df["total"]
-    ).sort_values(
-        by="prop",
+    for tax_id in cag_annot_df.loc[
+        cag_annot_df["rank"].isin([
+            "species", "genus", "family", "class", "order", "phylum"
+        ])
+    ].sort_values(
+        by="specific_prop",
         ascending=False
     )[
         "tax_id"
     ].values:
 
         # Add this node to the plot
-        add_tax_node(
-            tax_id,
-            terminal_nodes,
-            internal_nodes,
-            tax_df
+        terminal_nodes.add(
+            tax_id
         )
 
         # Stop once (or if) the limit on terminal nodes has been reached
-        if len(terminal_nodes) >= int(n_annots / 2.):
+        if len(terminal_nodes) >= int(n_annots):
             break
-
-    # For each CAG, get the list of ancestors in the path to root
-    path_to_root_dict = {
-        tax_id: [tax_id] + [
-            anc_tax_id
-            for anc_tax_id in path_to_root(tax_id, tax_df)
-        ]
-        for tax_id in list(terminal_nodes)
-    }
 
     # For each CAG, we will format the wide table so that each row contains
     # a terminal node, and the value in each cell is the number of genes
-    # which are assigned to taxa along the path to root
-    plot_df = pd.DataFrame({
-        cag_id: count_path_to_root(cag_count_df, terminal_nodes, path_to_root_dict)
-        for cag_id, cag_count_df in cag_annot_df.groupby("CAG")
-    })
+    # which are assigned to that taxa or its children
+    plot_df = cag_annot_df.loc[
+        cag_annot_df["tax_id"].isin(terminal_nodes)
+    ].reset_index(
+        drop=True
+    ).pivot_table(
+        columns="CAG",
+        index="tax_id",
+        values="at_or_below"
+    ).fillna(
+        0
+    )
 
-    return plot_df, tax_df, path_to_root_dict
+    return plot_df, tax_df
 
 
-def count_path_to_root(cag_count_df, terminal_nodes, path_to_root_dict):
-    """For each terminal node, count up the number of genes assigned on the path to root."""
+def find_counts_at_taxon(cag_df):
 
-    # The number of genes assigned to a taxon is the number of genes at-or-below (in the 'counts' column)
-    # minus the sum of counts for its children
-    specific_counts = cag_count_df.set_index(
-        "tax_id"
-    )[
-        "count"
-    ] - cag_count_df.query(
+    # Sum up the number of counts below each taxon
+    counts_below = cag_df.query(
         "tax_id != parent"
     ).groupby(
         "parent"
     )[
         "count"
     ].sum(
-    ).reindex(
-        cag_count_df["tax_id"].values
-    ).fillna(
-        0
     )
 
-    # Return the sum of counts along the path to root for each terminal node
-    return pd.Series({
-        tax_id: int(sum([
-            specific_counts.get(tax_id, 0)
-            for anc_tax_id in path_to_root_dict[tax_id]
-        ]))
-        for tax_id in list(terminal_nodes)
-    })
+    # Make a vector with the number of counts below each taxon
+    counts_below = cag_df["tax_id"].apply(
+        lambda t: counts_below.get(t, 0)
+    )
+    # Count up the number at each taxon
+    specific_count = cag_df["count"] - counts_below
+    # Compute the proportion of all assignments
+    specific_prop = specific_count / specific_count.sum()
+
+    return cag_df.assign(
+        counts_below = counts_below,
+        specific_count = specific_count,
+        at_or_below = counts_below + specific_count,
+        specific_prop = specific_prop,
+    )
 
 
 def add_tax_node(tax_id, terminal_nodes, internal_nodes, tax_df):
