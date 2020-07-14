@@ -688,11 +688,11 @@ def volcano_card():
             ),
             dbc.Col(
                 corncob_parameter_dropdown(
-                    "volcano-parameter-dropdown",
+                    group="volcano-parameter",
                 ) + cag_size_slider(
                     "volcano-cag-size-slider"
                 ) + volcano_pvalue_slider(
-                    "volcano-pvalue-slider",
+                    group="volcano-parameter",
                 ) + log_scale_radio_button(
                     "volcano-fdr-radio",
                     label_text="FDR-BH adjustment"
@@ -726,34 +726,66 @@ Note: Click on the camera icon at the top of this plot (or any on this page) to 
 ##################
 
 ###################
-# SINGLE CAG CARD #
+# PLOT CAG CARD #
 ###################
-def single_cag_card():
+def plot_cag_card():
     return card_wrapper(
-        "Individual CAG Abundance",
+        "Plot CAG Abundance",
         [
             dbc.Row([
                 dbc.Col(
                     dbc.Spinner(
-                        dcc.Graph(id="single-cag-graph")
+                        dcc.Graph(id="plot-cag-graph")
                     ),
                     width=8,
                     align="center",
                 ),
                 dbc.Col(
                     [
-                        html.Label("Display CAG"),
+                        html.Label("Display CAG(s) By"),
                         dcc.Dropdown(
-                            id="single-cag-multiselector",
-                            options=[],
-                            value=[],
+                            id="plot-cag-selection-type",
+                            options=[
+                                {"label": "CAG ID", "value": "cag_id"},
+                                {"label": "Association & Annotation", "value": "association"},
+                            ],
+                            value="cag_id",
                         ),
                         html.Br(),
+                        html.Div(
+                            [
+                                html.Label("CAG ID"),
+                                dcc.Dropdown(
+                                    id="plot-cag-multiselector",
+                                    options=[],
+                                    value=[],
+                                ),
+                                html.Br(),
+                            ], 
+                            id="plot-cag-by-id-div"
+                        ),
+                        html.Div(
+                            corncob_parameter_dropdown(
+                                group="plot-cag",
+                            ) + volcano_pvalue_slider(
+                                group="plot-cag",
+                            ) + [
+                                html.Label("Filter by Annotation"),
+                                dcc.Dropdown(
+                                    id="plot-cag-annotation-multiselector",
+                                    options=[],
+                                    value=[],
+                                    multi=True
+                                ),
+                                html.Br(),
+                            ],
+                            id="plot-cag-by-association-div"
+                        ),
                     ] + metadata_field_dropdown(
-                        "single-cag-xaxis",
+                        "plot-cag-xaxis",
                         label_text="X-axis",
                     ) + plot_type_dropdown(
-                        "single-cag-plot-type",
+                        "plot-cag-plot-type",
                         options=[
                             {'label': 'Points', 'value': 'scatter'},
                             {'label': 'Line', 'value': 'line'},
@@ -761,13 +793,13 @@ def single_cag_card():
                             {'label': 'Stripplot', 'value': 'strip'},
                         ]
                     ) + metadata_field_dropdown(
-                        "single-cag-color",
+                        "plot-cag-color",
                         label_text="Color",
                     ) + metadata_field_dropdown(
-                        "single-cag-facet",
+                        "plot-cag-facet",
                         label_text="Facet",
                     ) + log_scale_radio_button(
-                        "single-cag-log"
+                        "plot-cag-log"
                     ),
                     width=4,
                     align="center",
@@ -806,7 +838,7 @@ Note: Click on the camera icon at the top of this plot (or any on this page) to 
         """
     )
 #####################
-# / SINGLE CAG CARD #
+# / PLOT CAG CARD #
 #####################
 
 
@@ -840,7 +872,7 @@ def annotation_enrichment_card():
                         ),
                         html.Br(),
                     ] + corncob_parameter_dropdown(
-                        "annotation-enrichment-parameter"
+                        group="annotation-enrichment"
                     ) + basic_slider(
                         "annotation-enrichment-plotn",
                         "Number of Annotations per Plot",
@@ -1237,15 +1269,15 @@ def basic_slider(
 
 
 def corncob_parameter_dropdown(
-    dropdown_id,
     label_text='Parameter',
+    group="none"
 ):
     return [
         html.Label(label_text),
         dcc.Dropdown(
             id={
                 "type": "corncob-parameter-dropdown",
-                "name": dropdown_id
+                "group": group,
             },
             options=[
                 {'label': 'None', 'value': 'none'},
@@ -1256,12 +1288,15 @@ def corncob_parameter_dropdown(
     ]
 
 
-def volcano_pvalue_slider(slider_id, label_text='P-Value Filter'):
+def volcano_pvalue_slider(label_text='P-Value Filter (-log10)', group="none"):
     """This slider is missing the max and marks, which will be updated by a callback."""
     return [
         html.Label(label_text),
         dcc.Slider(
-            id=slider_id,
+            id={
+                "type": "corncob-pvalue-slider",
+                "group": group,
+            },
             min=0,
             step=0.1,
             value=1,

@@ -15,7 +15,7 @@ from helpers.layout import cag_abundance_heatmap_card
 from helpers.layout import cag_annotation_heatmap_card
 from helpers.layout import volcano_card
 from helpers.layout import annotation_enrichment_card
-from helpers.layout import single_cag_card
+from helpers.layout import plot_cag_card
 from helpers.layout import manifest_card
 from helpers.plotting import update_richness_graph
 from helpers.plotting import run_pca
@@ -355,7 +355,7 @@ app.layout = html.Div(
                 cag_abundance_heatmap_card(),
                 cag_annotation_heatmap_card(),
                 annotation_enrichment_card(),
-                single_cag_card(),
+                plot_cag_card(),
                 manifest_card(),
             ],
             id="detail-display",
@@ -1254,6 +1254,7 @@ def annotation_heatmap_graph_callback(
 
         # To show all taxonomic annotations, read in the enrichments at multiple ranks
         if annotation_type == "taxonomic":
+            # In the combined DataFrame, make sure to include the rank of interest
             enrichment_df = pd.concat([
                 enrichments(
                     fp, 
@@ -1316,7 +1317,7 @@ def annotation_heatmap_graph_callback(
         Input("annotation-enrichment-type", "value"),
         Input({
             "type": "corncob-parameter-dropdown",
-            "name": "annotation-enrichment-parameter"
+            "group": "annotation-enrichment",
         }, "value"),
         Input("annotation-enrichment-plotn", "value"),
         Input("annotation-enrichment-show-pos-neg", "value"),
@@ -1421,10 +1422,16 @@ def annotation_enrichment_click(btn1, btn2, btn3, page_num):
     Output('volcano-graph', 'figure'),
     [
         Input("selected-dataset", "children"),
-        Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
+        Input({
+            "type": "corncob-parameter-dropdown", 
+            "group": "volcano-parameter",
+        }, 'value'),
         Input("corncob-comparison-parameter-dropdown", "value"),
         Input({"name": 'volcano-cag-size-slider', "type": "cag-size-slider"}, 'value'),
-        Input('volcano-pvalue-slider', 'value'),
+        Input({
+            'group': 'volcano-parameter',
+            'type': 'corncob-pvalue-slider'
+        }, 'value'),
         Input('volcano-fdr-radio', 'value'),
     ])
 def volcano_graph_callback(
@@ -1453,11 +1460,11 @@ def volcano_graph_callback(
         )
 
 @app.callback(
-    Output({"type": "corncob-parameter-dropdown","name": MATCH}, "options"),
+    Output({"type": "corncob-parameter-dropdown", "group": MATCH}, "options"),
     [
         Input("selected-dataset", "children"),
     ],
-    [State({"type": "corncob-parameter-dropdown","name": MATCH}, "value")])
+    [State({"type": "corncob-parameter-dropdown", "group": MATCH}, "value")])
 def update_volcano_parameter_dropdown_options(selected_dataset, dummy):
     # Get the path to the selected dataset
     fp = parse_fp(selected_dataset)
@@ -1509,11 +1516,11 @@ def update_volcano_comparison_dropdown(selected_dataset):
         return [options, value]
 
 @app.callback(
-    Output({"type": "corncob-parameter-dropdown","name": MATCH}, "value"),
+    Output({"type": "corncob-parameter-dropdown", "group": MATCH}, "value"),
     [
         Input("selected-dataset", "children"),
     ],
-    [State({"type": "corncob-parameter-dropdown", "name": MATCH}, "options")])
+    [State({"type": "corncob-parameter-dropdown", "group": MATCH}, "options")])
 def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
     # Get the path to the selected dataset
     fp = parse_fp(selected_dataset)
@@ -1533,15 +1540,47 @@ def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
             return parameter_list[0]
 
 @app.callback(
-    [
-        Output('volcano-pvalue-slider', value)
-        for value in ['max', 'marks']
-    ],
+    Output({
+        'type': 'corncob-pvalue-slider',
+        'group': MATCH,
+    }, "max"),
     [
         Input("selected-dataset", "children"),
-        Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
+        Input({
+            "type": "corncob-parameter-dropdown", 
+            "group": MATCH}, 'value'),
     ])
-def update_volcano_pvalue_slider(selected_dataset, parameter):
+def update_volcano_pvalue_slider_max(selected_dataset, parameter):
+    # Get the path to the selected dataset
+    fp = parse_fp(selected_dataset)
+
+    # No dataset selected, or no parameter selected
+    if fp is None or parameter == "none":
+        return 1
+    else:
+
+        df = cag_associations(
+            fp, 
+            parameter
+        )
+        assert "neg_log10_pvalue" in df.columns.values, df.columns.values
+        return cag_associations(
+            fp, 
+            parameter
+        )["neg_log10_pvalue"].max()
+
+@app.callback(
+    Output({
+        'type': 'corncob-pvalue-slider',
+        'group': MATCH,
+    }, "marks"),
+    [
+        Input("selected-dataset", "children"),
+        Input({
+            "type": "corncob-parameter-dropdown", 
+            "group": MATCH}, 'value'),
+    ])
+def update_volcano_pvalue_slider_marks(selected_dataset, parameter):
     # Get the path to the selected dataset
     fp = parse_fp(selected_dataset)
 
@@ -1572,7 +1611,7 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
         )
     }
 
-    return [max_value, marks]
+    return marks
 #######################
 # / VOLCANO CALLBACKS #
 #######################
@@ -1591,7 +1630,7 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
     [
         Input("selected-dataset", "children"),
         Input('cag-tax-ngenes', 'value'),
-        Input('single-cag-multiselector', 'value'),
+        Input('plot-cag-multiselector', 'value'),
     ])
 def update_taxonomy_graph(selected_dataset, min_ngenes, cag_id):
     # Get the path to the selected dataset
@@ -1617,11 +1656,27 @@ def update_taxonomy_graph(selected_dataset, min_ngenes, cag_id):
 # / CAG TAXONOMY CALLBACK #
 ###########################
 
-#######################
-# SINGLE CAG CALLBACK #
-#######################
+#####################
+# PLOT CAG CALLBACK #
+#####################
 @app.callback(
-    Output("single-cag-multiselector", 'options'),
+    [
+        Output("plot-cag-by-id-div", "style"),
+        Output("plot-cag-by-association-div", "style"),
+    ],
+    [Input("plot-cag-selection-type", "value")]
+)
+def plot_cag_show_hide_selection_controls(
+    selection_type
+):
+    """When the user selects 'Association & Annotation', show the appropriate controls."""
+    if selection_type == "cag_id":
+        return {"display": "block"}, {"display": "none"}
+    else:
+        return {"display": "none"}, {"display": "block"}
+
+@app.callback(
+    Output("plot-cag-multiselector", 'options'),
     [
         Input("selected-dataset", "children"),
     ])
@@ -1656,12 +1711,12 @@ def update_single_cag_multiselector_options(
     return options
     
 @app.callback(
-    Output('single-cag-multiselector', 'value'),
+    Output('plot-cag-multiselector', 'value'),
     [
         Input("selected-dataset", "children"),
     ],
     [
-        State('single-cag-multiselector', 'value')
+        State('plot-cag-multiselector', 'value')
     ]
 )
 def update_single_cag_dropdown_value(
@@ -1694,17 +1749,17 @@ def update_single_cag_dropdown_value(
         # With a new dataset, select the first five CAGs
         return top_cag
 @app.callback(
-    Output('single-cag-graph', 'figure'),
+    Output('plot-cag-graph', 'figure'),
     [
-        Input('single-cag-multiselector', 'value'),
-        Input({'name': 'single-cag-xaxis',
+        Input('plot-cag-multiselector', 'value'),
+        Input({'name': 'plot-cag-xaxis',
                "type": "metadata-field-dropdown"}, 'value'),
-        Input('single-cag-plot-type', 'value'),
-        Input({'name': 'single-cag-color',
+        Input('plot-cag-plot-type', 'value'),
+        Input({'name': 'plot-cag-color',
                "type": "metadata-field-dropdown"}, 'value'),
-        Input({'name': 'single-cag-facet',
+        Input({'name': 'plot-cag-facet',
                "type": "metadata-field-dropdown"}, 'value'),
-        Input('single-cag-log', 'value'),
+        Input('plot-cag-log', 'value'),
         Input('manifest-filtered', 'children'),
     ],[
         State("selected-dataset", "children")
@@ -1744,9 +1799,9 @@ def update_single_cag_graph(
         facet,
         log_scale
     )
-#########################
-# / SINGLE CAG CALLBACK #
-#########################
+#######################
+# / PLOT CAG CALLBACK #
+#######################
 
 
 #########################
