@@ -1277,18 +1277,6 @@ def annotation_heatmap_graph_callback(
         cag_estimate_dict,
         n_annots,
     )
-
-# Only show the checkbox if a taxonomic rank is selected for the annotation heatmap
-@app.callback(
-    Output("cag-annotation-heatmap-include-nonspecific-taxa", "style"),
-    [Input('cag-annotation-heatmap-annotation-type', 'value')]
-)
-def annotation_heatmap_show_hide_checkbox(annotation_type):
-    """Show or hide the checkbox to include non-specific taxonomic hits as appropriate."""
-    if annotation_type == "eggNOG_desc":
-        return {"display": "none"}
-    else:
-        return {"display": "block"}
 ######################################
 # / CAG ANNOTATION HEATMAP CALLBACKS #
 ######################################
