@@ -249,6 +249,10 @@ def taxonomic_gene_annotations(fp, rank="all", cag_id=None):
 
     if df is None:
         return
+
+    df = df.apply(
+        lambda c: c.fillna(0).apply(int) if c.name in ["count", "tax_id", "parent", "total", "CAG"] else c
+    )
     
     if cag_id is not None:
         df = df.query(
@@ -1226,9 +1230,13 @@ def annotation_heatmap_graph_callback(
         # Read in the functional annotations for all CAGs in the index
         cag_annot_df = functional_gene_annotations(fp)
 
-    else:
+    elif annotation_type == "taxonomic":
 
         # Read in the full set of taxonomic annotations
+        cag_annot_df = taxonomic_gene_annotations(fp)
+
+    else:
+        # Read in the taxonomic annotations at this rank
         cag_annot_df = taxonomic_gene_annotations(fp, rank=annotation_type)
 
     # Subset to just the CAGs in this list
@@ -1243,11 +1251,28 @@ def annotation_heatmap_graph_callback(
         parameter = select_cags_by.replace("parameter-", "")
 
         # Read in the enrichments of each annotation according to this parameter
-        enrichment_df = enrichments(
-            fp, 
-            parameter, 
-            annotation_type
-        )
+
+        # To show all taxonomic annotations, read in the enrichments at multiple ranks
+        if annotation_type == "taxonomic":
+            enrichment_df = pd.concat([
+                enrichments(
+                    fp, 
+                    parameter, 
+                    rank
+                ).assign(
+                    rank=rank
+                ).reset_index()
+                for rank in ["species", "genus", "family"]
+            ]).reset_index(
+                drop=True
+            )
+        else:
+            # Otherwise just show the enrichments at this single level
+            enrichment_df = enrichments(
+                fp, 
+                parameter, 
+                annotation_type
+            )
 
         # If we are selecting CAGs by their association with a given parameter,
         # we will then plot the estimated coefficient with that parameter

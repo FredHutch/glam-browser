@@ -7,6 +7,7 @@ import pandas as pd
 import dash_core_components as dcc
 import plotly.express as px
 import plotly.graph_objs as go
+import plotly.figure_factory as ff
 from plotly.subplots import make_subplots
 from scipy.cluster.hierarchy import linkage
 from scipy.cluster.hierarchy import leaves_list
@@ -1423,37 +1424,75 @@ def draw_cag_annotation_heatmap(
     if cag_annot_df is None:
         return go.Figure()
 
-    # Format the annotation table
-    plot_df = format_annot_df(
-        cag_annot_df, 
-        annotation_type, 
-        enrichment_df, 
-        n_annots
-    )
+    print(annotation_type)
 
-    # Sort the rows and columns with linkage clustering
-    plot_df = cluster_dataframe(plot_df)
+    # If the annotation is taxonomic, then we will use a dedicated function to prepare the data for plotting
+    if annotation_type == "taxonomic":
+
+        print("here1")
+
+        # Three data structures are needed to plot the full taxonomy, the number of counts
+        # at each terminal node, the taxonomy linking each terminal node to its parents,
+        # and (for convenience) a list of ancestors for each terminal node
+        plot_df, tax_df, path_to_root_dict = format_taxonomic_annot_df(
+            cag_annot_df,
+            enrichment_df,
+            n_annots
+        )
+
+    # Otherwise, just format the annotation by pivoting to wide format and selecing the top
+    # N annotations by either frequency or the enrichment absolute Wald (if provided)
+    else:
+
+        print("here2")
+
+        # Format the annotation table
+        plot_df = format_annot_df(
+            cag_annot_df, 
+            annotation_type, 
+            enrichment_df, 
+            n_annots
+        )
+
+        # Sort the rows and columns with linkage clustering
+        plot_df = cluster_dataframe(plot_df)
 
     # Lacking functional/taxonomic enrichments or CAG-level estimated coefficients of association
-    if enrichment_df is None or cag_estimate_dict is None or len(cag_estimate_dict) == 0:
-        # Make a very simple plot
-        fig = go.Figure(
-            data=draw_cag_annotation_panel(
-                plot_df
-            )
-        )
-    elif cag_estimate_dict is not None and len(cag_estimate_dict) >= 0:
+    if enrichment_df is None and (cag_estimate_dict is None or len(cag_estimate_dict) == 0):
 
-        # Check to see if we have enrichment metrics for the annotations
-        if enrichment_df is not None:
+        print("here3")
+        # If the plot type is Taxonomic
+        if annotation_type == "taxonomic":
+            print("here4")
 
-            # Make a plot with association metrics on both the rows and columns        
-            # Four panels, side-by-side, sharing the x-axis and y-axis
-
-            fig = draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
+            # Make a plot with the proportion of genes assigned, alongside the taxonomy
+            fig = plot_taxonomic_annotations_without_enrichment(
                 plot_df,
-                cag_estimate_dict,
-                enrichment_df,
+                tax_df,
+                path_to_root_dict,
+            )
+
+        # all other plot types
+        else:
+            print("here5")
+            # Make a very simple plot
+            fig = go.Figure(
+                data=draw_cag_annotation_panel(
+                    plot_df
+                )
+            )
+
+    # We have CAG association metrics, but no label enrichment
+    elif enrichment_df is None and cag_estimate_dict is not None and len(cag_estimate_dict) > 0:
+        print("here6")
+
+        if annotation_type == "taxonomic":
+
+            fig = plot_taxonomic_annotations_with_cag_associations_only(
+                plot_df,
+                tax_df,
+                path_to_root_dict,
+                cag_estimate_dict
             )
 
         else:
@@ -1464,6 +1503,35 @@ def draw_cag_annotation_heatmap(
                 cag_estimate_dict,
             )
 
+    # We have information on parameter association for both CAGs and annotation labels
+    else:
+        print("here7")
+
+        # Plot the full taxonomy with a dedicated function to render the etree
+        if annotation_type == "taxonomic":
+            print("here8")
+            fig = plot_taxonomic_annotations_with_enrichment(
+                plot_df,
+                tax_df,
+                path_to_root_dict,
+                cag_estimate_dict,
+                enrichment_df
+            )
+
+        # All other annotation types
+        else:
+            print("here9")
+
+            # Make a plot with association metrics on both the rows and columns        
+            # Four panels, side-by-side, sharing the x-axis and y-axis
+
+            fig = draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
+                plot_df,
+                cag_estimate_dict,
+                enrichment_df,
+            )
+
+    print("here10")
 
     fig.update_layout(
         width=figure_width,
@@ -1472,6 +1540,171 @@ def draw_cag_annotation_heatmap(
     )
 
     return fig
+
+
+def plot_taxonomic_annotations_with_enrichment(
+    plot_df,
+    tax_df,
+    path_to_root_dict,
+    cag_estimate_dict,
+    enrichment_df
+):
+    """Plot the number of genes assigned to taxa alongside the tree, with association metrics."""
+
+    # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
+    path_to_root_df = pd.DataFrame(path_to_root_dict)
+
+    # Make the dendrogram
+    fig = ff.create_dendrogram(path_to_root_df, orientation='right')
+
+    return fig
+
+def plot_taxonomic_annotations_with_cag_associations_only(
+    plot_df,
+    tax_df,
+    path_to_root_dict,
+    cag_estimate_dict
+):
+    """Plot the number of genes assigned to taxa alongside the tree, with CAG association metrics only."""
+
+    # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
+    path_to_root_df = pd.DataFrame(path_to_root_dict)
+
+    # Make the dendrogram
+    fig = ff.create_dendrogram(path_to_root_df, orientation='right')
+
+    return fig
+
+
+def plot_taxonomic_annotations_without_enrichment(
+    plot_df,
+    tax_df,
+    path_to_root_dict
+):
+    """Plot the number of genes assigned to taxa alongside the tree."""
+    # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
+    path_to_root_df = format_path_to_root_df(path_to_root_dict, tax_df)
+
+    # Make the dendrogram
+    fig = ff.create_dendrogram(
+        path_to_root_df.values, 
+        orientation='left',
+        color_threshold=0,
+        labels=path_to_root_df.index.values
+    )
+    # Get the order of taxa from the dendrogram
+    dendro_leaves = fig['layout']['yaxis']['ticktext']
+    dendro_ticks = fig['layout']['yaxis']['tickvals']
+
+    # Add the heatmap panel
+    fig.add_trace(
+        draw_taxonomic_annotation_heatmap_panel(
+            plot_df,
+            tax_df,
+            dendro_leaves,
+            dendro_ticks,
+            xaxis="x2",
+        )
+    )
+
+    # Edit xaxis for the dendrogram
+    fig.update_layout(
+        xaxis={
+            'domain': [0.8, 1.0],
+            'mirror': False,
+            'showgrid': False,
+            'showline': False,
+            'showticklabels': False,
+            'zeroline': False,
+            'ticks':""
+        }
+    )
+    # Edit xaxis for the heatmap
+    fig.update_layout(
+        xaxis2={
+            'domain': [0, 0.79],
+            'showline': False,
+            'zeroline': False,
+        }
+    )
+    # Edit shared yaxis
+    fig.update_layout(
+        yaxis={
+            'domain': [0, 1],
+            'mirror': False,
+            'showgrid': False,
+            'showline': False,
+            'zeroline': False,
+            'ticks':"",
+            'anchor': "x2",
+        }
+    )
+
+    return fig
+
+
+def draw_taxonomic_annotation_heatmap_panel(
+    plot_df,
+    tax_df,
+    dendro_leaves,
+    dendro_ticks,
+    xaxis="x",
+):
+    # Cluster the table with gene abundances
+    plot_df = cluster_dataframe(plot_df)
+
+    # Rename the tax IDs to organism names
+    plot_df = plot_df.rename(
+        index=tax_df["name"].get
+    ).reindex(
+        index=dendro_leaves
+    )
+
+    # Make the table with text to display
+    text_df = plot_df.apply(
+        lambda c: pd.Series(
+            ["{:,} genes from CAG {} assigned to {} or its parent taxa".format(
+                count,
+                c.name,
+                org_name
+            ) for org_name, count in c.items()],
+            index=c.index
+        )
+    )
+
+    # Scale to show as a proportion of the maximum number of genes assigned per CAG
+    plot_df = plot_df.apply(
+        lambda c: 100. * c / c.max() if c.max() > 0 else c
+    )
+
+    # Create the Heatmap
+    return go.Heatmap(
+        text=text_df.values,
+        x=["CAG {}".format(cag_id) for cag_id in plot_df.columns.values],
+        y=dendro_ticks,
+        z=plot_df.values,
+        colorscale='Blues',
+        colorbar={"title": "Percent of gene assignments"},
+        hovertemplate="%{text}<extra></extra>",
+        zmin=0.,
+        zmax=100.,
+        xaxis=xaxis
+    )
+
+
+def format_path_to_root_df(path_to_root_dict, tax_df):
+    return pd.DataFrame({
+        terminal_node: {
+            internal_node: 1
+            for internal_node in internal_node_list
+        }
+        for terminal_node, internal_node_list in path_to_root_dict.items()
+    }).T.fillna(
+        0
+    ).rename(
+        index=tax_df["name"].get
+    )
+
 
 def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
     plot_df,
@@ -1579,6 +1812,175 @@ def draw_enrichment_estimate_panel(
         yaxis=yaxis,
         showlegend=False,
     )
+
+def format_taxonomic_annot_df(cag_annot_df, enrichment_df, n_annots):
+    """Format the table of taxonomic assignment for a set of CAGs."""
+
+    # Make a table with just the taxonomy
+    tax_df = cag_annot_df.drop(
+        columns=["count", "total", "CAG"]
+    ).drop_duplicates(
+    ).set_index(
+        "tax_id"
+    )
+    
+    # Keep track of how many terminal nodes we're adding to the plot
+    terminal_nodes = set([])
+    # Keep track of which internal nodes are in the path to root for the terminal nodes
+    internal_nodes = set([])
+
+    # If the enrichment values are provided, add the top n_annots / 2
+    if enrichment_df is not None:
+
+        # Iterate over the most consistently associated labels
+        for _, r in enrichment_df.sort_values(
+            by="abs_wald",
+            ascending=False
+        ).iterrows():
+            # If there is an exact match to this label, add it
+            matched_org = tax_df.query(
+                "rank == '{}'".format(r["rank"])
+            ).query(
+                "name == '{}'".format(r["label"])
+            )
+
+            if matched_org.shape[0] == 1:
+                add_tax_node(
+                    matched_org.index.values[0],
+                    terminal_nodes,
+                    internal_nodes,
+                    tax_df
+                )
+
+    # Now add more taxa according to their frequency in the underlying data
+    for tax_id in cag_annot_df.assign(
+        prop = cag_annot_df["count"] / cag_annot_df["total"]
+    ).sort_values(
+        by="prop",
+        ascending=False
+    )[
+        "tax_id"
+    ].values:
+
+        # Add this node to the plot
+        add_tax_node(
+            tax_id,
+            terminal_nodes,
+            internal_nodes,
+            tax_df
+        )
+
+        # Stop once (or if) the limit on terminal nodes has been reached
+        if len(terminal_nodes) >= int(n_annots / 2.):
+            break
+
+    # For each CAG, get the list of ancestors in the path to root
+    path_to_root_dict = {
+        tax_id: [tax_id] + [
+            anc_tax_id
+            for anc_tax_id in path_to_root(tax_id, tax_df)
+        ]
+        for tax_id in list(terminal_nodes)
+    }
+
+    # For each CAG, we will format the wide table so that each row contains
+    # a terminal node, and the value in each cell is the number of genes
+    # which are assigned to taxa along the path to root
+    plot_df = pd.DataFrame({
+        cag_id: count_path_to_root(cag_count_df, terminal_nodes, path_to_root_dict)
+        for cag_id, cag_count_df in cag_annot_df.groupby("CAG")
+    })
+
+    return plot_df, tax_df, path_to_root_dict
+
+
+def count_path_to_root(cag_count_df, terminal_nodes, path_to_root_dict):
+    """For each terminal node, count up the number of genes assigned on the path to root."""
+
+    # The number of genes assigned to a taxon is the number of genes at-or-below (in the 'counts' column)
+    # minus the sum of counts for its children
+    specific_counts = cag_count_df.set_index(
+        "tax_id"
+    )[
+        "count"
+    ] - cag_count_df.query(
+        "tax_id != parent"
+    ).groupby(
+        "parent"
+    )[
+        "count"
+    ].sum(
+    ).reindex(
+        cag_count_df["tax_id"].values
+    ).fillna(
+        0
+    )
+
+    # Return the sum of counts along the path to root for each terminal node
+    return pd.Series({
+        tax_id: int(sum([
+            specific_counts.get(tax_id, 0)
+            for anc_tax_id in path_to_root_dict[tax_id]
+        ]))
+        for tax_id in list(terminal_nodes)
+    })
+
+
+def add_tax_node(tax_id, terminal_nodes, internal_nodes, tax_df):
+    """Add a single tax ID and its ancestors, as appropriate."""
+
+    # This tax ID is already present
+    if tax_id in terminal_nodes or tax_id in internal_nodes:
+        return
+
+    # Add the tax ID as a terminal node
+    terminal_nodes.add(tax_id)
+
+    # Now walk up the taxonomy to the root
+    for anc_tax_id in path_to_root(tax_id, tax_df):
+
+        # If the ancestor tax ID is a terminal node, move it to the internal node set
+        if anc_tax_id in terminal_nodes:
+            terminal_nodes.remove(anc_tax_id)
+
+        # Make sure to add this to the internal node set
+        internal_nodes.add(anc_tax_id)
+
+
+def path_to_root(tax_id, tax_df, max_iter=1000):
+    """Parse the taxonomy to walk up to the root (will not yield the query itself)."""
+
+    # Get the parent tax ID
+    anc_tax_id = tax_df.loc[tax_id, "parent"]
+
+    # Keep track of all of the tax IDs that we've visited
+    visited_taxa = set([tax_id])
+
+    # Walk up the taxonomy
+    for _ in range(max_iter):
+
+        # Stop walking up when we reach the end
+        if anc_tax_id in visited_taxa:
+            break
+        elif anc_tax_id is None:
+            break
+        elif anc_tax_id == tax_id:
+            break
+
+        # Add the ancestor
+        visited_taxa.add(anc_tax_id)
+
+        # Yield the ancestor tax ID
+        yield anc_tax_id
+
+        # Now find the parent of this one
+        if anc_tax_id not in tax_df.index.values:
+            break
+
+        # In the next iteration, process the parent tax ID
+        tax_id = anc_tax_id
+        anc_tax_id = tax_df.loc[tax_id, "parent"]
+        
 
 def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
     """Format the table of CAG annotations."""

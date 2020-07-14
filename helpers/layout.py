@@ -602,9 +602,9 @@ def cag_annotation_heatmap_card():
                         "cag-annotation-heatmap-ncags",
                         "Number of CAGs to Display",
                         min_value=5,
-                        max_value=50,
-                        default_value=10,
-                        marks=[5, 10, 25, 50]
+                        max_value=100,
+                        default_value=20,
+                        marks=[5, 25, 50, 75, 100]
                     ) + cag_size_slider(
                         "cag-annotation-heatmap-size-range"
                     ),
@@ -618,20 +618,21 @@ def cag_annotation_heatmap_card():
                             id="cag-annotation-heatmap-annotation-type",
                             options=[
                                 {'label': 'Functional', 'value': 'eggNOG_desc'},
+                                {'label': 'Taxonomic', 'value': 'taxonomic'},
                                 {'label': 'Species', 'value': 'species'},
                                 {'label': 'Genus', 'value': 'genus'},
                                 {'label': 'Family', 'value': 'family'},
                             ],
-                            value='species',
+                            value='taxonomic',
                         ),
                         html.Br(),
                     ] + basic_slider(
                         "cag-annotation-heatmap-nannots",
-                        "Number of Annotations to Display",
-                        min_value=10,
+                        "Max Number of Annotations to Display",
+                        min_value=5,
                         max_value=100,
                         default_value=20,
-                        marks=[10, 30, 50, 70, 90]
+                        marks=[5, 25, 50, 75, 100]
                     ),
                     width=4,
                     align="center",
