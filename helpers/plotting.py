@@ -1602,7 +1602,11 @@ def plot_taxonomic_annotations_with_enrichment(
 
     fig.add_trace(
         draw_enrichment_estimate_panel(
-            enrichment_df,
+            enrichment_df.loc[
+                enrichment_df["label"].isin(dendro_leaves)
+            ].set_index(
+                "label"
+            ),
             dendro_leaves,
             dendro_ticks,
             xaxis="x",
@@ -1898,8 +1902,10 @@ def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
         draw_enrichment_estimate_panel(
             enrichment_df,
             plot_df.columns.values,
+            plot_df.columns.values,
             xaxis="x",
-            yaxis="y2"
+            yaxis="y2",
+            orientation="horizontal"
         ),
     ]
 
@@ -1961,11 +1967,7 @@ def draw_enrichment_estimate_panel(
 ):
     """Render the subplot with the estimated coefficients for annotation label."""
     # Explicitly order the values for plotting
-    plot_df = enrichment_df.loc[
-        enrichment_df["label"].isin(label_order)
-    ].set_index(
-        "label"
-    ).reindex(
+    plot_df = enrichment_df.reindex(
         index=label_order
     )
     
