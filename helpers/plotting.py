@@ -1339,6 +1339,7 @@ def draw_cag_estimate_panel(
         marker_color = "LightSkyBlue",
         xaxis = xaxis,
         yaxis = yaxis,
+        showlegend=False
     )
 
 
@@ -1441,44 +1442,28 @@ def draw_cag_annotation_heatmap(
                 plot_df
             )
         )
-    elif enrichment_df is not None:
+    elif cag_estimate_dict is not None and len(cag_estimate_dict) >= 0:
 
-        # Make a plot with association metrics on both the rows and columns        
-        # Four panels, side-by-side, sharing the x-axis and y-axis
+        # Check to see if we have enrichment metrics for the annotations
+        if enrichment_df is not None:
 
-        # The estimate plots will be smaller
-        fig = make_subplots(
-            rows=2, 
-            cols=2, 
-            shared_xaxes=False,
-            shared_yaxes=True,
-            column_widths=[
-                0.85, 0.15
-            ],
-            row_heights=[
-                0.85, 0.15
-            ],
-            horizontal_spacing=0.005,
-        )
+            # Make a plot with association metrics on both the rows and columns        
+            # Four panels, side-by-side, sharing the x-axis and y-axis
 
-        # Plot the abundances on the left
-        fig.add_trace(
-            draw_cag_annotation_panel(
-                plot_df
-            ),
-            row=1, 
-            col=1
-        )
+            fig = draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
+                plot_df,
+                cag_estimate_dict,
+                enrichment_df,
+            )
 
-        # Plot the estimated coefficients on the right
-        fig.add_trace(
-            draw_cag_estimate_panel(
-                cag_estimate_dict, 
-                plot_df.index.values
-            ), 
-            row=1, 
-            col=2,
-        )
+        else:
+
+            # Just plot the association metrics for the CAGs
+            fig = draw_cag_annot_heatmap_with_cag_estimates(
+                plot_df,
+                cag_estimate_dict,
+            )
+
 
     fig.update_layout(
         width=figure_width,
@@ -1488,6 +1473,112 @@ def draw_cag_annotation_heatmap(
 
     return fig
 
+def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
+    plot_df,
+    cag_estimate_dict,
+    enrichment_df,
+):
+
+    data = [
+        draw_cag_annotation_panel(
+            plot_df,
+            xaxis="x",
+            yaxis="y"
+        ),
+        draw_cag_estimate_panel(
+            cag_estimate_dict,
+            plot_df.index.values,
+            xaxis="x2",
+            yaxis="y"
+        ),
+        draw_enrichment_estimate_panel(
+            enrichment_df,
+            plot_df.columns.values,
+            xaxis="x",
+            yaxis="y2"
+        ),
+    ]
+
+    layout = go.Layout(
+        xaxis=dict(domain=[0, 0.85]),
+        yaxis=dict(domain=[0, 0.85]),
+        xaxis2=dict(domain=[0.86, 1.0]),
+        yaxis2=dict(domain=[0.86, 1.0]),
+    )
+
+    fig = go.Figure(data=data, layout=layout)
+
+    return fig
+
+
+def draw_cag_annot_heatmap_with_cag_estimates(
+    plot_df,
+    cag_estimate_dict,
+):
+
+    fig = make_subplots(
+        rows=1, 
+        cols=2, 
+        shared_yaxes=True,
+        column_widths=[
+            0.85, 0.15
+        ],
+        horizontal_spacing=0.005,
+    )
+
+    # Plot the abundances on the left
+    fig.add_trace(
+        draw_cag_annotation_panel(
+            plot_df
+        ),
+        row=1, 
+        col=1
+    )
+
+    # Plot the estimates on the right
+    fig.add_trace(
+        draw_cag_estimate_panel(
+            cag_estimate_dict,
+            plot_df.index.values
+        ),
+        row=1,
+        col=2,
+    )
+
+    return fig
+
+def draw_enrichment_estimate_panel(
+    enrichment_df,
+    label_order,
+    xaxis="x",
+    yaxis="y",
+):
+    """Render the subplot with the estimated coefficients for annotation label."""
+    # Explicitly order the values for plotting
+    plot_df = enrichment_df.reindex(index=label_order)
+    
+    # Render the hover text
+    hovertext = plot_df["wald"].apply(
+        "Wald: {:.2}".format
+    )
+
+    return go.Scatter(
+        x=plot_df.index.values,
+        y=plot_df["estimate"],
+        error_y=dict(
+            type='data',
+            array=plot_df["std_error"],
+            visible=True
+        ),
+        ids=plot_df.index.values,
+        text=hovertext,
+        hovertemplate="%{id}<br>Estimated Coefficient: %{y}<br>%{text}<extra></extra>",
+        mode="markers",
+        marker_color="LightSkyBlue",
+        xaxis=xaxis,
+        yaxis=yaxis,
+        showlegend=False,
+    )
 
 def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
     """Format the table of CAG annotations."""
