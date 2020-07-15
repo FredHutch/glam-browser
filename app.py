@@ -1,14 +1,7 @@
 #!/usr/bin/env python3
 
 from collections import defaultdict
-from helpers.io import parse_directory
-from helpers.io import hdf5_manifest
-from helpers.io import hdf5_richness
-from helpers.io import hdf5_cag_summary
-from helpers.io import hdf5_metrics
-from helpers.io import hdf5_distances
-from helpers.io import hdf5_corncob
-from helpers.io import hdf5_taxonomy
+from helpers.io import Manifest
 from helpers.io import hdf5_get_item
 from helpers.layout import navbar_simple
 from helpers.layout import dataset_summary_card
@@ -18,10 +11,11 @@ from helpers.layout import richness_card
 from helpers.layout import single_sample_card
 from helpers.layout import ordination_card
 from helpers.layout import cag_summary_card
-from helpers.layout import cag_heatmap_card
+from helpers.layout import cag_abundance_heatmap_card
+from helpers.layout import cag_annotation_heatmap_card
 from helpers.layout import volcano_card
-from helpers.layout import single_cag_card
-from helpers.layout import genome_card
+from helpers.layout import annotation_enrichment_card
+from helpers.layout import plot_cag_card
 from helpers.layout import manifest_card
 from helpers.plotting import update_richness_graph
 from helpers.plotting import run_pca
@@ -31,15 +25,13 @@ from helpers.plotting import print_anosim
 from helpers.plotting import plot_sample_vs_cag_size
 from helpers.plotting import plot_samples_pairwise
 from helpers.plotting import draw_cag_summary_graph_hist
-from helpers.plotting import draw_cag_summary_graph_scatter
-from helpers.plotting import draw_cag_heatmap
+from helpers.plotting import draw_cag_abundance_heatmap
+from helpers.plotting import draw_cag_annotation_heatmap
 from helpers.plotting import draw_volcano_graph
+from helpers.plotting import draw_enrichment_graph
 from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
-from helpers.plotting import plot_genome_scatter
-from helpers.plotting import plot_genome_heatmap
 from helpers.plotting import parse_manifest_json
-from helpers.taxonomy import make_cag_tax_df
 from flask_caching import Cache
 import dash
 import dash_bootstrap_components as dbc
@@ -84,21 +76,9 @@ data_folder = os.getenv("DATA_FOLDER")
 assert os.path.exists(data_folder), "Path does not exist: {}".format(data_folder)
 
 # Parse the contents of the directory
-page_data = parse_directory(data_folder)
+# See the documentation for options on how to structure the data folder
+page_data = Manifest(data_folder)
 
-# All of the data in the indicated folder is loaded as a dict
-# in the following format:
-# {
-#   "page_title": "Title for the navbar at the top of the page", 
-#   "page_description": "Additional text for landing page",
-#   "contents": [
-#     {
-#       "fp": "path_to_file.hdf5", 
-#       "name": "Optional name from manifest.json", 
-#       "description": "Optional description (markdown) from manifest.json", 
-#     },
-#   ] 
-# } 
 
 ###################
 # CSS STYLESHEETS #
@@ -136,145 +116,172 @@ cache = Cache()
 cache.init_app(app.server, config=CACHE_CONFIG)
 
 ###################################
-# CACHE FUNCTIONS TO READ IN DATA #
+# CACHE DATA READ FROM INDEX HDF5 #
 ###################################
 @cache.memoize()
 def manifest(fp):
-    return hdf5_manifest(fp)
-
-@cache.memoize()
-def richness(fp):
-    return hdf5_richness(fp)
-
-@cache.memoize()
-def sample_abund(fp, sample_name):
     return hdf5_get_item(
-        fp,
-        "/abund/cag/wide",
-        columns=["CAG", sample_name],
+        fp, 
+        "/manifest"
+    ).set_index(
+        "specimen"
+    )
+
+@cache.memoize()
+def experiment_metrics(fp):
+    return hdf5_get_item(
+        fp, 
+        "/experiment_metrics"
+    ).set_index(
+        "variable"
+    )["value"]
+
+@cache.memoize()
+def specimen_metrics(fp):
+    return hdf5_get_item(
+        fp, 
+        "/specimen_metrics"
+    ).set_index(
+        "specimen"
+    )
+
+@cache.memoize()
+def analysis_features(fp):
+    return hdf5_get_item(
+        fp, 
+        "/analysis_features"
+    )
+
+@cache.memoize()
+def cag_annotations(fp):
+    return hdf5_get_item(
+        fp, 
+        "/cag_annotations"
     ).set_index(
         "CAG"
     )
 
 @cache.memoize()
-def cag_summary(fp):
-    return hdf5_cag_summary(fp)
+def cag_abundances(fp):
+    return hdf5_get_item(
+        fp, 
+        "/cag_abundances"
+    ).set_index(
+        "CAG"
+    )
 
 @cache.memoize()
 def distances(fp, metric):
-    return hdf5_distances(fp, metric)
+    # Make sure that this distance metric is included in the analysis
+    assert metric in valid_distances(fp)
 
-@cache.memoize()
-def metrics(fp):
-    return hdf5_metrics(fp)
-
-@cache.memoize()
-def corncob(fp):
-    return hdf5_corncob(fp)
-
-@cache.memoize()
-def corncob_parameters(fp):
-    if corncob(fp) is None:
-        return None
-
-    return corncob(fp)[
-        "parameter"
-    ].drop_duplicates(
-    ).sort_values(
-    ).tolist(
+    return hdf5_get_item(
+        fp,
+        "/distances/{}".format(metric)
+    ).set_index(
+        "specimen"
     )
 
 @cache.memoize()
-def taxonomy(fp):
-    return hdf5_taxonomy(fp)
+def cag_associations(fp, parameter):
+    # Check if any parameter is selected
+    if parameter == "none":
+        return pd.DataFrame()
 
-@cache.memoize()
-def cag_taxonomy(cag_id, fp):
-    # Skip if there is no taxonomy
-    if taxonomy(fp) is None:
-        return None
+    # Make sure that this parameter is valid
+    assert parameter in valid_parameters(fp), parameter
 
-    # Read in the taxonomic annotations for this CAG
-    cag_df = read_cag_annotations(fp, cag_id)
-
-    # Format the DataFrame as needed to make a go.Sunburst
-    return make_cag_tax_df(cag_df["tax_id"], taxonomy(fp))
-
-@cache.memoize()
-def read_cag_annotations(fp, cag_id):
     return hdf5_get_item(
         fp,
-        "/annot/gene/all",
-        where="CAG == {}".format(cag_id),
-        columns = ["gene", "tax_id"]
-    )
-
-@cache.memoize()
-def read_cag_abundance(fp, cag_id):
-    return hdf5_get_item(
-        fp,
-        "/abund/cag/wide",
-        where="CAG == {}".format(cag_id),
+        "/cag_associations/{}".format(parameter)
     ).set_index(
         "CAG"
-    ).loc[cag_id]
+    )
 
+@cache.memoize()
+def enrichments(fp, parameter, annotation):
+    # Make sure that this parameter is valid
+    if parameter not in valid_parameters(fp):
+        return None
 
-#####################################
-# CACHE FUNCTIONS TO SUMMARIZE DATA #
-#####################################
+    df = hdf5_get_item(
+        fp,
+        "/enrichments/{}/{}".format(parameter, annotation)
+    )
+    if df is not None:
+        df.set_index("label", inplace=True)
+    return df
+
+@cache.memoize()
+def functional_gene_annotations(fp):
+    return hdf5_get_item(
+        fp,
+        "/gene_annotations/functional"
+    )
+
+@cache.memoize()
+def taxonomic_gene_annotations(fp, rank="all", cag_id=None):
+    df = hdf5_get_item(
+        fp,
+        "/gene_annotations/taxonomic/{}".format(rank)
+    )
+
+    if df is None:
+        return
+
+    df = df.apply(
+        lambda c: c.fillna(0).apply(int) if c.name in ["count", "tax_id", "parent", "total", "CAG"] else c
+    )
+    
+    if cag_id is not None:
+        df = df.query(
+            "CAG == {}".format(cag_id)
+        )
+
+        if df.shape[0] == 0:
+            return
+
+        # Sort by number of hits
+        df = df.sort_values(
+            by="count", 
+            ascending=False
+        )
+
+    return df
+############################################
+# CACHE DATA SUMMARIZED FROM LARGER TABLES #
+############################################
 @cache.memoize()
 def cag_summary_describe(fp):
-    return cag_summary(fp).describe()
+    return cag_annotations(fp).describe()
 
-@cache.memoize()
-def metadata_fields(fp):
-    return [
-        f
-        for f in manifest(fp).columns.values
-        if f not in ["R1", "R2", "I1", "I2"]
-    ]
+# Functions to return the pertinent elements of "/analysis_features"
+def valid_distances(fp):
+    return analysis_features(
+        fp
+    ).query(
+        "group == 'distances'"
+    ).query(
+        "key == 'metric'"
+    )["value"].tolist()
 
-@cache.memoize()
-def max_neg_log_pvalue(fp):
-    df = corncob(fp)
-    if df is None:
-        return defaultdict(1)
-    else:
-        return df.groupby(
-            "parameter"
-        )["neg_log_pvalue"].max()
+def valid_parameters(fp):
+    return analysis_features(
+        fp
+    ).query(
+        "group == 'cag_associations'"
+    ).query(
+        "key == 'parameter'"
+    )["value"].tolist()
 
-
-#########################################
-# CACHE FUNCTIONS FOR GENOME ALIGNMENTS #
-#########################################
-@cache.memoize()
-def genome_manifest(fp):
-    return hdf5_get_item(
-        fp,
-        "/genomes/manifest",
-    )
-
-@cache.memoize()
-def genome_summary_by_parameter(fp, parameter):
-    return hdf5_get_item(
-        fp,
-        "/genomes/summary/{}".format(parameter),
-    )
-
-@cache.memoize()
-def cags_by_genome(fp, genome_id):
-    return hdf5_get_item(
-        fp,
-        "/genomes/cags/containment",
-        where="genome == '{}'".format(genome_id)
-    )
-
-@cache.memoize()
-def has_genome_alignments(fp):
-    return genome_manifest(fp) is not None
-
+def valid_enrichments(fp):
+    return analysis_features(
+        fp
+    ).query(
+        "group == 'enrichments'"
+    ).query(
+        "key == 'annotation'"
+    )["value"].tolist()
 
 ######################
 # PLOTTING FUNCTIONS #
@@ -299,20 +306,10 @@ def empty_figure():
 #   - Togglable div with the detailed view (detail-display)
 app.layout = html.Div(
     children=[
-        navbar_simple(page_data),
+        dcc.Location(id='url', refresh=False),
+        navbar_simple(),
         html.Div(
-            children=[
-                dbc.Card(
-                    dbc.CardBody([
-                        dcc.Markdown(page_data.get("page_description", "")),
-                    ])
-                )
-            ] + [
-                dataset_summary_card(
-                    ix, dataset
-                )
-                for ix, dataset in enumerate(page_data["contents"])
-            ],
+            children=[],
             id="summary-display",
         ),
         html.Div(
@@ -323,10 +320,11 @@ app.layout = html.Div(
                 single_sample_card(),
                 ordination_card(),
                 cag_summary_card(),
-                cag_heatmap_card(),
                 volcano_card(),
-                single_cag_card(),
-                genome_card(),
+                cag_abundance_heatmap_card(),
+                cag_annotation_heatmap_card(),
+                annotation_enrichment_card(),
+                plot_cag_card(),
                 manifest_card(),
             ],
             id="detail-display",
@@ -338,6 +336,74 @@ app.layout = html.Div(
 ############################
 # / SET UP THE PAGE LAYOUT #
 ############################
+
+#############################
+# SUMMARY DISPLAY CALLBACKS #
+#############################
+@app.callback(
+    Output("page-title", "brand"),
+    [
+        Input("selected-dataset", 'children'),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
+)
+def page_title_callback(selected_dataset, page, key):
+    """Return the title of the page."""
+    page_title = page_data.page_title(page=page, key=key)
+
+    if page_title is None:
+        return "GLAM Browser"
+    else:
+        return page_title
+
+@app.callback(
+    Output("summary-display", "children"),
+    [
+        Input({
+            "type": "open-dataset-pressed",
+            "index": -1
+        }, "children")
+    ],
+    [
+        State("selected-dataset", 'children'),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ],
+)
+def summary_display_callback(_, selected_dataset, page, key):
+    """Fill out the summary display div."""
+    page_description = page_data.page_description(page=page, key=key)
+    if page_description is None:
+        page_description = """
+This page may have been reached in error, please check your URL and try again.
+
+For assistance, please consult the GLAM Browser documentation or contact its maintainers.
+"""
+
+    # The summary page will start with a description panel
+    children = [
+        dbc.Card(
+            dbc.CardBody([
+                dcc.Markdown(page_description),
+            ])
+        )
+    ]
+
+    # Add the summary cards for each dataset
+    for ix, dataset in enumerate(page_data.dataset_list(page=page, key=key)):
+        children.append(
+            dataset_summary_card(
+                ix, dataset
+            )
+        )
+
+    return children
+
+###############################
+# / SUMMARY DISPLAY CALLBACKS #
+###############################
+
 
 
 ################################
@@ -354,7 +420,10 @@ app.layout = html.Div(
     )],
 )
 def open_dataset_button_click(n_clicks):
-    return time()
+    if n_clicks > 0:
+        return time()
+    else:
+        return -1
 ##################################
 # / OPEN DATASET BUTTON CALLBACK #
 ##################################
@@ -434,27 +503,28 @@ def toggle_card_button_click(n_clicks):
             "index": ALL
         },
         'children'
-    )],
-    [dash.dependencies.State("selected-dataset", "children")]
+    )]
 )
-def open_dataset_switch(button_timestamps, currently_selected):
-    # Only switch the dataset if more than 0.1 seconds passed between button press
-
+def open_dataset_switch(button_timestamps):
+    """Control whether a dataset is open, or the summary page."""
+    
     # Make a list of the timestamps
     button_timestamps = [
         float(t)
         for t in button_timestamps
     ]
 
-    # Get the rank order
-    rank_order = list(range(len(button_timestamps)))
-    # Sort by time
-    rank_order.sort(key=lambda ix: button_timestamps[ix], reverse=True)
+    # Get the most recent timestamp
+    most_recent_timestamp = max(button_timestamps)
 
-    if button_timestamps[rank_order[0]] - button_timestamps[rank_order[1]] > 0.1:
-        return [rank_order[0] - 1]
-    else:
-        return currently_selected
+    # Switch to whichever button was pressed most recently
+    for button_ix, button_timestamp in enumerate(button_timestamps):
+
+        # If this button was pressed most recently
+        if button_timestamp == most_recent_timestamp:
+
+            # Return the index position (adjusted -1 to include the main menu)
+            return [button_ix - 1]
 ##################################
 # / OPEN DATASET SWITCH CALLBACK #
 ##################################
@@ -470,29 +540,34 @@ def open_dataset_switch(button_timestamps, currently_selected):
     }, 'options'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input({
             "type": "metadata-field-dropdown",
             "name": MATCH
         }, "value"),
     ],
 )
-def metadata_field_dropdown_callback(selected_dataset, dummy_value):
+def metadata_field_dropdown_callback(selected_dataset, page, key, dummy_value):
     """Update the metadata field dropdown for the selected dataset."""
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        # No dataset was selected
         return [{'label': 'None', 'value': 'none'}]
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
-        options = [
+
+        return [
             {'label': 'None', 'value': 'none'},
         ] + [
             {
                 "label": f,
                 "value": f
             }
-            for f in metadata_fields(fp)
+            for f in manifest(fp).columns.values
         ]
-        return options
 ######################################
 # / METADATA FIELD DROPDOWN CALLBACK #
 ######################################
@@ -508,6 +583,8 @@ def metadata_field_dropdown_callback(selected_dataset, dummy_value):
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input({
             "type": "cag-metric-slider",
             "name": MATCH,
@@ -515,16 +592,17 @@ def metadata_field_dropdown_callback(selected_dataset, dummy_value):
         }, "id"),
     ],
 )
-def cag_metric_slider_callback_max(selected_dataset, slider_id):
+def cag_metric_slider_callback_max(selected_dataset, page, key, slider_id):
     """Update any CAG metric slider for the selected dataset."""
     metric = slider_id["metric"]
 
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         min_val = 0
         max_val = 1
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
         # Get the description of the summary metrics
         df = cag_summary_describe(fp)
 
@@ -556,20 +634,24 @@ def cag_metric_slider_callback_max(selected_dataset, slider_id):
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input({
             "type": "cag-size-slider",
             "name": MATCH
         }, "id"),
     ],
 )
-def cag_size_slider_callback(selected_dataset, dummy_value):
+def cag_size_slider_callback(selected_dataset, page, key, dummy_value):
     """Update the CAG size slider for the selected dataset."""
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         max_value = 3
         min_value = 0
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
         max_value = cag_summary_describe(fp).loc["max", "size_log10"]
         min_value = cag_summary_describe(fp).loc["min", "size_log10"]
 
@@ -591,10 +673,17 @@ def cag_size_slider_callback(selected_dataset, dummy_value):
 ###############################
 @app.callback(
     Output("summary-display", 'style'),
-    [Input("selected-dataset", "children")],
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
 )
-def show_hide_summary_display(selected_dataset):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+def show_hide_summary_display(selected_dataset, page, key):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return {"display": "block"}
     else:
         return {"display": "none"}
@@ -606,14 +695,19 @@ def show_hide_summary_display(selected_dataset):
 ##############################
 # SHOW / HIDE DETAIL DISPLAY #
 ##############################
-        ##############################        
-##############################
 @app.callback(
     Output("detail-display", 'style'),
-    [Input("selected-dataset", "children")],
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
 )
-def show_hide_detail_display(selected_dataset):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+def show_hide_detail_display(selected_dataset, page, key):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return {"display": "none"}
     else:
         return {"display": "block"}
@@ -627,27 +721,50 @@ def show_hide_detail_display(selected_dataset):
 ####################################
 @app.callback(
     Output("experiment-summary-card", 'children'),
-    [Input("selected-dataset", "children")],
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
 )
-def experiment_summary_card_callback(selected_dataset):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+def experiment_summary_card_callback(selected_dataset, page, key):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
         return update_experiment_summary_card(
-            metrics(fp)
+            experiment_metrics(fp)
         )
 @app.callback(
     Output("experiment-summary-card-header", 'children'),
-    [Input("selected-dataset", "children")],
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
 )
-def experiment_summary_card_header_callback(selected_dataset):
+def experiment_summary_card_header_callback(selected_dataset, page, key):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
         return "Experiment"
     else:
+        # Get the list of datasets on this page
+        dataset_list = page_data.dataset_list(
+            page=page,
+            key=key
+        )
+
+        # If we cannot access the data, return a safe value
+        if dataset_list is None or len(dataset_list) == 0:
+            return "Experiment"
+
         # Return the name of the indicated HDF5
-        return "Experiment: {}".format(page_data["contents"][selected_dataset[0]]["name"])
+        return "Experiment: {}".format(dataset_list[
+            selected_dataset[0]
+        ][
+            "name"
+        ])
 ######################################
 # / EXPERIMENT SUMMARY CARD CALLBACK #
 ######################################
@@ -668,7 +785,11 @@ def experiment_summary_card_header_callback(selected_dataset):
         Input('richness-log-x', 'value'),
         Input('manifest-filtered', 'children'),
     ],
-    [State("selected-dataset", "children")],
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ],
 )
 def richness_graph_callback(
     selected_metric, 
@@ -677,13 +798,17 @@ def richness_graph_callback(
     log_x,
     manifest_json,
     selected_dataset, 
+    page,
+    key,
 ):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return empty_figure()
     else:
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
         return update_richness_graph(
-            richness(fp),
+            specimen_metrics(fp),
             selected_metric,
             selected_type,
             selected_metadata,
@@ -706,36 +831,44 @@ def richness_graph_callback(
         Input('single-sample-secondary-dropdown', 'value'),
         Input('single-sample-metric', 'value'),
     ],
-    [State("selected-dataset", "children")],
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ],
 )
 def single_sample_graph_callback(
     primary_sample, 
     secondary_sample, 
     display_metric,
     selected_dataset, 
+    page,
+    key,
 ):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return empty_figure()
     elif primary_sample == "none" or display_metric is None:
         return empty_figure()
     else:
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
 
         if secondary_sample == "cag_size":
             return plot_sample_vs_cag_size(
-                sample_abund(fp, primary_sample),
+                cag_abundances(fp)[primary_sample],
                 primary_sample,
-                cag_summary(fp),
+                cag_annotations(fp),
                 display_metric,
             )
         else:
             return plot_samples_pairwise(
-                sample_abund(fp, primary_sample),
+                cag_abundances(fp)[primary_sample],
                 primary_sample,
-                sample_abund(fp, secondary_sample),
+                cag_abundances(fp)[secondary_sample],
                 secondary_sample,
                 display_metric,
-                cag_summary(fp),
+                cag_annotations(fp),
             )
 
 @app.callback(
@@ -745,18 +878,23 @@ def single_sample_graph_callback(
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ],
 )
 def update_single_sample_primary_dropdown(
-    selected_dataset, 
+    selected_dataset, page, key
 ):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
     options = [
         {'label': 'None', 'value': 'none'}
     ]
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+
+    if fp is None:
         return [options, "none"]
     else:
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
 
         options = [
             {
@@ -774,19 +912,24 @@ def update_single_sample_primary_dropdown(
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ],
 )
 def update_single_sample_secondary_dropdown(
-    selected_dataset, 
+    selected_dataset, page, key
 ):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
     options = [
         {'label': 'CAG Size', 'value': 'cag_size'}
     ]
     value = "cag_size"
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+
+    if fp is None:
         return [options, value]
     else:
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
 
         options.extend([
             {
@@ -850,7 +993,9 @@ def show_hide_ordination_perplexity(algorithm):
         Input('manifest-filtered', 'children'),
     ],
     [
-        State("selected-dataset", "children")
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
     ])
 def ordination_graph_callback(
     algorithm,
@@ -861,11 +1006,15 @@ def ordination_graph_callback(
     metadata,
     manifest_json,
     selected_dataset,
+    page,
+    key,
 ):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return empty_figure()
     else:
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
         return update_ordination_graph(
             distances(fp, metric),
             algorithm,
@@ -882,20 +1031,26 @@ def ordination_graph_callback(
         Input('ordination-metric', 'value'),
         Input({'type': 'metadata-field-dropdown', 'name': 'ordination-metadata'}, 'value'),
         Input('manifest-filtered', 'children'),
-        Input("selected-dataset", "children")
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ])
 def ordination_anosim_callback(
     metric,
     metadata,
     manifest_json,
     selected_dataset,
+    page,
+    key,
 ):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return dcc.Markdown("")
     elif metadata == "none":
         return dcc.Markdown("")
     else:
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
 
         return print_anosim(
             distances(fp, metric),
@@ -916,148 +1071,193 @@ def ordination_anosim_callback(
     Output('cag-summary-graph-hist', 'figure'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input('cag-summary-metric-primary', 'value'),
-        Input({"name": 'cag-summary-size-slider', "type": "cag-size-slider"}, 'value'),
-        Input({"name": 'cag-summary-entropy-slider', "type": "cag-metric-slider", "metric": "entropy"}, 'value'),
-        Input({"name": 'cag-summary-prevalence-slider', "type": "cag-metric-slider", "metric": "prevalence"}, 'value'),
-        Input({"name": 'cag-summary-abundance-slider', "type": "cag-metric-slider", "metric": "mean_abundance"}, 'value'),
         Input('cag-summary-nbinsx-slider', 'value'),
         Input('cag-summary-histogram-log', 'value'),
         Input('cag-summary-histogram-metric', 'value'),
     ])
 def cag_summary_graph_hist_callback(
     selected_dataset,
+    page,
+    key,
     metric_primary,
-    size_range,
-    entropy_range,
-    prevalence_range,
-    abundance_range,
     nbinsx,
     log_scale,
     hist_metric,
 ):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return empty_figure()
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
         return draw_cag_summary_graph_hist(
-            cag_summary(fp),
+            cag_annotations(fp),
             metric_primary,
-            size_range,
-            entropy_range,
-            prevalence_range,
-            abundance_range,
             nbinsx,
             log_scale,
             hist_metric,
         )
 
-@app.callback(
-    Output('cag-summary-graph-scatter', 'figure'),
-    [
-        Input("selected-dataset", "children"),
-        Input('cag-summary-metric-primary', 'value'),
-        Input('cag-summary-metric-secondary', 'value'),
-        Input({"name": 'cag-summary-size-slider', "type": "cag-size-slider"}, 'value'),
-        Input({"name": 'cag-summary-entropy-slider', "type": "cag-metric-slider", "metric": "entropy"}, 'value'),
-        Input({"name": 'cag-summary-prevalence-slider', "type": "cag-metric-slider", "metric": "prevalence"}, 'value'),
-        Input({"name": 'cag-summary-abundance-slider', "type": "cag-metric-slider", "metric": "mean_abundance"}, 'value'),
-        Input('global-selected-cag', 'children'),
-    ])
-def cag_summary_graph_scatter_callback(
-    selected_dataset,
-    metric_primary,
-    metric_secondary,
-    size_range,
-    entropy_range,
-    prevalence_range,
-    abundance_range,
-    selected_cag_json,
-):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return empty_figure()
-    else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
-        return draw_cag_summary_graph_scatter(
-            cag_summary(fp),
-            metric_primary,
-            metric_secondary,
-            size_range,
-            entropy_range,
-            prevalence_range,
-            abundance_range,
-            selected_cag_json,
-        )
-
-@app.callback(
-    Output('cag-summary-selected-cag', 'children'),
-    [
-        Input('cag-summary-graph-scatter', 'clickData'),
-    ])
-def cag_summary_save_click_data(clickData):
-    """Only save the click data when a point in a scatter has been selected"""
-    if clickData is not None:
-        for point in clickData["points"]:
-            if "id" in point:
-                # Save the time of the event
-                point["time"] = time()
-                return json.dumps(point, indent=2)
 ################################
 # / CAG SUMMARY CARD CALLBACKS #
 ################################
 
 
-#########################
-# CAG HEATMAP CALLBACKS #
-#########################
+###################################
+# CAG ABUNDANCE HEATMAP CALLBACKS #
+###################################
 @app.callback(
-    Output('cag-heatmap-graph', 'figure'),
     [
-        Input('cag-heatmap-multiselector', 'value'),
-        Input('cag-heatmap-metadata-dropdown', 'value'),
-        Input('cag-heatmap-abundance-metric', 'value'),
-        Input('cag-heatmap-cluster', 'value'),
-        Input('cag-heatmap-taxa-rank', 'value'),
+        Output({"type": "heatmap-select-cags-by", "parent": MATCH}, 'options'),
+        Output({"type": "heatmap-select-cags-by", "parent": MATCH}, 'value'),
+    ],
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
+    [State({"type": "heatmap-select-cags-by", "parent": MATCH}, 'value')])
+def abundance_heatmap_graph_select_cags_callback(selected_dataset, page, key, _):
+    """Add the corncob parameters to the CAG abundance heatmap CAG selection options."""
+
+    # Set the base options
+    options = [
+        {"label": "Average Relative Abundance", "value": "abundance"},
+        {"label": "Size (Number of Genes)", "value": "size"}
+    ]
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        # Return the base options if no dataset is selected
+        return options, "abundance"
+    else:
+        # TODO Add the default parameter from the manifest, if specified
+        # Add the parameters
+        return options + [
+            {"label": parameter, "value": "parameter-{}".format(parameter)}
+            for parameter in valid_parameters(fp)
+        ], "abundance"
+
+
+def get_cags_selected_by_criterion(fp, select_cags_by, n_cags, cag_size_range):
+    """Function to select the top N CAGs based on a particular criterion."""
+    # Either select based on a parameter, or based on some CAG annotation metric
+
+    if select_cags_by.startswith("parameter-"):
+        # Parse the parameter name from the value
+        parameter = select_cags_by.replace("parameter-", "")
+        assert parameter in valid_parameters(fp), \
+            "Selecting CAGs by {}, but no parameter found".format(select_cags_by)
+
+        # Get the results for this particular parameter
+        ranked_df = cag_associations(
+            fp, 
+            parameter
+        ).assign(
+            size_log10 = cag_annotations(fp)["size_log10"]
+        ).sort_values(
+            by="abs_wald",
+            ascending=False,
+        )
+    else:
+        # Selecting either based on abundance or size
+        assert select_cags_by in ["abundance", "size"], select_cags_by
+
+        ranked_df = cag_annotations(fp).sort_values(
+            by="mean_abundance" if select_cags_by == "abundance" else "size",
+            ascending=False
+        )
+
+    # Either way, return the set of CAGs in the size range
+    return ranked_df.query(
+        "size_log10 >= {}".format(cag_size_range[0])
+    ).query(
+        "size_log10 <= {}".format(cag_size_range[1])
+    ).head(
+        n_cags
+    ).index.values
+
+
+@app.callback(
+    Output('cag-abundance-heatmap-graph', 'figure'),
+    [
+        Input({"type": "heatmap-select-cags-by", "parent": "abundance-heatmap"}, 'value'),
+        Input('cag-abundance-heatmap-ncags', 'value'),
+        Input({'name': 'cag-abundance-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
+        Input('cag-abundance-heatmap-metadata-dropdown', 'value'),
+        Input('cag-abundance-heatmap-abundance-metric', 'value'),
+        Input('cag-abundance-heatmap-cluster', 'value'),
+        Input('cag-abundance-heatmap-annotate-cags-by', 'value'),
         Input('manifest-filtered', 'children'),
     ],
-    [State("selected-dataset", "children")])
-def heatmap_graph_callback(
-    cags_selected,
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ])
+def abundance_heatmap_graph_callback(
+    select_cags_by,
+    n_cags,
+    cag_size_range,
     metadata_selected,
     abundance_metric,
     cluster_by,
     taxa_rank,
     manifest_json,
     selected_dataset,
+    page,
+    key,
 ):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return empty_figure()
+
+    # Get the top CAGs selected by this criterion
+    cags_selected = get_cags_selected_by_criterion(
+        fp,
+        select_cags_by, 
+        n_cags,
+        cag_size_range,
+    )
     
-    if len(cags_selected) == 0:
-        return empty_figure()
-
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
-
     # Get the abundance of the selected CAGs
-    cag_abund_df = pd.DataFrame({
-        cag_id: read_cag_abundance(fp, cag_id)
-        for cag_id in cags_selected
-    })
+    cag_abund_df = cag_abundances(fp).reindex(
+        index=cags_selected
+    ).T
 
-    # Get the taxonomic hits for the selected CAGs
+    # If we are selecting CAGs by their association with a given parameter,
+    # we will then plot the estimated coefficient with that parameter
+    if select_cags_by.startswith("parameter-"):
+        cag_estimate_dict = cag_associations(
+            fp, 
+            select_cags_by.replace("parameter-", "")
+        ).reindex(
+            index=cags_selected
+        ).to_dict(
+            orient="index" # Index by CAG ID, then column name
+        )
+    else:
+        cag_estimate_dict = None
+
+    # Get the taxonomic annotations for the selected CAGs
     if taxa_rank != "none":
-        cag_tax_dict = {
-            cag_id: cag_taxonomy(cag_id, fp)
+        # Otherwise, get the taxonomic IDs for the CAGs
+        cag_taxa_dict = {
+            cag_id: taxonomic_gene_annotations(fp, cag_id=cag_id, rank=taxa_rank)
             for cag_id in cags_selected
         }
     else:
-        cag_tax_dict = {}
+        cag_taxa_dict = {}
 
     # Draw the figure
-    return draw_cag_heatmap(
+    return draw_cag_abundance_heatmap(
         cag_abund_df,
         metadata_selected,
         abundance_metric,
@@ -1065,26 +1265,29 @@ def heatmap_graph_callback(
         taxa_rank,
         manifest_json,
         manifest(fp),
-        cag_tax_dict,
+        cag_taxa_dict,
+        cag_estimate_dict,
     )
 
 @app.callback(
     [
-        Output('cag-heatmap-metadata-dropdown', value)
+        Output('cag-abundance-heatmap-metadata-dropdown', value)
         for value in ['options', 'value']
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ])
 def update_heatmap_metadata_dropdown(
-    selected_dataset,
+    selected_dataset, page, key
 ):
     """When a new dataset is selected, fill in the available metadata."""
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return [], []
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
+    if fp is None:
+        return [], []
 
     # Get the list of all metadata
     options = [
@@ -1092,114 +1295,251 @@ def update_heatmap_metadata_dropdown(
             "label": f,
             "value": f
         }
-        for f in metadata_fields(fp)
+        for f in manifest(fp).columns.values
     ]
 
     return options, []
+#####################################
+# / CAG ABUNDANCE HEATMAP CALLBACKS #
+#####################################
 
-def get_cag_multiselector_options(
-    selected_dataset
-):
-    """Function to make a list of all of the CAGs for a given dataset."""
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        options = [{
-            "label": "None",
-            "value": 0
-        }]
 
-    else:
-
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
-
-        # Get the list of all CAGs
-        cag_id_list = cag_summary(fp).index.values
-
-        # Get the list of CAGs
-        options = [
-            {
-                "label": "CAG {}".format(cag_id),
-                "value": cag_id
-            }
-            for cag_id in cag_id_list
-        ]
-
-    return options
-
+####################################
+# CAG ANNOTATION HEATMAP CALLBACKS #
+####################################
 @app.callback(
-    Output("cag-heatmap-multiselector", 'options'),
+    Output('cag-annotation-heatmap-graph', 'figure'),
     [
-        Input("selected-dataset", "children"),
-    ])
-def update_cag_heatmap_multiselector_options(
-    selected_dataset
-):
-    """When a new dataset is selected, fill in the names of all the CAGs as options."""
-    return get_cag_multiselector_options(selected_dataset)
-
-@app.callback(
-    [
-        Output("cag-heatmap-selected-dataset", "children"),
-        Output('cag-heatmap-multiselector', 'value'),
+        Input({"type": "heatmap-select-cags-by", "parent": "annotation-heatmap"}, 'value'),
+        Input('cag-annotation-heatmap-ncags', 'value'),
+        Input({'name': 'cag-annotation-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
+        Input('cag-annotation-heatmap-annotation-type', 'value'),
+        Input('cag-annotation-heatmap-nannots', 'value'),
     ],
     [
-        Input("selected-dataset", "children"),
-        Input('global-selected-cag', 'children'),
-    ],
-    [
-        State("cag-heatmap-selected-dataset", "children"),
-        State("cag-heatmap-multiselector", "value"),
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
     ])
-def update_heatmap_cag_dropdown_value(
+def annotation_heatmap_graph_callback(
+    select_cags_by,
+    n_cags,
+    cag_size_range,
+    annotation_type,
+    n_annots,
     selected_dataset,
-    clicked_cag_json,
-    cag_heatmap_selected_dataset,
-    cags_in_dropdown,
+    page,
+    key,
 ):
-    # The logic for this callback is a bit involved
-    # If a new dataset has been selected, we want to clear the selected values
-    # However, if a new CAG has been clicked (global-selected-cag), then add that to the list
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
-    # At the same time, we need to update cag-heatmap-selected-dataset to figure out
-    # whether selected-dataset has changed or not
+    if fp is None:
+        return empty_figure()
 
-    # If a new dataset is selected, remove all selected values
-    if isinstance(selected_dataset, list):
-        selected_dataset = selected_dataset[0]
-    selected_dataset = int(selected_dataset)
+    # Get the top CAGs selected by this criterion
+    cags_selected = get_cags_selected_by_criterion(
+        fp,
+        select_cags_by,
+        n_cags,
+        cag_size_range,
+    )
 
-    if isinstance(cag_heatmap_selected_dataset, list):
-        cag_heatmap_selected_dataset = cag_heatmap_selected_dataset[0]
-    cag_heatmap_selected_dataset = int(cag_heatmap_selected_dataset)
+    # Get the full table of CAG annotations
+    if annotation_type == "eggNOG_desc":
 
-    # A new dataset has been selected
-    if cag_heatmap_selected_dataset != selected_dataset:
-        
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset]["fp"]
+        # Read in the functional annotations for all CAGs in the index
+        cag_annot_df = functional_gene_annotations(fp)
 
-        # Pick the top five CAGs to display by mean abundance
-        top_five_cags = cag_summary(fp)["mean_abundance"].sort_values(
-            ascending=False
-        ).index.values[:5]
+    elif annotation_type == "taxonomic":
 
-        # With a new dataset, select the first five CAGs
-        return [selected_dataset], top_five_cags
+        # Read in the full set of taxonomic annotations
+        cag_annot_df = taxonomic_gene_annotations(fp)
 
     else:
-        # Reaching this point in the function, a new dataset has _not_ been selected
-        # That means that a new CAG has been clicked on somewhere in the display
-        if clicked_cag_json is not None:
-            # Add the clicked point to the list of selected CAGs in the heatmap
-            cags_in_dropdown.append(
-                json.loads(clicked_cag_json)["id"]
+        # Read in the taxonomic annotations at this rank
+        cag_annot_df = taxonomic_gene_annotations(fp, rank=annotation_type)
+
+    # Subset to just the CAGs in this list
+    cag_annot_df = cag_annot_df.loc[
+        cag_annot_df["CAG"].isin(cags_selected)
+    ]
+
+    # If the CAGs are selected by parameter, then fetch the annotations by parameter
+    if select_cags_by.startswith("parameter-"):
+
+        # Parse the parameter from the `select_cags_by` value
+        parameter = select_cags_by.replace("parameter-", "")
+
+        # Read in the enrichments of each annotation according to this parameter
+
+        # To show all taxonomic annotations, read in the enrichments at multiple ranks
+        if annotation_type == "taxonomic":
+            # In the combined DataFrame, make sure to include the rank of interest
+            enrichment_df = pd.concat([
+                enrichments(
+                    fp, 
+                    parameter, 
+                    rank
+                ).assign(
+                    rank=rank
+                ).reset_index()
+                for rank in ["species", "genus", "family"]
+            ]).reset_index(
+                drop=True
             )
-        return [selected_dataset], cags_in_dropdown
+        else:
+            # Otherwise just show the enrichments at this single level
+            enrichment_df = enrichments(
+                fp, 
+                parameter, 
+                annotation_type
+            )
+
+        # If we are selecting CAGs by their association with a given parameter,
+        # we will then plot the estimated coefficient with that parameter
+        cag_estimate_dict = cag_associations(
+            fp,
+            parameter
+        ).reindex(
+            index=cags_selected
+        ).to_dict(
+            orient="index"  # Index by CAG ID, then column name
+        )
+    else:
+
+        parameter = None
+
+        # Do not show any enrichments for annotations
+        enrichment_df = None
+
+        # Do not show any estimates for CAGs
+        cag_estimate_dict = None
+
+    # Draw the figure
+    return draw_cag_annotation_heatmap(
+        cag_annot_df,
+        annotation_type,
+        enrichment_df,
+        cag_estimate_dict,
+        n_annots,
+    )
+######################################
+# / CAG ANNOTATION HEATMAP CALLBACKS #
+######################################
 
 
-###########################
-# / CAG HEATMAP CALLBACKS #
-###########################
+###################################
+# ANNOTATION ENRICHMENT CALLBACKS #
+###################################
+@app.callback(
+    Output("annotation-enrichment-graph", "figure"),
+    [
+        Input("annotation-enrichment-type", "value"),
+        Input({
+            "type": "corncob-parameter-dropdown",
+            "group": "annotation-enrichment",
+        }, "value"),
+        Input("annotation-enrichment-plotn", "value"),
+        Input("annotation-enrichment-show-pos-neg", "value"),
+        Input("annotation-enrichment-page-num", "children"),
+    ],
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ]
+)
+def annotation_enrichment_graph_callback(
+    annotation,
+    parameter,
+    plotn,
+    show_pos_neg,
+    page_num,
+    selected_dataset,
+    page,
+    key,
+):
+    """Render the graph for the annotation enrichment card."""
+    
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No dataset has been selected or no parameter has been selected
+    if fp is None or parameter == "none":
+        return empty_figure()
+    else:
+
+        # Read in the enrichments
+        enrichment_df = enrichments(
+            fp, 
+            parameter, 
+            annotation
+        )
+
+        # If there are no enrichments, skip it
+        if enrichment_df is None:
+            return empty_figure()
+
+        # Subset to positive / negative estimated coefficients
+        if show_pos_neg == "negative":
+            enrichment_df = enrichment_df.query(
+                "estimate < 0"
+            )
+        elif show_pos_neg == "positive":
+            enrichment_df = enrichment_df.query(
+                "estimate > 0"
+            )
+
+        # Sort by absolute Wald
+        enrichment_df = enrichment_df.sort_values(
+            by="abs_wald", 
+            ascending=False
+        )
+
+        # Remove the Psort annotations
+        enrichment_df = enrichment_df.loc[[
+            n.startswith("Psort") is False
+            for n in enrichment_df.index.values
+        ]]
+
+        # Parse the `plotn` and `page_num` parameter
+        if isinstance(page_num, list):
+            page_num = page_num[0]
+        else:
+            page_num = 1
+
+        enrichment_df = enrichment_df.head(
+            plotn * page_num
+        ).tail(
+            plotn
+        )
+
+        return draw_enrichment_graph(
+            enrichment_df,
+            annotation,
+            parameter, 
+        )
+
+
+@app.callback(
+    Output('annotation-enrichment-page-num', 'children'),
+    [Input('annotation-enrichment-button-next', 'n_clicks'),
+    Input('annotation-enrichment-button-previous', 'n_clicks'),
+    Input('annotation-enrichment-button-first', 'n_clicks')],
+    [State('annotation-enrichment-page-num', 'children')]
+)
+def annotation_enrichment_click(btn1, btn2, btn3, page_num):
+    changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
+    if 'annotation-enrichment-button-next' in changed_id:
+        return [page_num[0] + 1]
+    elif 'annotation-enrichment-button-previous' in changed_id:
+        return [max(page_num[0] - 1, 1)]
+    else:
+        return [1]
+#####################################
+# / ANNOTATION ENRICHMENT CALLBACKS #
+#####################################
 
 
 #####################
@@ -1209,28 +1549,40 @@ def update_heatmap_cag_dropdown_value(
     Output('volcano-graph', 'figure'),
     [
         Input("selected-dataset", "children"),
-        Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+        Input({
+            "type": "corncob-parameter-dropdown", 
+            "group": "volcano-parameter",
+        }, 'value'),
         Input("corncob-comparison-parameter-dropdown", "value"),
         Input({"name": 'volcano-cag-size-slider', "type": "cag-size-slider"}, 'value'),
-        Input('volcano-pvalue-slider', 'value'),
+        Input({
+            'group': 'volcano-parameter',
+            'type': 'corncob-pvalue-slider'
+        }, 'value'),
         Input('volcano-fdr-radio', 'value'),
     ])
 def volcano_graph_callback(
     selected_dataset,
+    page,
+    key,
     parameter, 
     comparison_parameter,
     cag_size_range,
     neg_log_pvalue_min, 
     fdr_on_off, 
 ):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No dataset has been selected or no parameter has been selected
+    if fp is None or parameter == "none":
         return empty_figure()
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
         return draw_volcano_graph(
-            corncob(fp),
-            cag_summary(fp),
+            cag_associations(fp, parameter),
+            cag_annotations(fp),
             parameter, 
             comparison_parameter,
             cag_size_range,
@@ -1239,66 +1591,59 @@ def volcano_graph_callback(
         )
 
 @app.callback(
-    Output('volcano-selected-cag', 'children'),
-    [
-        Input('volcano-graph', 'clickData'),
-    ])
-def volcano_save_click_data(clickData):
-    """Only save the click data when a point in a scatter has been selected"""
-    if clickData is not None:
-        for point in clickData["points"]:
-            if "id" in point:
-                # Save the time of the event
-                point["time"] = time()
-                return json.dumps(point, indent=2)
-
-@app.callback(
-    Output({"type": "corncob-parameter-dropdown","name": MATCH}, "options"),
+    Output({"type": "corncob-parameter-dropdown", "group": MATCH}, "options"),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ],
-    [State({"type": "corncob-parameter-dropdown","name": MATCH}, "value")])
-def update_volcano_parameter_dropdown_options(selected_dataset, dummy):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    [State({"type": "corncob-parameter-dropdown", "group": MATCH}, "value")])
+def update_volcano_parameter_dropdown_options(selected_dataset, page, key, dummy):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return [
             {'label': 'None', 'value': 'none'}
         ]
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
 
         # Check to see if the file contains corncob results
-        if corncob_parameters(fp) is None:
+        if len(valid_parameters(fp)) == 0:
             return [
                 {'label': 'None', 'value': 'none'}
             ]
 
         else:
-            # Get the list of parameters
-            parameter_list = corncob_parameters(fp)
             return [
                 {'label': l, 'value': l}
-                for l in parameter_list
+                for l in valid_parameters(fp)
             ]
 
 @app.callback(
     [Output("corncob-comparison-parameter-dropdown", value) for value in ["options", "value"]],
-    [Input("selected-dataset", "children")]
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ]
 )
-def update_volcano_comparison_dropdown(selected_dataset):
+def update_volcano_comparison_dropdown(selected_dataset, page, key):
     options = [{'label': 'Estimated Coefficient', 'value': 'coef'}]
     value = "coef"
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return [options, value]
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
 
         # Get the list of parameters
-        parameter_list = corncob_parameters(fp)
+        parameter_list = valid_parameters(fp)
 
         # Check to make sure that the file contains corncob results
-        if parameter_list is not None:
+        if len(parameter_list) > 0:
 
             options = options + [
                 {'label': l, 'value': l}
@@ -1308,22 +1653,24 @@ def update_volcano_comparison_dropdown(selected_dataset):
         return [options, value]
 
 @app.callback(
-    Output({"type": "corncob-parameter-dropdown","name": MATCH}, "value"),
+    Output({"type": "corncob-parameter-dropdown", "group": MATCH}, "value"),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ],
-    [State({"type": "corncob-parameter-dropdown", "name": MATCH}, "options")])
-def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    [State({"type": "corncob-parameter-dropdown", "group": MATCH}, "options")])
+def update_volcano_parameter_dropdown_value(selected_dataset, page, key, dummy):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return "none"
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
-
         # Get the list of parameters
-        parameter_list = corncob_parameters(fp)
+        parameter_list = valid_parameters(fp)
 
-        if parameter_list is None:
+        if len(parameter_list) == 0:
             return "none"
 
         if len(parameter_list) > 1:
@@ -1332,28 +1679,68 @@ def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
             return parameter_list[0]
 
 @app.callback(
-    [
-        Output('volcano-pvalue-slider', value)
-        for value in ['max', 'marks']
-    ],
+    Output({
+        'type': 'corncob-pvalue-slider',
+        'group': MATCH,
+    }, "max"),
     [
         Input("selected-dataset", "children"),
-        Input({"type": "corncob-parameter-dropdown", "name": 'volcano-parameter-dropdown'}, 'value'),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+        Input({
+            "type": "corncob-parameter-dropdown", 
+            "group": MATCH}, 'value'),
     ])
-def update_volcano_pvalue_slider(selected_dataset, parameter):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+def update_volcano_pvalue_slider_max(selected_dataset, page, key, parameter):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No dataset selected, or no parameter selected
+    if fp is None or parameter == "none":
+        return 1
+    else:
+
+        df = cag_associations(
+            fp, 
+            parameter
+        )
+        assert "neg_log10_pvalue" in df.columns.values, df.columns.values
+        return cag_associations(
+            fp, 
+            parameter
+        )["neg_log10_pvalue"].max()
+
+@app.callback(
+    Output({
+        'type': 'corncob-pvalue-slider',
+        'group': MATCH,
+    }, "marks"),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+        Input({
+            "type": "corncob-parameter-dropdown", 
+            "group": MATCH}, 'value'),
+    ])
+def update_volcano_pvalue_slider_marks(selected_dataset, page, key, parameter):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No dataset selected, or no parameter selected
+    if fp is None or parameter == "none":
         max_value = 1
     else:
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset[0]]["fp"]
 
-        # If there are no corncob results, max_value = 1
-        if corncob(fp) is None:
-            max_value = 1
-        else:
-            max_value = corncob(fp).query(
-                "parameter == '{}'".format(parameter)
-            )["neg_log_pvalue"].max()
+        df = cag_associations(
+            fp, 
+            parameter
+        )
+        assert "neg_log10_pvalue" in df.columns.values, df.columns.values
+        max_value = cag_associations(
+            fp, 
+            parameter
+        )["neg_log10_pvalue"].max()
 
     if np.isnan(max_value):
         max_value = 1
@@ -1367,7 +1754,7 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
         )
     }
 
-    return [max_value, marks]
+    return marks
 #######################
 # / VOLCANO CALLBACKS #
 #######################
@@ -1384,93 +1771,298 @@ def update_volcano_pvalue_slider(selected_dataset, parameter):
         Output('cag-tax-ngenes', 'marks'),
     ],
     [
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
+        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-multiselector", "value"),
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input('cag-tax-ngenes', 'value'),
-        Input('single-cag-multiselector', 'value'),
+        Input('plot-cag-multiselector', 'value'),
     ])
-def update_taxonomy_graph(selected_dataset, min_ngenes, cag_id):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        marks = {
-            n: n
-            for n in ["0", "1"]
-        }
+def update_taxonomy_graph(
+    selection_type,
+    parameter,
+    max_neglog_pvalue,
+    annotation,
+    selected_dataset, 
+    page,
+    key,
+    min_ngenes, 
+    cag_id
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # Marks for an empty taxonomy plot
+    marks = {
+        n: n
+        for n in ["0", "1"]
+    }
+
+    if fp is None or cag_id is None:
         return empty_figure(), 1, marks
 
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
+    # If a single CAG has been selected, add that to the plot
+    if selection_type == "cag_id":
+        cag_id = int(cag_id)
 
-    # Format the DataFrame as needed to make a go.Sunburst
-    cag_tax_df = cag_taxonomy(int(cag_id), fp)
+        # Format the DataFrame as needed to make a go.Sunburst
+        cag_tax_df = taxonomic_gene_annotations(fp, cag_id=cag_id)
 
-    return draw_taxonomy_sunburst(cag_tax_df, int(cag_id), min_ngenes)
+        plot_title = "CAG {}".format(cag_id)
+
+    else:
+        # Read the association metrics for each CAG against this parameter
+        corncob_df = cag_associations(fp, parameter)
+        if corncob_df is None:
+            return empty_figure(), 1, marks
+
+        # Filter by p-value
+        all_cags = set(corncob_df.query(
+            "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
+        ).index.values)
+
+        if len(all_cags) == 0:
+            return empty_figure(), 1, marks
+
+        # Get the list of CAGs based on these criteria
+        selected_cags = set([])
+
+        # Include all of the taxa annotated for these CAGs
+        for rank in ["family", "genus", "species"]:
+            rank_df = taxonomic_gene_annotations(
+                fp, rank=rank
+            )
+            # Filter to these CAGs
+            rank_df = rank_df.loc[rank_df["CAG"].isin(all_cags)]
+
+            # Add any CAGs with this annotation
+            selected_cags.update(set(rank_df.loc[
+                rank_df["name"].isin(annotation),
+                "CAG"
+            ].tolist()))
+
+        selected_cags = list(selected_cags)
+        
+        if len(selected_cags) == 0:
+            return empty_figure(), 1, marks
+
+        # Format the DataFrame as needed to make a go.Sunburst
+        cag_tax_df = taxonomic_gene_annotations(fp)
+        cag_tax_df = cag_tax_df.loc[cag_tax_df["CAG"].isin(selected_cags)]
+        cag_tax_df = cag_tax_df.drop(
+            columns="CAG"
+        ).groupby(
+            ["name", "rank", "tax_id", "parent"]
+        ).sum(
+        ).reset_index(
+        )
+
+        if len(selected_cags) > 1:
+            plot_title = "{:,} CAGs with annotations for {}".format(
+                len(selected_cags),
+                " / ".join(annotation)
+            )
+            axis_label = "Relative Abundance"
+        else:
+            plot_title = "CAG {} - with annotations for {}".format(
+                int(selected_cags[0]),
+                " / ".join(annotation)
+            )
+
+
+    if cag_tax_df is None:
+        return empty_figure(), 1, marks
+    else:
+        return draw_taxonomy_sunburst(cag_tax_df, plot_title, min_ngenes)
 ###########################
 # / CAG TAXONOMY CALLBACK #
 ###########################
 
-#######################
-# SINGLE CAG CALLBACK #
-#######################
+#####################
+# PLOT CAG CALLBACK #
+#####################
 @app.callback(
-    Output("single-cag-multiselector", 'options'),
+    [
+        Output("plot-cag-by-id-div", "style"),
+        Output("plot-cag-by-association-div", "style"),
+    ],
+    [Input("plot-cag-selection-type", "value")]
+)
+def plot_cag_show_hide_selection_controls(
+    selection_type
+):
+    """When the user selects 'Association & Annotation', show the appropriate controls."""
+    if selection_type == "cag_id":
+        return {"display": "block"}, {"display": "none"}
+    else:
+        return {"display": "none"}, {"display": "block"}
+
+@app.callback(
+    Output("plot-cag-annotation-multiselector", "options"),
+    [
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
+        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ]
+)
+def plot_cag_annotation_options(
+    selection_type,
+    parameter,
+    max_neglog_pvalue,
+    selected_dataset,
+    page,
+    key,
+):
+    """When the user selects 'Association & Annotation', show the appropriate annotations."""
+    options = [{"label": "None", "value": "None"}]
+    if selection_type == "cag_id":
+        return options
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # Make sure that this parameter is valid
+    if parameter not in valid_parameters(fp):
+        return options
+
+    # Get the table of CAG associations
+    corncob_df = cag_associations(fp, parameter)
+    if corncob_df is None:
+        return options
+
+    # Filter by p-value
+    corncob_df = corncob_df.query(
+        "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
+    )
+
+    if corncob_df.shape[0] == 0:
+        return options
+
+    # Get the annotations for this set of CAGs
+    all_annot = defaultdict(int)
+
+    # Include all of the taxa annotated for these CAGs
+    for rank in ["family", "genus", "species"]:
+        for label in filter_by_cags(
+            taxonomic_gene_annotations(
+                fp, rank=rank
+            ),
+            corncob_df.index.values
+        )["name"].values:
+            all_annot[label] += 1
+    
+    if len(all_annot) == 0:
+        return [{"label": "None", "value": "None"}]
+
+    # Sort the annotations by the number of CAGs found
+    return [
+            {"label": label, "value": label}
+        for label in pd.Series(
+            all_annot
+        ).sort_values(
+            ascending=False
+        ).index.values
+    ]
+
+def filter_by_cags(df, cag_id_list):
+    return df.loc[df["CAG"].isin(cag_id_list)]
+    
+
+@app.callback(
+    Output("plot-cag-multiselector", 'max'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ])
 def update_single_cag_multiselector_options(
-    selected_dataset
+    selected_dataset, page, key
 ):
-    """When a new dataset is selected, fill in the names of all the CAGs as options."""
-    return get_cag_multiselector_options(selected_dataset)
+    """When a new dataset is selected, fill in maximum allowed CAG ID value."""
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return 1
+
+    else:
+
+        # Get the list of all CAGs
+        cag_id_list = cag_annotations(fp).index.values
+
+        return max(cag_id_list)
+    
 @app.callback(
-    Output('single-cag-multiselector', 'value'),
+    Output('plot-cag-multiselector', 'value'),
     [
         Input("selected-dataset", "children"),
-    ],
-    [
-        State('single-cag-multiselector', 'value')
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ]
 )
 def update_single_cag_dropdown_value(
-    selected_dataset, selected_cag
+    selected_dataset, page, key
 ):
-    # If a new dataset is selected, remove all selected values
+    # If a new dataset is selected, update the default CAG selected
     if isinstance(selected_dataset, list):
         selected_dataset = selected_dataset[0]
     selected_dataset = int(selected_dataset)
 
-    # If the Main Menu button has been clicked, just return the existing value
+    # If the Main Menu button has been clicked, just return 0
     if selected_dataset == -1:
-        return selected_cag
+        return 0
 
     # Otherwise return the most abundant CAG
     else:
         
-        # Get the path to the indicated HDF5
-        fp = page_data["contents"][selected_dataset]["fp"]
+        # Get the path to the selected dataset
+        fp = page_data.parse_fp([selected_dataset])
 
         # Pick the top CAG to display by mean abundance
-        top_cag = cag_summary(fp)["mean_abundance"].sort_values(
+        top_cag = cag_annotations(
+            fp
+        )[
+            "mean_abundance"
+        ].sort_values(
             ascending=False
         ).index.values[0]
 
         # With a new dataset, select the first five CAGs
         return top_cag
 @app.callback(
-    Output('single-cag-graph', 'figure'),
+    Output('plot-cag-graph', 'figure'),
     [
-        Input('single-cag-multiselector', 'value'),
-        Input({'name': 'single-cag-xaxis',
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
+        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-multiselector", "value"),
+        Input('plot-cag-multiselector', 'value'),
+        Input({'name': 'plot-cag-xaxis',
                "type": "metadata-field-dropdown"}, 'value'),
-        Input('single-cag-plot-type', 'value'),
-        Input({'name': 'single-cag-color',
+        Input('plot-cag-plot-type', 'value'),
+        Input({'name': 'plot-cag-color',
                "type": "metadata-field-dropdown"}, 'value'),
-        Input({'name': 'single-cag-facet',
+        Input({'name': 'plot-cag-facet',
                "type": "metadata-field-dropdown"}, 'value'),
-        Input('single-cag-log', 'value'),
+        Input('plot-cag-log', 'value'),
         Input('manifest-filtered', 'children'),
     ],[
-        State("selected-dataset", "children")
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
     ])
 def update_single_cag_graph(
+    selection_type,
+    parameter,
+    max_neglog_pvalue,
+    annotation,
     cag_id,
     xaxis,
     plot_type,
@@ -1479,159 +2071,98 @@ def update_single_cag_graph(
     log_scale,
     manifest_json,
     selected_dataset,
+    page,
+    key,
 ):
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         return empty_figure()
 
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
-
     # Get the filtered manifest from the browser
-    plot_manifest_df = parse_manifest_json(manifest_json, manifest(fp))
-
-    plot_df = plot_manifest_df.assign(
-        CAG_ABUND = read_cag_abundance(fp, int(cag_id))
+    plot_manifest_df = parse_manifest_json(
+        manifest_json, 
+        manifest(fp)
     )
+
+    # If a single CAG has been selected, add that to the plot
+    if selection_type == "cag_id":
+        plot_df = plot_manifest_df.assign(
+            CAG_ABUND = cag_abundances(fp).loc[int(cag_id)]
+        )
+        plot_title = "CAG {}".format(cag_id)
+
+    else:
+        # Read the association metrics for each CAG against this parameter
+        corncob_df = cag_associations(fp, parameter)
+        if corncob_df is None:
+            return empty_figure()
+
+        # Filter by p-value
+        all_cags = set(corncob_df.query(
+            "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
+        ).index.values)
+
+        if len(all_cags) == 0:
+            return empty_figure()
+
+        # Get the list of CAGs based on these criteria
+        selected_cags = set([])
+
+        # Include all of the taxa annotated for these CAGs
+        for rank in ["family", "genus", "species"]:
+            rank_df = taxonomic_gene_annotations(
+                fp, rank=rank
+            )
+            # Filter to these CAGs
+            rank_df = rank_df.loc[rank_df["CAG"].isin(all_cags)]
+
+            # Add any CAGs with this annotation
+            selected_cags.update(set(rank_df.loc[
+                rank_df["name"].isin(annotation),
+                "CAG"
+            ].tolist()))
+
+        selected_cags = list(selected_cags)
+
+        if len(selected_cags) == 0:
+            return empty_figure()
+
+        # Now that we have a list of CAGs, add the abundance and format the title
+        plot_df = plot_manifest_df.assign(
+            CAG_ABUND = cag_abundances(fp).reindex(
+                index=selected_cags
+            ).sum()
+        )
+
+        if len(selected_cags) > 1:
+            plot_title = "{:,} CAGs with annotations for {}".format(
+                len(selected_cags),
+                " / ".join(annotation)
+            )
+            axis_label = "Relative Abundance"
+        else:
+            plot_title = "CAG {} - with annotations for {}".format(
+                int(selected_cags[0]),
+                " / ".join(annotation)
+            )
+
+    axis_label = "Relative Abundance"
 
     return draw_single_cag_graph(
         plot_df,
-        int(cag_id),
+        plot_title,
+        axis_label,
         xaxis,
         plot_type,
         color,
         facet,
         log_scale
     )
-#########################
-# / SINGLE CAG CALLBACK #
-#########################
-
-
-#########################
-# GENOME CARD CALLBACKS #
-#########################
-@app.callback(
-    Output("genome-card", "style"),
-    [Input("selected-dataset", "children")]
-)
-def show_hide_genome_card(selected_dataset):
-    """Only show the genome card if the HDF5 has alignment information."""
-    hide_val = {"display": "none"}
-    show_val = {}
-
-    # No dataset is selected
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return hide_val
-    
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
-
-    # Check if dataset has alignment information
-    if has_genome_alignments(fp):
-        return show_val
-    else:
-        return hide_val
-
-@app.callback(
-    Output("genome-scatter-graph", "figure"),
-    [
-        Input({
-            "type": "corncob-parameter-dropdown",
-            "name": "genome-parameter-dropdown"
-        }, "value"),
-        Input("genome-scatter-ngenes-slider", "value"),
-    ],
-    [State("selected-dataset", "children")]
-)
-def update_genome_scatter_figure(parameter, min_ngenes, selected_dataset):
-    # Don't make a plot if a CAG hasn't been selected
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return empty_figure()
-
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
-
-    # Get the genomes for this CAG (lengthy read operation)
-    genome_df = genome_summary_by_parameter(
-        fp, parameter
-    )
-
-    # Skip if this dataset does not have corncob output
-    if genome_df is None:
-        return empty_figure()
-
-    # Filter down to the top N genomes
-    genome_df = genome_df.query( 
-        "total_genes >= {}".format(min_ngenes)
-    )
-
-    if genome_df.shape[0] == 0:
-        return empty_figure()
-
-    # Make the plot
-    return plot_genome_scatter(
-        genome_df, parameter, genome_manifest(fp)
-    )
-
-@app.callback(
-    Output("genome-heatmap-graph", "figure"),
-    [
-        Input("genome-scatter-graph", "selectedData")
-    ],
-    [State("selected-dataset", "children")]
-)
-def update_genome_heatmap_figure(selected_genomes, selected_dataset):
-    if selected_genomes is None or len(selected_genomes["points"]) == 0:
-        return empty_figure()
-
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
-
-    # Enforce an upper limit the number of genomes to display
-    if len(selected_genomes["points"]) > 30:
-        selected_genomes["points"] = selected_genomes["points"][:30]
-
-    # Get the CAGs aligning to these genomes
-    genome_df = pd.concat([
-        cags_by_genome(fp, i["id"])
-        for i in selected_genomes["points"]
-    ])
-
-    # Make a plot
-    return plot_genome_heatmap(
-        genome_df,
-        genome_manifest(fp),
-        cag_summary(fp),
-    )
-
-
-#########################
-# SELECTED CAG CALLBACK #
-#########################
-@app.callback(
-    Output('global-selected-cag', 'children'),
-    [
-        Input('cag-summary-selected-cag', 'children'),
-        Input('volcano-selected-cag', 'children'),
-    ])
-def save_global_selected_cag(cag_summary_click, volcano_click):
-    """Save the most recent click"""
-    output_time = None
-    output_dat = None
-
-    for click_json in [cag_summary_click, volcano_click]:
-        if click_json is None:
-            continue
-        click_dat = json.loads(click_json)
-        if output_time is None or click_dat["time"] > output_time:
-            output_time = click_dat["time"]
-            output_dat = click_dat
-
-    if output_dat is not None:
-        return json.dumps(output_dat, indent=2)
-###########################
-# / SELECTED CAG CALLBACK #
-###########################
+#######################
+# / PLOT CAG CALLBACK #
+#######################
 
 
 ######################
@@ -1647,11 +2178,25 @@ def save_global_selected_cag(cag_summary_click, volcano_click):
     ],
     [
         Input("selected-dataset", "children"),
-    ])
-def update_manifest_table(selected_dataset):
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+        Input("manifest-table-bulk-select-apply", "n_clicks")
+    ],
+    [State("manifest-table-bulk-select-formula", "value")]
+)
+def update_manifest_table(
+    selected_dataset, 
+    page,
+    key,
+    bulk_select_button, 
+    bulk_select_formula
+):
     """Fill in the values of the manifest with the selected dataset."""
 
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
         # Deselect and return empty values
         columns = [
             {"name": "specimen", "id": "specimen"},
@@ -1668,21 +2213,28 @@ def update_manifest_table(selected_dataset):
         return columns, data, selected_rows, options, value
 
     # Otherwise, fill in with real values for this dataset
-
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
-
-    # Get the manifest for this dataset
     manifest_df = manifest(fp).reset_index()
 
     columns=[
         {"name": i, "id": i}
-        for i in manifest_df.columns
+        for i in manifest_df.columns.values
     ]
 
     data = manifest_df.to_dict('records')
 
+    # By default, select all of the rows
     selected_rows = np.arange(0, manifest_df.shape[0])
+
+    # If the user has used the bulk select feature, apply the provided formula
+    bulk_selected_rows = []
+    if bulk_select_formula is not None and len(bulk_select_formula) > 0:
+        try:
+            bulk_selected_rows = manifest_df.query(bulk_select_formula).index.values
+        except:
+            pass
+    # Only use the results of the formula if some samples were selected
+    if len(bulk_selected_rows) > 0:
+        selected_rows = bulk_selected_rows
 
     options = [
         {
@@ -1712,44 +2264,82 @@ def manifest_save_rows_selected(selected_rows):
     Output('manifest-filtered', 'children'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input('manifest-rows-selected', 'children'),
     ])
-def manifest_save_filtered(selected_dataset, selected_rows_json):
+def manifest_save_filtered(selected_dataset, page, key, selected_rows_json):
     """Save the filtered manifest to a hidden div.."""
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return None
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
+    if fp is None:
+        return None
 
     # Parse the list of indexes which we should save
     selected_rows = json.loads(selected_rows_json)
 
     # Filter down the manifest table and save as JSON
-    return manifest(fp).reset_index(
+    return manifest(
+        fp
+    ).reset_index(
     ).reindex(
         index=selected_rows
-    ).to_json(date_format='iso', orient='records')
+    ).to_json(
+        date_format='iso',
+        orient='records'
+    )
 
 @app.callback(
     Output('manifest-table', 'hidden_columns'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input('manifest-table-select-columns', 'value'),
     ])
-def manifest_update_columns_selected(selected_dataset, selected_columns):
+def manifest_update_columns_selected(selected_dataset, page, key, selected_columns):
     """Allow the user to hide selected columns in the manifest table."""
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        return []
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
-    # Get the path to the indicated HDF5
-    fp = page_data["contents"][selected_dataset[0]]["fp"]
+    if fp is None:
+        return []
 
     return [
         n
         for n in manifest(fp).columns.values
         if n not in selected_columns
     ]
+
+@app.callback(
+    [
+        Output('manifest-table-bulk-select-open', 'n_clicks'),
+        Output('manifest-table-bulk-select-apply', 'n_clicks'),
+    ],
+    [
+        Input("selected-dataset", "children"),
+    ])
+def manifest_clear_formula(selected_dataset):
+    """Reset the buttons when the dataset changes."""
+    return 0, 0
+
+@app.callback(
+    Output("manifest-table-bulk-select-modal", "is_open"),
+    [
+        Input("manifest-table-bulk-select-open", "n_clicks"),
+        Input("manifest-table-bulk-select-apply", "n_clicks"),
+    ]
+)
+def manifest_bulk_select_toggle_modal(open_n, apply_n):
+    if open_n is None:
+        return False
+
+    dismiss_clicks = 0
+    if apply_n is not None:
+        dismiss_clicks += apply_n
+    
+    return open_n > dismiss_clicks
 ########################
 # / MANIFEST CALLBACKS #
 ########################
@@ -1762,4 +2352,5 @@ if __name__ == '__main__':
     app.run_server(
         host='0.0.0.0',
         port=8050,
+        debug=True,
     )

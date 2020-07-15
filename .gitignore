@@ -47,3 +47,7 @@ helpers/__pycache__/
 *.hdf5
 *.hdf5.lock
 data/
+testing/
+.nextflow*
+.nextflow/*
+work/

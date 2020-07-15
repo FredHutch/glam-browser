@@ -7,9 +7,9 @@ import pandas as pd
 import numpy as np
 
 # NAVBAR AT THE TOP
-def navbar_simple(page_data):
+def navbar_simple():
     return dbc.NavbarSimple(
-        brand=page_data["page_title"],
+        brand="GLAM Browser",
         dark=True,
         color="#112345",
         children=[
@@ -19,14 +19,15 @@ def navbar_simple(page_data):
                     "type": "open-dataset-button",
                     "index": -1,
                 },
-                n_clicks=0,
+                n_clicks=1,
             ),
             html.Div(  # Store the button-press time
                 id={
                     "type": "open-dataset-pressed",
                     "index": -1
                 },
-                style={"display": "none"}
+                style={"display": "none"},
+                children=-1
             ),
             html.Div(  # Store which dataset is selected
                 id="selected-dataset",
@@ -34,6 +35,7 @@ def navbar_simple(page_data):
                 style={"display": "none"}
             )
         ],
+        id="page-title"
     )
 
 
@@ -64,7 +66,8 @@ def dataset_summary_card(ix, dataset):
                                     "type": "open-dataset-pressed",
                                     "index": ix
                                 },
-                                style={"display": "none"}
+                                style={"display": "none"},
+                                children=-1
                             )],
                         style={"text-align": "right"}
                     ),
@@ -169,8 +172,18 @@ def richness_card():
             )
         ]),
         help_text="""
-Summary of the detection of genes across samples in this dataset.
-For each sample, you may select:
+In order to perform gene-level metagenomic analysis, the first step is to 
+estimate the abundance of every microbial gene in every sample.
+
+The analytical steps needed to perform this analysis include:
+
+- Removal of host sequences by subtractive alignment
+- _De novo_ assembly of every individual sample
+- Deduplication of protein coding sequences across all samples to form a _de novo_ gene catalog
+- Alignment of WGS reads from every sample against that gene catalog
+- Estimation of the relative abundance of every gene as the proportion of reads which align uniquely (normalized by gene length)
+
+To visualize how genes were quantified in each sample, you may select:
 
 - The proportion of reads from each sample which align uniquely to a single protein-coding gene from the catalog
 - The number of genes which were identified by _de novo_ assembly in each sample
@@ -180,7 +193,7 @@ Data may be summarized either by a single point per sample or with a frequency h
 
 To mask any sample from this plot, deselect it in the manifest at the bottom of the page.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 ###################
@@ -235,7 +248,8 @@ def single_sample_card():
             )
         ]),
         help_text="""
-Summary of the CAGs detected in a single sample. 
+**Summary of the CAGs detected in a single sample.**
+
 You may select any sample to display the relative abundance of every CAG which
 was detected, comparing by default against the size (number of genes) in each CAG. 
 
@@ -246,7 +260,7 @@ Abundance metrics:
 - Relative Abundance (default): The proportion of gene copies detected in a sample which are assigned to each CAG
 - Centered Log-Ratio: The log10 transformed relative abundance of each CAG divided by the geometric mean of relative abundance of all CAGs detected in that sample
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 ########################
@@ -317,7 +331,11 @@ def ordination_card():
             )
         ]),
         help_text="""
-Beta-diversity summary of the similarity of community composition across samples.
+**Beta-diversity summary of the similarity of community composition across samples.**
+
+One way to understand the composition of a microbial community is to compare every pair of samples
+on the basis of what microbes were detected. This approach is referred to as 'beta-diversity' analysis.
+
 You may select a distance metric which is used to calculate the similarity of every pair of samples.
 Based on that distance matrix, PCA or t-SNE may be used to summarize the groups of samples which
 are most similar to each other.
@@ -329,7 +347,7 @@ The lower scatter plot shows two axes, and metadata from the manifest can be ove
 
 To mask any sample from this plot, deselect it in the manifest at the bottom of the page.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 #####################
@@ -346,74 +364,32 @@ def cag_summary_card():
         [
             dbc.Row([
                 dbc.Col(
+                    dbc.Spinner(
+                        dcc.Graph(
+                            id='cag-summary-graph-hist'
+                        )
+                    ),
+                    width = 8,
+                    align = "center"
+                ),
+                dbc.Col(
                     cag_metric_dropdown(
                         "cag-summary-metric-primary",
                         default_value="size",
-                        label_text="Primary Metric (x-axis)",
-                    ) + cag_metric_dropdown(
-                        "cag-summary-metric-secondary",
-                        default_value="entropy",
-                        label_text="Secondary Metric (y-axis)",
-                    ),
-                    width = 4,
-                    align = "center"
-                ),
-                dbc.Col(
-                    cag_size_slider(
-                        "cag-summary-size-slider"
-                    ) + cag_metric_slider(
-                        "cag-summary-entropy-slider",
-                        "entropy",
-                        "CAG Entropy Filter",
-                    ) ,
-                    width = 4,
-                    align = "center"
-                ),
-                dbc.Col(
-                    cag_metric_slider(
-                        "cag-summary-prevalence-slider",
-                        "prevalence",
-                        "CAG Prevalence Filter"
-                    ) + cag_metric_slider(
-                        "cag-summary-abundance-slider",
-                        "mean_abundance",
-                        "CAG Abundance Filter",
-                    ),
-                    width = 4,
-                    align = "center"
-                )
-            ]),
-            dbc.Row([
-                dbc.Col(
-                    [
-                        dbc.Spinner(
-                            dcc.Graph(
-                                id='cag-summary-graph-scatter'
-                            )
-                        ),
-                    ],
-                    width=12,
-                    align="center"
-                )
-            ]),
-            dbc.Row([
-                dbc.Col(
-                    [
+                        label_text="Metric",
+                    ) + [
                         html.Label("Histogram Display"),
                         dcc.Dropdown(
                             id='cag-summary-histogram-metric',
                             options=[
-                                {'label': 'Number of genes', 'value': 'genes'},
-                                {'label': 'Number of CAGs', 'value': 'cags'},
+                                {'label': 'Number of genes',
+                                    'value': 'genes'},
+                                {'label': 'Number of CAGs',
+                                    'value': 'cags'},
                             ],
                             value="genes",
-                        )
-                    ],
-                    width = 4,
-                    align = "center"
-                ),
-                dbc.Col(
-                    [
+                        ),
+                        html.Br(),
                         html.Label("Histogram Log Scale"),
                         dcc.Dropdown(
                             id='cag-summary-histogram-log',
@@ -424,55 +400,47 @@ def cag_summary_card():
                             value="on",
                         ),
                         html.Div(id='global-selected-cag',
-                                style={"display": "none"}),
+                                    style={"display": "none"}),
                         html.Div(id='cag-summary-selected-cag',
-                                style={"display": "none"}),
-                    ],
-                    width = 4,
-                    align = "center"
-                ),
-                dbc.Col(
-                    nbins_slider(
+                                    style={"display": "none"}),
+                        html.Br()
+                    ] + nbins_slider(
                         "cag-summary-nbinsx-slider"
                     ),
-                    width=4,
-                    align="center"
-                )
-            ]),
-            dbc.Row([
-                dbc.Col(
-                    [
-                        dbc.Spinner(
-                            dcc.Graph(
-                                id='cag-summary-graph-hist'
-                            )
-                        ),
-                    ],
-                    width=12,
-                    align="center"
+                    width = 4,
+                    align = "center"
                 )
             ])
         ],
         help_text="""
-Genes were grouped into Co-Abundant Groups (CAGs), and this panel summarizes that set of CAGs on the basis of:
+A key factor in performing efficient gene-level metagenomic analysis is the grouping of genes by co-abundance.
+The term 'co-abundance' is used to describe the degree to which any pair of genes are found at similar relative
+abundances in similar samples. The core concept is that any pair of genes which are always found on the same
+molecule of DNA are expected to have similar relative abundances as measured by WGS metagenomic sequencing.
+
+In this analysis, genes were grouped into Co-Abundant Groups (CAGs) by average linkage clustering using the
+cosine measure of co-abundance across every pair of samples. After constructing CAGs for this dataset, each
+of those CAGs can be summarized on the basis of the aggregate abundance of all genes contained in that CAG.
+(note: every gene can only belong to a single CAG in this approach).
+
+The biological interpretation of CAGs is that they are expected to correspond to groups of genes which are
+consistently found on the same piece of genetic material (chromosome, plasmid, etc.), or that they are found
+in organismsm which are highly co-abundant in this dataset.
+
+This panel summarizes that set of CAGs on the basis of:
 
 - Size: Number of genes contained in each CAG
+- Mean Abundance across all samples (as the sum of the relative abundance of every gene in that CAG)
 - Entropy: The evenness of abundance for a given CAG across all samples
-- Mean Abundance across all samples
 - Prevalence: The proportion of samples in which a CAG was detected at all
 - Standard Deviation of relative abundance values across all samples
 
-*Click on any CAG* to display additional information about that CAG in the panels below.
-
 Note: Masking a sample from the manifest at the bottom of the page does _not_ update the summary CAG metrics displayed here.
 
-You may select to filter which CAGs are displayed using the sliders which are provided.
-You may also change the number of bins used to plot the frequency histogram.
-
-By default, the frequency histogram (top) displays the number of _genes_ found in the group of CAGs that fall
+By default, this frequency histogram displays the number of _genes_ found in the group of CAGs that fall
 within a given range. You may instead choose to display the number of CAGs which fall into each bin.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 ######################
@@ -480,24 +448,36 @@ Note: Click on the camera icon at the top of this plot (or any on this page) to 
 ######################
 
 
-####################
-# CAG HEATMAP CARD #
-####################
-def cag_heatmap_card():
+##############################
+# CAG ABUNDANCE HEATMAP CARD #
+##############################
+def cag_abundance_heatmap_card():
     return card_wrapper(
         "CAG Abundance Heatmap",
         [
             dbc.Row([
                 dbc.Col(
                     [
-                        html.Label("Display CAGs"),
+                        html.Label("Display Top CAGs By"),
                         dcc.Dropdown(
-                            id="cag-heatmap-multiselector",
-                            options=[],
-                            value=[],
-                            multi=True
-                        )
-                    ],
+                            id={"type": "heatmap-select-cags-by", "parent": "abundance-heatmap"},
+                            options=[
+                                {"label": "Average Relative Abundance", "value": "abundance"},
+                                {"label": "Size (Number of Genes)", "value": "size"},
+                            ],
+                            value="abundance"
+                        ),
+                        html.Br()
+                    ] + basic_slider(
+                        "cag-abundance-heatmap-ncags",
+                        "Number of CAGs to Display",
+                        min_value=5,
+                        max_value=50,
+                        default_value=10,
+                        marks=[5, 10, 25, 50]
+                    ) + cag_size_slider(
+                        "cag-abundance-heatmap-size-range"
+                    ),
                     width=4,
                     align="center",
                 ),
@@ -505,25 +485,20 @@ def cag_heatmap_card():
                     [
                         html.Label("Display Metadata"),
                         dcc.Dropdown(
-                            id="cag-heatmap-metadata-dropdown",
+                            id="cag-abundance-heatmap-metadata-dropdown",
                             options=[],
                             value=[],
                             multi=True
                         ),
-                        html.Div(
-                            children=[-1],
-                            id="cag-heatmap-selected-dataset",
-                            style={"display": "none"}
-                        ),
                         html.Br(),
                         html.Label("Group Specimens"),
                         dcc.Dropdown(
-                            id='cag-heatmap-cluster',
+                            id='cag-abundance-heatmap-cluster',
                             options=[
-                                {'label': 'By Metadata', 'value': 'metadata'},
                                 {'label': 'By CAG Abundances', 'value': 'cag'},
+                                {'label': 'By Metadata', 'value': 'metadata'},
                             ],
-                            value="metadata",
+                            value="cag",
                         ),
                     ],
                     width=4,
@@ -533,7 +508,7 @@ def cag_heatmap_card():
                     [
                         html.Label("Abundance Metric"),
                         dcc.Dropdown(
-                            id='cag-heatmap-abundance-metric',
+                            id='cag-abundance-heatmap-abundance-metric',
                             options=[
                                 {'label': 'Rel. Abund. (log10)', 'value': 'log10'},
                                 {'label': 'Rel. Abund. (log10) (z-score)', 'value': 'zscore'},
@@ -542,9 +517,9 @@ def cag_heatmap_card():
                             value="log10",
                         ),
                         html.Br(),
-                        html.Label("Show Taxonomy"),
+                        html.Label("Taxonomic Annotation"),
                         dcc.Dropdown(
-                            id='cag-heatmap-taxa-rank',
+                            id='cag-abundance-heatmap-annotate-cags-by',
                             options=[
                                 {'label': 'None', 'value': 'none'},
                                 {'label': 'Species', 'value': 'species'},
@@ -563,7 +538,7 @@ def cag_heatmap_card():
             dbc.Row([
                 dbc.Col(
                     dbc.Spinner(dcc.Graph(
-                        id='cag-heatmap-graph'
+                        id='cag-abundance-heatmap-graph'
                     )),
                     width=12,
                     align="center"
@@ -571,19 +546,133 @@ def cag_heatmap_card():
             ]),
         ],
         help_text="""
-The relative abundance of a user-selected group of CAGs is shown in comparison to
-specimen metadata as well as the taxonomic annotation of those CAGs.
+This display lets you compare the relative abundance of a group of CAGs across all samples.
+You may choose to view those CAGs which are most highly abundant, those CAGs containing the
+largest number of genes, or those CAGs which are most consistently associated with a parameter
+in your formula (if provided).
 
-Type in the box to select CAGs to add to the heatmap. Additionally, clicking on a single CAG in any of
-the other displays on this page will add those CAGs to the heatmap.
+If you decide to display those CAGs which are most associated with a parameter in the formula,
+then you will see the estimated coefficient of association for each CAG against that parameter
+displayed to the right of the heatmap.
 
-You may choose to annotate columns by specimen metadata, and you may choose to annotate rows
-by the taxonomic annotation of each CAG, when available.
+You may also choose to display the taxonomic annotation of each CAG at a particular taxonomic
+level (e.g. species). That will add a color label to each row in the heatmap, and you can see
+the name of the organism that represents by moving your mouse over that part of the plot.
+
+The controls at the top of the display help you customize this heatmap. You may choose to include
+a greater or smaller number of CAGs; you may choose to filter CAGs based on their size (the
+number of genes in each CAG); and you may choose to annotate the samples based on user-defined
+metadata from the manifest.
+
+By default, the columns in the heatmap are ordered based on the similarity of CAG abundances
+(average linkage clustering), but you may also choose to set the order according to the sorted
+metadata for each sample.
+
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
 )
-######################
-# / CAG HEATMAP CARD #
-######################
+################################
+# / CAG ABUNDANCE HEATMAP CARD #
+################################
+
+
+###############################
+# CAG ANNOTATION HEATMAP CARD #
+###############################
+def cag_annotation_heatmap_card():
+    return card_wrapper(
+        "CAG Annotation Heatmap",
+        [
+            dbc.Row([
+                dbc.Col(
+                    [
+                        html.Label("Display Top CAGs By"),
+                        dcc.Dropdown(
+                            id={"type": "heatmap-select-cags-by", "parent": "annotation-heatmap"},
+                            options=[
+                                {"label": "Average Relative Abundance", "value": "abundance"},
+                                {"label": "Size (Number of Genes)", "value": "size"},
+                            ],
+                            value="abundance"
+                        ),
+                        html.Br()
+                    ],
+                    width=4,
+                    align="center",
+                ),
+                dbc.Col(
+                    basic_slider(
+                        "cag-annotation-heatmap-ncags",
+                        "Number of CAGs to Display",
+                        min_value=5,
+                        max_value=100,
+                        default_value=20,
+                        marks=[5, 25, 50, 75, 100]
+                    ) + cag_size_slider(
+                        "cag-annotation-heatmap-size-range"
+                    ),
+                    width=4,
+                    align="center",
+                ),
+                dbc.Col(
+                    [
+                        html.Label("Annotation Type"),
+                        dcc.Dropdown(
+                            id="cag-annotation-heatmap-annotation-type",
+                            options=[
+                                {'label': 'Functional', 'value': 'eggNOG_desc'},
+                                {'label': 'Taxonomic', 'value': 'taxonomic'},
+                                {'label': 'Species', 'value': 'species'},
+                                {'label': 'Genus', 'value': 'genus'},
+                                {'label': 'Family', 'value': 'family'},
+                            ],
+                            value='taxonomic',
+                        ),
+                        html.Br(),
+                    ] + basic_slider(
+                        "cag-annotation-heatmap-nannots",
+                        "Max Number of Annotations to Display",
+                        min_value=5,
+                        max_value=100,
+                        default_value=20,
+                        marks=[5, 25, 50, 75, 100]
+                    ),
+                    width=4,
+                    align="center",
+                ),
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    dbc.Spinner(dcc.Graph(
+                        id='cag-annotation-heatmap-graph'
+                    )),
+                    width=12,
+                    align="center"
+                )
+            ]),
+        ],
+        help_text="""
+This display lets you compare the taxonomic or functional annotations of a group of CAGs.
+
+You may choose to view those CAGs which are most highly abundant, those CAGs containing the
+largest number of genes, or those CAGs which are most consistently associated with a parameter
+in your formula (if provided).
+
+If you decide to display those CAGs which are most associated with a parameter in the formula,
+then you will see the estimated coefficient of association for each CAG against that parameter
+displayed to the right of the heatmap. In addition, you will see the aggregate association of
+each selected annotation against that same parameter from the formula.
+
+The controls at the top of the display help you customize this heatmap. You may choose to include
+a greater or smaller number of CAGs; you may choose to filter CAGs based on their size (the
+number of genes in each CAG); and you may choose to display either taxonomic or functional annotations.
+
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
+        """
+)
+#################################
+# / CAG ANNOTATION HEATMAP CARD #
+#################################
 
 
 ################
@@ -602,11 +691,11 @@ def volcano_card():
             ),
             dbc.Col(
                 corncob_parameter_dropdown(
-                    "volcano-parameter-dropdown",
+                    group="volcano-parameter",
                 ) + cag_size_slider(
                     "volcano-cag-size-slider"
                 ) + volcano_pvalue_slider(
-                    "volcano-pvalue-slider",
+                    group="volcano-parameter",
                 ) + log_scale_radio_button(
                     "volcano-fdr-radio",
                     label_text="FDR-BH adjustment"
@@ -632,8 +721,7 @@ The estimated association of each CAG with a specified metadata feature is displ
 as a volcano plot. The values shown in this display must be pre-computed by selecting
 the `--formula` flag when running _geneshot_.
 
-Note: Clicking on any CAG in this display will select it for display in the other
-panels on this page.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 ##################
@@ -641,34 +729,70 @@ panels on this page.
 ##################
 
 ###################
-# SINGLE CAG CARD #
+# PLOT CAG CARD #
 ###################
-def single_cag_card():
+def plot_cag_card():
     return card_wrapper(
-        "Individual CAG Abundance",
+        "Plot CAG Abundance",
         [
             dbc.Row([
                 dbc.Col(
                     dbc.Spinner(
-                        dcc.Graph(id="single-cag-graph")
+                        dcc.Graph(id="plot-cag-graph")
                     ),
                     width=8,
                     align="center",
                 ),
                 dbc.Col(
                     [
-                        html.Label("Display CAG"),
+                        html.Label("Display CAG(s) By"),
                         dcc.Dropdown(
-                            id="single-cag-multiselector",
-                            options=[],
-                            value=[],
+                            id="plot-cag-selection-type",
+                            options=[
+                                {"label": "CAG ID", "value": "cag_id"},
+                                {"label": "Association & Taxonomy", "value": "association"},
+                            ],
+                            value="cag_id",
                         ),
                         html.Br(),
+                        html.Div(
+                            [
+                                html.Label("CAG ID", style={"margin-right": "15px"}),
+                                dcc.Input(
+                                    id="plot-cag-multiselector",
+                                    type="number",
+                                    placeholder="<CAG ID>",
+                                    debounce=True,
+                                    min=0,
+                                    max=1, # Will be updated by callbacks
+                                    step=1
+                                ),
+                                html.Br(),
+                            ], 
+                            id="plot-cag-by-id-div"
+                        ),
+                        html.Div(
+                            corncob_parameter_dropdown(
+                                group="plot-cag",
+                            ) + volcano_pvalue_slider(
+                                group="plot-cag",
+                            ) + [
+                                html.Label("Filter by Annotation"),
+                                dcc.Dropdown(
+                                    id="plot-cag-annotation-multiselector",
+                                    options=[],
+                                    value=[],
+                                    multi=True
+                                ),
+                                html.Br(),
+                            ],
+                            id="plot-cag-by-association-div"
+                        ),
                     ] + metadata_field_dropdown(
-                        "single-cag-xaxis",
+                        "plot-cag-xaxis",
                         label_text="X-axis",
                     ) + plot_type_dropdown(
-                        "single-cag-plot-type",
+                        "plot-cag-plot-type",
                         options=[
                             {'label': 'Points', 'value': 'scatter'},
                             {'label': 'Line', 'value': 'line'},
@@ -676,13 +800,13 @@ def single_cag_card():
                             {'label': 'Stripplot', 'value': 'strip'},
                         ]
                     ) + metadata_field_dropdown(
-                        "single-cag-color",
+                        "plot-cag-color",
                         label_text="Color",
                     ) + metadata_field_dropdown(
-                        "single-cag-facet",
+                        "plot-cag-facet",
                         label_text="Facet",
                     ) + log_scale_radio_button(
-                        "single-cag-log"
+                        "plot-cag-log"
                     ),
                     width=4,
                     align="center",
@@ -717,93 +841,115 @@ The taxonomic annotation of a given CAG is shown as the proportion of
 genes which contain a given taxonomic annotation, out of all genes which
 were given any taxonomic annotation.
 
-Note: Click on the camera icon at the top of this plot (or any on this page) to save a PNG to your computer.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
 #####################
-# / SINGLE CAG CARD #
+# / PLOT CAG CARD #
 #####################
 
 
-###############
-# GENOME CARD #
-###############
-def genome_card():
+##############################
+# ANNOTATION ENRICHMENT CARD #
+##############################
+def annotation_enrichment_card():
     return card_wrapper(
-        "Genome Similarity",
+        "Estimated Coefficients by Annotation",
         [
             dbc.Row([
                 dbc.Col(
-                    corncob_parameter_dropdown(
-                        "genome-parameter-dropdown",
+                    dbc.Spinner(
+                        dcc.Graph(id="annotation-enrichment-graph")
                     ),
-                    width = 4,
-                    align = "center"
+                    width=8,
+                    align="center",
                 ),
                 dbc.Col(
-                    basic_slider(
-                        "genome-scatter-ngenes-slider",
-                        "Minimum Size Filter (Num. Genes)",
-                        min_value=1,
-                        max_value=1000,
-                        step_value=10,
-                        default_value=100,
-                        marks=[1, 500, 1000],
-                        included=False
-                    ),
-                    width=4,
-                    align="center",
-                )
-            ]),
-            dbc.Row([
-                dbc.Col(
                     [
-                        dbc.Spinner(
-                            dcc.Graph(
-                                id="genome-scatter-graph"
-                            )
-                        )
-                    ],
-                    width=12,
-                    align="center",
-                )
-            ]),
-            dbc.Row([
-                dbc.Col(
-                    [
-                        dbc.Spinner(
-                            dcc.Graph(
-                                id="genome-heatmap-graph"
-                            )
+                        html.Label("Annotation Group"),
+                        dcc.Dropdown(
+                            id="annotation-enrichment-type",
+                            options=[
+                                {'label': 'Functional', 'value': 'eggNOG_desc'},
+                                {'label': 'Taxonomic Species', 'value': 'species'},
+                                {'label': 'Taxonomic Genus', 'value': 'genus'},
+                                {'label': 'Taxonomic Family', 'value': 'family'},
+                            ],
+                            value='eggNOG_desc',
+                        ),
+                        html.Br(),
+                    ] + corncob_parameter_dropdown(
+                        group="annotation-enrichment"
+                    ) + basic_slider(
+                        "annotation-enrichment-plotn",
+                        "Number of Annotations per Plot",
+                        min_value=10,
+                        max_value=50,
+                        default_value=20,
+                        marks=[10, 30, 50]
+                    ) + [
+                        html.Label("Show Positive / Negative"),
+                        dcc.Dropdown(
+                            id="annotation-enrichment-show-pos-neg",
+                            options=[
+                                {'label': 'Both', 'value': 'both'},
+                                {'label': 'Positive', 'value': 'positive'},
+                                {'label': 'Negative', 'value': 'negative'},
+                            ],
+                            value="both",
+                        ),
+                        html.Br(),
+                        dbc.Button(
+                            "Next", 
+                            id='annotation-enrichment-button-next', 
+                            n_clicks=0,
+                            color="light",
+                        ),
+                        dbc.Button(
+                            "Previous", 
+                            id='annotation-enrichment-button-previous', 
+                            n_clicks=0,
+                            color="light",
+                        ),
+                        dbc.Button(
+                            "First", 
+                            id='annotation-enrichment-button-first', 
+                            n_clicks=0,
+                            color="light",
+                        ),
+                        html.Div(
+                            children=[1],
+                            id='annotation-enrichment-page-num',
+                            style={"display": "none"},
                         ),
                     ],
-                    width=12,
+                    width=4,
                     align="center",
                 )
             ])
         ],
-        custom_id="genome-card",
-        custom_style={"display": "none"},
         help_text="""
-Summary of genome alignment against CAGs associated with parameters of interest.
+After estimating the coefficient of association for every individual CAG, we are able to
+aggregate those estimated coefficients on the basis of the annotations assigned to the genes
+found within those CAGs.
 
-The upper plot summarizes all of the genomes which aligned to the CAGs in this dataset.
-Each genome is summarized by (a) the proportion of the genome which aligns to any CAG
-which is associated with the indicated parameter (at a fixed p-value threshold), as well as
-(b) the average estimated coefficient for those genes which do align against that genome.
+The reasoning for this analysis is that a single CAG may be strongly associated with
+parameter X, and that CAG may contain a gene which has been taxonomically assigned to
+species Y. In that case, we are interested in testing whether _all_ CAGs which contain
+any gene which has been taxonomically assigned to the same species Y are estimated to
+have an association with parameter X _in aggregate_.
 
-*Selecting Genomes*
+In this analysis we show the estimated coefficient of association for the groups of CAGs
+constructed for every unique annotation in the analysis. This may include functional
+annotations generated with eggNOG-mapper, as well as taxonomic assignments generated
+by alignment against RefSeq.
 
-To select a set of genomes to display in more detail, mouse over the scatter plot and
-activate one of the selection tools (box select or lasso select).
-Using that selection tool, indicate those genomes which you wish to display more details on.
-The lower plot will then be rendered with those set of selected genomes.
-Using the controls on the right, you may then filter the CAGs and genomes which are displayed.
+Note: Click on the camera icon at the top of this plot (or any on this page) to save an image to your computer.
         """
     )
-#################
-# / GENOME CARD #
-#################
+################################
+# / ANNOTATION ENRICHMENT CARD #
+################################
 
 
 #################
@@ -867,6 +1013,40 @@ def manifest_card():
                                 multi=True,
                             ),
                             html.Br(),
+                            dbc.Button("Bulk Select", id="manifest-table-bulk-select-open"),
+                            dbc.Modal(
+                                [
+                                    dbc.ModalHeader("Filter Specimens by Metadata"),
+                                    dbc.ModalBody(
+                                        [
+                                            dcc.Markdown(
+"""Enter a formula to filter specimens by the metadata in your table.
+
+To select all samples, simply leave the formula empty.
+
+If the formula cannot be parsed or if no samples pass the filter, then all samples will be selected.
+"""
+                                            ),
+                                            dcc.Input(
+                                                id="manifest-table-bulk-select-formula",
+                                                placeholder="e.g., day > 1 and participant != 'Jerry'",
+                                                type="text",
+                                                debounce=True,
+                                                size='50',
+                                            )
+                                        ]
+                                    ),
+                                    dbc.ModalFooter(
+                                        [
+                                            dbc.Button("Apply", id="manifest-table-bulk-select-apply"),
+                                        ]
+                                    ),
+                                ],
+                                id="manifest-table-bulk-select-modal",
+                                centered=True,
+                                keyboard=False,
+                                backdrop="static"
+                            ),
                         ]
                     ),
                     dbc.Col(
@@ -905,7 +1085,7 @@ def card_wrapper(
                     dbc.Col(
                         html.Div(
                             card_name,
-                            style={"vertical-align": "middle"}
+                            style={"verticalAlign": "middle"}
                         ),
                         width=10,
                     ),
@@ -1096,15 +1276,15 @@ def basic_slider(
 
 
 def corncob_parameter_dropdown(
-    dropdown_id,
     label_text='Parameter',
+    group="none"
 ):
     return [
         html.Label(label_text),
         dcc.Dropdown(
             id={
                 "type": "corncob-parameter-dropdown",
-                "name": dropdown_id
+                "group": group,
             },
             options=[
                 {'label': 'None', 'value': 'none'},
@@ -1115,12 +1295,15 @@ def corncob_parameter_dropdown(
     ]
 
 
-def volcano_pvalue_slider(slider_id, label_text='P-Value Filter'):
+def volcano_pvalue_slider(label_text='P-Value Filter (-log10)', group="none"):
     """This slider is missing the max and marks, which will be updated by a callback."""
     return [
         html.Label(label_text),
         dcc.Slider(
-            id=slider_id,
+            id={
+                "type": "corncob-pvalue-slider",
+                "group": group,
+            },
             min=0,
             step=0.1,
             value=1,
