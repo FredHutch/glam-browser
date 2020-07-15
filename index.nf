@@ -51,6 +51,7 @@ if (params.help || params.input == false || params.output_folder == false || par
 process indexGeneshotResults {
     container "${container__pandas}"
     label "mem_veryhigh"
+    errorStrategy 'retry'
 
     input:
     path input_hdf
