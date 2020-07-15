@@ -747,7 +747,7 @@ def plot_cag_card():
                             id="plot-cag-selection-type",
                             options=[
                                 {"label": "CAG ID", "value": "cag_id"},
-                                {"label": "Association & Annotation", "value": "association"},
+                                {"label": "Association & Taxonomy", "value": "association"},
                             ],
                             value="cag_id",
                         ),
