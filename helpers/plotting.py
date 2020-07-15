@@ -7,6 +7,7 @@ import pandas as pd
 import dash_core_components as dcc
 import plotly.express as px
 import plotly.graph_objs as go
+import plotly.figure_factory as ff
 from plotly.subplots import make_subplots
 from scipy.cluster.hierarchy import linkage
 from scipy.cluster.hierarchy import leaves_list
@@ -693,7 +694,10 @@ def draw_cag_abundance_heatmap(
     taxa_rank,
     manifest_json,
     full_manifest_df,
-    cag_tax_dict,
+    cag_taxa_dict,
+    cag_estimate_dict,
+    figure_width = 800,
+    figure_height = 800,
 ):
     # Get the filtered manifest from the browser
     plot_manifest_df = parse_manifest_json(manifest_json, full_manifest_df)
@@ -764,11 +768,6 @@ def draw_cag_abundance_heatmap(
         ]
     )
 
-    # Set the figure width
-    figure_width = 800
-    # Set the figure height
-    figure_height = 800
-
     # Depending on whether metadata or taxonomic information has
     # been provided, the plot will be set up in different ways
     # Metadata - & taxonomic annotations - : single plot
@@ -777,7 +776,12 @@ def draw_cag_abundance_heatmap(
     # Metadata + & taxonomic annotations + : three plots, combining tax and metadata
 
     has_metadata = len(metadata_selected) > 0
-    has_taxonomy = (taxa_rank != "none") & any(df is not None for _, df in cag_tax_dict.items())
+
+    # Only plot the taxonomic annotation if we have sufficient taxonomic information
+    has_taxonomy = any(
+        cag_taxa_dict.get(cag_id) is not None
+        for cag_id in plot_df.index.values
+    )
 
     # Set the mouseover text template
     if abundance_metric == "raw":
@@ -787,43 +791,108 @@ def draw_cag_abundance_heatmap(
     elif abundance_metric == "zscore":
         hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund. (z-score): %{z}<extra></extra>"
 
-    if has_metadata is False and has_taxonomy is False:
+    # No metadata
+    if has_metadata is False:
 
-        fig = go.Figure(
-            data=draw_cag_abund_heatmap_panel(
-                plot_df,
-                hovertemplate=hovertemplate
-            ),
-        )
+        # No taxonomic information
+        if has_taxonomy is False:
 
-    elif has_metadata is False and has_taxonomy:
+            # No estimated coefficients of association
+            if cag_estimate_dict is None:
 
-        fig = draw_cag_abund_heatmap_with_tax(
-            plot_df, cag_tax_dict, taxa_rank,
-            hovertemplate=hovertemplate
-        )
+                # Make a very simple plot
+                fig = go.Figure(
+                    data=draw_cag_abund_heatmap_panel(
+                        plot_df,
+                        hovertemplate=hovertemplate
+                    ),
+                )
 
-    elif has_metadata and has_taxonomy is False:
+            else:
+                
+                # Only add the estimated coefficient
+                fig = draw_cag_abund_heatmap_with_estimate(
+                    plot_df, cag_estimate_dict,
+                    hovertemplate=hovertemplate
+                )
 
-        fig = draw_cag_abund_heatmap_with_metadata(
-            plot_df, plot_manifest_df, metadata_selected,
-            hovertemplate=hovertemplate
-        )
+        else:
+
+            # We have taxonomic information, but no estimated coefficients
+            if cag_estimate_dict is None:
+
+                fig = draw_cag_abund_heatmap_with_tax(
+                    plot_df, cag_taxa_dict, taxa_rank,
+                    hovertemplate=hovertemplate
+                )
+
+            else:
+
+                # We have taxonomic information and estimated coefficients
+                fig = draw_cag_abund_heatmap_with_tax_and_estimates(
+                    plot_df, cag_taxa_dict, taxa_rank, cag_estimate_dict,
+                    hovertemplate=hovertemplate
+                )
 
     else:
+        # We have metadata
 
-        fig = draw_cag_abund_heatmap_with_metadata_and_tax(
-            plot_df, 
-            plot_manifest_df, 
-            metadata_selected, 
-            cag_tax_dict, 
-            taxa_rank,
-            hovertemplate=hovertemplate,
-        )
+        # No taxonomic information
+        if has_taxonomy is False:
+
+            # No estimated coefficients of association
+            if cag_estimate_dict is None:
+
+                # Make a plot with just metadata
+                fig = draw_cag_abund_heatmap_with_metadata(
+                    plot_df, plot_manifest_df, metadata_selected,
+                    hovertemplate=hovertemplate
+                )
+
+            else:
+                # We have estimated coefficients
+                fig = draw_cag_abund_heatmap_with_metadata_and_estimate(
+                    plot_df,
+                    plot_manifest_df,
+                    metadata_selected,
+                    cag_estimate_dict,
+                    hovertemplate=hovertemplate,
+                )
+        
+        else:
+
+            # We have taxonomic information
+
+            # No estimated coefficients of association
+            if cag_estimate_dict is None:
+
+                # Make a plot with metadata and taxonomic annotations
+                fig = draw_cag_abund_heatmap_with_metadata_and_tax(
+                    plot_df, 
+                    plot_manifest_df, 
+                    metadata_selected, 
+                    cag_taxa_dict,
+                    taxa_rank,
+                    hovertemplate=hovertemplate,
+                )
+
+            else:
+
+                # We will make a plot with all three: metadata, taxa, and estimates
+                fig = draw_cag_abund_heatmap_with_metadata_tax_and_estimates(
+                    plot_df, 
+                    plot_manifest_df, 
+                    metadata_selected, 
+                    cag_taxa_dict,
+                    taxa_rank,
+                    cag_estimate_dict,
+                    hovertemplate=hovertemplate,
+                )
 
     fig.update_layout(
         width=figure_width,
         height=figure_height,
+        template="simple_white",
     )
     return fig
 
@@ -853,8 +922,41 @@ def draw_cag_abund_heatmap_with_tax(
 
     # Plot the taxonomic annotations on the right
     fig.add_trace(
-        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank), row=1, col=2
+        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank, cag_abund_df.index.values), row=1, col=2
     )
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
+
+    return fig
+
+def draw_cag_abund_heatmap_with_estimate(
+    cag_abund_df, 
+    cag_annot_dict,
+    hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
+):
+
+    # Make a plot with two panels, side-by-side, sharing the y-axis
+
+    # The estimate plot will be smaller
+    fig = make_subplots(
+        rows=1, cols=2, shared_yaxes=True,
+        column_widths=[
+            0.85, 0.15
+        ],
+        horizontal_spacing=0.005,
+    )
+
+    # Plot the abundances on the left
+    fig.add_trace(
+        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=1, col=1
+    )
+
+    # Plot the estimated coefficients on the right
+    fig.add_trace(
+        draw_cag_estimate_panel(cag_annot_dict, cag_abund_df.index.values), row=1, col=2
+    )
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
 
     return fig
 
@@ -918,47 +1020,253 @@ def draw_cag_abund_heatmap_with_metadata_and_tax(
         ),
     )
 
-    fig = make_subplots(
-        rows=2, 
-        cols=2, 
-        shared_xaxes=True,
-        shared_yaxes=True,
-        row_heights=[
-            metadata_height,
-            1 - metadata_height
-        ],
-        vertical_spacing=0.01,
-        column_widths=[
-            0.95, 0.05
-        ],
-        horizontal_spacing=0.005,
+    data = [
+        draw_cag_abund_heatmap_panel(
+            cag_abund_df, 
+            hovertemplate = hovertemplate,
+            xaxis = "x",
+            yaxis = "y"
+        ),
+        draw_cag_abund_taxon_panel(
+            cag_tax_dict, 
+            taxa_rank, 
+            cag_abund_df.index.values,
+            xaxis = "x2",
+            yaxis = "y"
+        ),
+        draw_metadata_heatmap_panel(
+            plot_manifest_df,
+            xaxis = "x",
+            yaxis = "y2"
+        )
+    ]
+
+    layout = go.Layout(
+        xaxis = dict(
+            domain = [0., 0.94]
+        ),
+        xaxis2 = dict(
+            domain = [0.95, 1.]
+        ),
+        yaxis = dict(
+            domain = [0., 0.99 - metadata_height]
+        ),
+        yaxis2 = dict(
+            domain = [1.01 - metadata_height, 1.0]
+        ),
     )
 
-    # Plot the abundances on the bottom-left
-    fig.add_trace(
-        draw_cag_abund_heatmap_panel(cag_abund_df, hovertemplate=hovertemplate), row=2, col=1
+    fig = go.Figure(
+        data=data,
+        layout=layout
+    )
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
+
+    return fig
+
+def draw_cag_abund_heatmap_with_metadata_and_estimate(
+    cag_abund_df, 
+    plot_manifest_df, 
+    metadata_selected, 
+    cag_annot_dict, 
+    hovertemplate="Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
+):
+
+    # Make a plot with four panels:
+    # metadata - blank
+    # cag-abun - estimate
+
+    # First set up the data which goes into the plots
+    data = [
+        draw_cag_abund_heatmap_panel(
+            cag_abund_df, 
+            hovertemplate = hovertemplate,
+            xaxis = "x",
+            yaxis = "y",
+        ),
+        draw_metadata_heatmap_panel(
+            plot_manifest_df,
+            xaxis = "x",
+            yaxis = "y2"
+        ),
+        draw_cag_estimate_panel(
+            cag_annot_dict, 
+            cag_abund_df.index.values,
+            xaxis = "x2",
+            yaxis = "y"
+        ),
+    ]
+
+    # Dynamically set the amount of plot area taken up by metadata
+    metadata_height = max(
+        0.1,
+        min(
+            0.5,
+            len(metadata_selected) / 20.
+        ),
     )
 
-    # Plot the taxonomic annotations on the bottom-right
-    fig.add_trace(
-        draw_cag_abund_taxon_panel(cag_tax_dict, taxa_rank), row=2, col=2
+    # Now set the relative plot area taken up by each axis
+    # The proportion taken up by each plot also includes 2% internal padding
+    layout = go.Layout(
+        xaxis=dict(
+            domain=[0, 0.84]
+        ),
+        yaxis=dict(
+            domain=[0, 0.99 - metadata_height]
+        ),
+        xaxis2=dict(
+            domain=[0.86, 1.0]
+        ),
+        yaxis2=dict(
+            domain=[1.01 - metadata_height, 1]
+        ),
     )
 
-    # Plot the metadata on the top-left
-    fig.add_trace(
-        draw_metadata_heatmap_panel(plot_manifest_df), row=1, col=1
+    # Make the figure
+    fig = go.Figure(
+        data=data,
+        layout=layout
     )
+
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
+
+
+    return fig
+
+def draw_cag_abund_heatmap_with_tax_and_estimates(
+    cag_abund_df, 
+    cag_tax_dict,
+    taxa_rank,
+    cag_annot_dict,
+    hovertemplate="Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
+):
+
+    # Make a plot with three panels:
+    # cag-abun - taxa - estimate
+
+    data = [
+        draw_cag_abund_heatmap_panel(
+            cag_abund_df, 
+            hovertemplate=hovertemplate,
+            xaxis="x",
+        ),
+        draw_cag_abund_taxon_panel(
+            cag_tax_dict, 
+            taxa_rank, 
+            cag_abund_df.index.values,
+            xaxis="x1",
+        ),
+        draw_cag_estimate_panel(
+            cag_annot_dict, 
+            cag_abund_df.index.values,
+            xaxis="x2",
+        )
+    ]
+
+    layout = go.Layout(
+        xaxis=dict(
+            domain=[0, 0.795]
+        ),
+        xaxis2=dict(
+            domain=[0.805, 0.845]
+        ),
+        xaxis3=dict(
+            domain=[0.855, 1.0]
+        ),
+    )
+
+    fig = go.Figure(
+        data=data, layout=layout
+    )
+
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
+
+    return fig
+
+
+def draw_cag_abund_heatmap_with_metadata_tax_and_estimates(
+    cag_abund_df, 
+    plot_manifest_df, 
+    metadata_selected, 
+    cag_tax_dict,
+    taxa_rank,
+    cag_annot_dict,
+    hovertemplate="Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
+):
+
+    # Make a plot with six panels:
+    # metadata - blank - blank
+    # cag-abund - taxa - estimate
+
+    # The relative height of the subplots will be set dynamically
+    metadata_height = max(
+        0.1,
+        min(
+            0.5,
+            len(metadata_selected) / 20.
+        ),
+    )
+
+    data = [
+        draw_cag_abund_heatmap_panel(
+            cag_abund_df, 
+            hovertemplate=hovertemplate,
+            xaxis="x",
+            yaxis="y",
+        ),
+        draw_cag_abund_taxon_panel(
+            cag_tax_dict, 
+            taxa_rank, 
+            cag_abund_df.index.values,
+            xaxis="x2",
+            yaxis="y",
+        ),
+        draw_cag_estimate_panel(
+            cag_annot_dict, 
+            cag_abund_df.index.values,
+            xaxis="x3",
+            yaxis="y"
+        ),
+        draw_metadata_heatmap_panel(
+            plot_manifest_df,
+            xaxis="x",
+            yaxis="y2"
+        )
+    ]
+
+    layout = go.Layout(
+        xaxis = dict(domain=[0, 0.8]),
+        xaxis2 = dict(domain=[0.81, 0.85]),
+        xaxis3 = dict(domain=[0.86, 1.0]),
+        yaxis = dict(domain=[0, 0.99 - metadata_height]),
+        yaxis2 = dict(domain=[1 - metadata_height, 1.]),
+    )
+
+    fig = go.Figure(
+        data=data,
+        layout=layout
+    )
+
+    # Rotate the angle of the x-tick labels
+    fig.update_xaxes(tickangle=90)
 
     return fig
 
 def draw_cag_abund_taxon_panel(
     cag_tax_dict, 
-    taxa_rank
+    taxa_rank,
+    cag_order,
+    xaxis="x",
+    yaxis="y",
 ):
 
     # For each CAG, pick out the top hit
     summary_df = pd.DataFrame([
-        summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank)
+        summarize_cag_taxa(cag_id, cag_tax_df)
         for cag_id, cag_tax_df in cag_tax_dict.items()
     ])
 
@@ -972,46 +1280,112 @@ def draw_cag_abund_taxon_panel(
         )
     )
 
+    # Reorder the display to match the abundances
+    summary_df = summary_df.set_index(
+        "CAG"
+    ).reindex(
+        index=cag_order
+    ).reset_index()
+
     return go.Heatmap(
         x=[taxa_rank],
-        y=["CAG {} -".format(i) for i in summary_df["CAG"].values],
+        y=["CAG {}".format(i) for i in summary_df["CAG"].values],
         z=summary_df.reindex(columns=["name_scalar"]).values,
         text=summary_df.reindex(columns=["label"]).values,
         showscale=False,
         colorscale='Viridis',
-        hovertemplate="%{y}<br>%{text}<extra></extra>"
+        hovertemplate="%{y}<br>%{text}<extra></extra>",
+        xaxis=xaxis,
+        yaxis=yaxis,
     )
 
 
-def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
+def draw_cag_estimate_panel(
+    cag_annot_dict,
+    cag_order,
+    xaxis = "x",
+    yaxis = "y",
+    orientation = "vertical"
+):
+    """Render the subplot with the estimated coefficients for each CAG."""
+    # Explicitly order the values for plotting
+    plot_values = {
+        col_name: [
+            cag_annot_dict[cag_id][col_name]
+            for cag_id in cag_order
+        ]
+        for col_name in ["estimate", "std_error"]
+    }
+    # Render the hover text
+    hovertext = [
+        "Wald: {:.2}".format(
+            cag_annot_dict[cag_id]["wald"]
+        )
+        for cag_id in cag_order
+    ]
+
+    # Set the values that will be plotted
+    estimate_values = plot_values["estimate"]
+    index_values = [
+        "CAG {}".format(cag_id)
+        for cag_id in cag_order
+    ]
+    error_values = dict(
+        type='data',
+        array=plot_values["std_error"],
+        visible=True
+    )
+
+    if orientation == "vertical":
+        return go.Scatter(
+            x = estimate_values,
+            y = index_values,
+            error_x = error_values,
+            ids = cag_order,
+            text = hovertext,
+            hovertemplate = "CAG %{id}<br>Estimated Coefficient: %{x}<br>%{text}<extra></extra>",
+            mode = "markers",
+            marker_color = "LightSkyBlue",
+            xaxis = xaxis,
+            yaxis = yaxis,
+            showlegend=False
+        )
+    else:
+        assert orientation == "horizontal"
+
+        return go.Scatter(
+            y = estimate_values,
+            x = index_values,
+            error_y = error_values,
+            ids = cag_order,
+            text = hovertext,
+            hovertemplate = "CAG %{id}<br>Estimated Coefficient: %{y}<br>%{text}<extra></extra>",
+            mode = "markers",
+            marker_color = "LightSkyBlue",
+            xaxis = xaxis,
+            yaxis = yaxis,
+            showlegend=False
+        )
+
+
+def summarize_cag_taxa(cag_id, cag_tax_df):
     """Helper function to summarize the top hit at a given rank."""
 
     # If there are no hits at this level, return None
-    if cag_tax_df is None or ((cag_tax_df["rank"] == taxa_rank).sum() == 0):
+    if cag_tax_df is None:
         return {
             "CAG": cag_id,
             "name": 'none',
             "label": "No genes assigned at this level"
         }
 
-    # Filter down to this rank
-    df = cag_tax_df.query("rank == '{}'".format(taxa_rank))
-
-    # Sort by 'consistent' hits
-    df.sort_values(by="consistent", inplace=True, ascending=False)
-
     # Return the top hit
     return {
         "CAG": cag_id,
-        "name": df["name"].values[0],
-        "label": "{}<br>{:,} / {:,} genes assigned at the {} level or above<br>{:,} / {:,} genes consistent with {}".format(
-            df["name"].values[0],
-            int(df["count"].values[0]),
-            df["total"].values[0],
-            taxa_rank,
-            int(df["consistent"].values[0]),
-            df["total"].values[0],
-            df["name"].values[0],
+        "name": cag_tax_df["name"].values[0],
+        "label": "{}<br>{:,} genes assigned".format(
+            cag_tax_df["name"].values[0],
+            int(cag_tax_df["count"].values[0])
         )
     }
 
@@ -1019,6 +1393,8 @@ def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
 def draw_metadata_heatmap_panel(
     plot_manifest_df,
     hovertemplate="Specimen: %{x}<br>Label: %{y}<br>Value: %{text}<extra></extra>",
+    xaxis="x",
+    yaxis="y",
 ):
     return go.Heatmap(
         z=plot_manifest_df.apply(
@@ -1034,19 +1410,866 @@ def draw_metadata_heatmap_panel(
         colorscale='Viridis',
         showscale=False,
         hovertemplate=hovertemplate,
+        xaxis=xaxis,
+        yaxis=yaxis,
     )
 
 def draw_cag_abund_heatmap_panel(
     cag_abund_df,
     hovertemplate = "Specimen: %{x}<br>CAG: %{y}<br>Rel. Abund.: %{z}<extra></extra>",
+    xaxis="x",
+    yaxis="y",
 ):
     return go.Heatmap(
         z=cag_abund_df.values,
-        y=["CAG {} -".format(i) for i in cag_abund_df.index.values],
+        y=["CAG {}".format(i) for i in cag_abund_df.index.values],
         x=["Specimen: {}".format(i) for i in cag_abund_df.columns.values],
         colorbar={"title": "Abundance (log10)"},
         colorscale='blues',
         hovertemplate=hovertemplate,
+        xaxis = xaxis,
+        yaxis = yaxis,
+
+    )
+
+##########################
+# CAG ANNOTATION HEATMAP #
+##########################
+def draw_cag_annotation_heatmap(
+    cag_annot_df,
+    annotation_type,
+    enrichment_df,
+    cag_estimate_dict,
+    n_annots,
+    figure_width=800,
+    figure_height=800,
+):
+    """Render the heatmap with CAG annotations."""
+    if cag_annot_df is None:
+        return go.Figure()
+
+
+    # If the annotation is taxonomic, then we will use a dedicated function to prepare the data for plotting
+    if annotation_type == "taxonomic":
+
+
+        # Three data structures are needed to plot the full taxonomy, the number of counts
+        # at each terminal node, the taxonomy linking each terminal node to its parents,
+        # and (for convenience) a list of ancestors for each terminal node
+        plot_df, tax_df = format_taxonomic_annot_df(
+            cag_annot_df,
+            enrichment_df,
+            n_annots
+        )
+
+    # Otherwise, just format the annotation by pivoting to wide format and selecing the top
+    # N annotations by either frequency or the enrichment absolute Wald (if provided)
+    else:
+
+
+        # Format the annotation table
+        plot_df = format_annot_df(
+            cag_annot_df, 
+            annotation_type, 
+            enrichment_df, 
+            n_annots
+        )
+
+        # Sort the rows and columns with linkage clustering
+        plot_df = cluster_dataframe(plot_df)
+
+    # Lacking functional/taxonomic enrichments or CAG-level estimated coefficients of association
+    if enrichment_df is None and (cag_estimate_dict is None or len(cag_estimate_dict) == 0):
+
+        # If the plot type is Taxonomic
+        if annotation_type == "taxonomic":
+
+            # Make a plot with the proportion of genes assigned, alongside the taxonomy
+            fig = plot_taxonomic_annotations_without_enrichment(
+                plot_df,
+                tax_df,
+            )
+
+        # all other plot types
+        else:
+            # Make a very simple plot
+            fig = go.Figure(
+                data=draw_cag_annotation_panel(
+                    plot_df
+                )
+            )
+
+    # We have CAG association metrics, but no label enrichment
+    elif enrichment_df is None and cag_estimate_dict is not None and len(cag_estimate_dict) > 0:
+
+        if annotation_type == "taxonomic":
+
+            fig = plot_taxonomic_annotations_with_cag_associations_only(
+                plot_df,
+                tax_df,
+                cag_estimate_dict
+            )
+
+        else:
+
+            # Just plot the association metrics for the CAGs
+            fig = draw_cag_annot_heatmap_with_cag_estimates(
+                plot_df,
+                cag_estimate_dict,
+            )
+
+    # We have information on parameter association for both CAGs and annotation labels
+    else:
+
+        # Plot the full taxonomy with a dedicated function to render the etree
+        if annotation_type == "taxonomic":
+            fig = plot_taxonomic_annotations_with_enrichment(
+                plot_df,
+                tax_df,
+                cag_estimate_dict,
+                enrichment_df
+            )
+
+        # All other annotation types
+        else:
+
+            # Make a plot with association metrics on both the rows and columns        
+            # Four panels, side-by-side, sharing the x-axis and y-axis
+
+            fig = draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
+                plot_df,
+                cag_estimate_dict,
+                enrichment_df,
+            )
+
+
+    fig.update_layout(
+        width=figure_width,
+        height=figure_height,
+        template="simple_white",
+    )
+
+    return fig
+
+
+def plot_taxonomic_annotations_with_enrichment(
+    plot_df,
+    tax_df,
+    cag_estimate_dict,
+    enrichment_df
+):
+    """Plot the number of genes assigned to taxa alongside the tree, with association metrics."""
+
+    # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
+    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
+
+    # Make the dendrogram
+    fig = ff.create_dendrogram(
+        path_to_root_df.values,
+        color_threshold=0,
+        labels=path_to_root_df.index.values
+    )
+    # Get the order of taxa from the dendrogram
+    dendro_leaves = fig['layout']['xaxis']['ticktext']
+    dendro_ticks = fig['layout']['xaxis']['tickvals']
+
+    # Add the heatmap panel
+    fig.add_trace(
+        draw_taxonomic_annotation_heatmap_panel(
+            plot_df,
+            tax_df,
+            dendro_leaves,
+            dendro_ticks,
+            yaxis="y3",
+        )
+    )
+
+    # Add the CAG estimates
+    fig.add_trace(
+        draw_cag_estimate_panel(
+            cag_estimate_dict,
+            plot_df.columns.values,
+            xaxis="x2",
+            yaxis="y3",
+            orientation="vertical"
+        ),
+
+    )
+
+    fig.add_trace(
+        draw_enrichment_estimate_panel(
+            enrichment_df.loc[
+                enrichment_df["label"].isin(dendro_leaves)
+            ].set_index(
+                "label"
+            ),
+            dendro_leaves,
+            dendro_ticks,
+            xaxis="x",
+            yaxis="y2",
+            orientation="horizontal"
+        )
+    )
+
+    # Edit yaxis for the dendrogram
+    fig.update_layout(
+        yaxis={
+            'domain': [0.8, 1.0],
+            'mirror': False,
+            'showgrid': False,
+            'showline': False,
+            'showticklabels': False,
+            'zeroline': False,
+            'ticks': ""
+        }
+    )
+    # Edit yaxis for the enrichment metrics
+    fig.update_layout(
+        yaxis2={
+            'domain': [0.7, 0.79],
+        }
+    )
+    # Edit yaxis for the heatmap and CAG association metrics
+    fig.update_layout(
+        yaxis3={
+            'domain': [0, 0.69],
+            'showline': False,
+            'zeroline': False,
+        }
+    )
+    # Edit xaxis shared by heatmap, enrichment values and dendrogram
+    fig.update_layout(
+        xaxis={
+            'domain': [0, 0.9],
+            'mirror': False,
+            'showgrid': False,
+            'showline': False,
+            'zeroline': False,
+            'ticks': "",
+            'anchor': "y3",
+        }
+    )
+    # Edit xaxis used for the CAG association metrics
+    fig.update_layout(
+        xaxis2={
+            'domain': [0.91, 1],
+            'anchor': "y3",
+        }
+    )
+
+    return fig
+
+def plot_taxonomic_annotations_with_cag_associations_only(
+    plot_df,
+    tax_df,
+    cag_estimate_dict
+):
+    """Plot the number of genes assigned to taxa alongside the tree, with CAG association metrics only."""
+
+    # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
+    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
+
+    # Make the dendrogram
+    fig = ff.create_dendrogram(
+        path_to_root_df.values,
+        color_threshold=0,
+        labels=path_to_root_df.index.values
+    )
+    # Get the order of taxa from the dendrogram
+    dendro_leaves = fig['layout']['xaxis']['ticktext']
+    dendro_ticks = fig['layout']['xaxis']['tickvals']
+
+    # Add the heatmap panel
+    fig.add_trace(
+        draw_taxonomic_annotation_heatmap_panel(
+            plot_df,
+            tax_df,
+            dendro_leaves,
+            dendro_ticks,
+            yaxis="y2",
+        )
+    )
+
+    # Add the CAG estimates
+    fig.add_trace(
+        draw_cag_estimate_panel(
+            cag_estimate_dict,
+            plot_df.columns.values,
+            xaxis="x2",
+            yaxis="y2",
+            orientation="vertical"
+        ),
+
+    )
+
+    # Edit yaxis for the dendrogram
+    fig.update_layout(
+        yaxis={
+            'domain': [0.8, 1.0],
+            'mirror': False,
+            'showgrid': False,
+            'showline': False,
+            'showticklabels': False,
+            'zeroline': False,
+            'ticks': ""
+        }
+    )
+    # Edit yaxis for the heatmap and CAG association metrics
+    fig.update_layout(
+        yaxis2={
+            'domain': [0, 0.79],
+            'showline': False,
+            'zeroline': False,
+        }
+    )
+    # Edit xaxis shared by heatmap, enrichment values and dendrogram
+    fig.update_layout(
+        xaxis={
+            'domain': [0, 0.9],
+            'mirror': False,
+            'showgrid': False,
+            'showline': False,
+            'zeroline': False,
+            'ticks': "",
+            'anchor': "y2",
+        }
+    )
+    # Edit xaxis used for the CAG association metrics
+    fig.update_layout(
+        xaxis2={
+            'domain': [0.91, 1],
+            'anchor': "y2",
+        }
+    )
+
+    return fig
+
+
+def plot_taxonomic_annotations_without_enrichment(
+    plot_df,
+    tax_df,
+):
+    """Plot the number of genes assigned to taxa alongside the tree."""
+    # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
+    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
+
+    # Make the dendrogram
+    fig = ff.create_dendrogram(
+        path_to_root_df.values, 
+        color_threshold=0,
+        labels=path_to_root_df.index.values
+    )
+    # Get the order of taxa from the dendrogram
+    dendro_leaves = fig['layout']['xaxis']['ticktext']
+    dendro_ticks = fig['layout']['xaxis']['tickvals']
+
+    # Add the heatmap panel
+    fig.add_trace(
+        draw_taxonomic_annotation_heatmap_panel(
+            plot_df,
+            tax_df,
+            dendro_leaves,
+            dendro_ticks,
+            yaxis="y2",
+        )
+    )
+
+    # Edit yaxis for the dendrogram
+    fig.update_layout(
+        yaxis={
+            'domain': [0.8, 1.0],
+            'mirror': False,
+            'showgrid': False,
+            'showline': False,
+            'showticklabels': False,
+            'zeroline': False,
+            'ticks':""
+        }
+    )
+    # Edit yaxis for the heatmap
+    fig.update_layout(
+        yaxis2={
+            'domain': [0, 0.79],
+            'showline': False,
+            'zeroline': False,
+        }
+    )
+    # Edit shared xaxis
+    fig.update_layout(
+        xaxis={
+            'domain': [0, 1],
+            'mirror': False,
+            'showgrid': False,
+            'showline': False,
+            'zeroline': False,
+            'ticks':"",
+            'anchor': "y2",
+        }
+    )
+
+    return fig
+
+
+def draw_taxonomic_annotation_heatmap_panel(
+    plot_df,
+    tax_df,
+    dendro_leaves,
+    dendro_ticks,
+    xaxis="x",
+    yaxis="y"
+):
+    # Cluster the table with gene abundances
+    plot_df = cluster_dataframe(plot_df)
+
+    # Rename the tax IDs to organism names
+    plot_df = plot_df.rename(
+        index=tax_df["name"].get
+    ).reindex(
+        index=dendro_leaves
+    )
+
+    # Make the table with text to display
+    text_df = plot_df.apply(
+        lambda c: pd.Series(
+            ["{:,} genes from CAG {} assigned to {} or its constituents".format(
+                int(count),
+                c.name,
+                org_name
+            ) for org_name, count in c.items()],
+            index=c.index
+        )
+    )
+
+    # Scale to show as a proportion of the maximum number of genes assigned per CAG
+    plot_df = plot_df.apply(
+        lambda c: 100. * c / c.max() if c.max() > 0 else c
+    )
+
+    # Create the Heatmap
+    return go.Heatmap(
+        text=text_df.T.values,
+        x=dendro_ticks,
+        y=["CAG {}".format(cag_id) for cag_id in plot_df.columns.values],
+        z=plot_df.T.values,
+        colorscale='Blues',
+        colorbar={"title": "Percent of gene assignments"},
+        hovertemplate="%{text}<extra></extra>",
+        zmin=0.,
+        zmax=100.,
+        xaxis=xaxis,
+        yaxis=yaxis,
+    )
+
+
+def format_path_to_root_df(tax_id_list, tax_df):
+    return pd.DataFrame({
+        tax_id: {
+            anc_tax_id: 1
+            for anc_tax_id in [tax_id] + [
+                t for t in path_to_root(tax_id, tax_df)
+            ]
+        }
+        for tax_id in tax_id_list
+    }).T.fillna(
+        0
+    ).rename(
+        index=tax_df["name"].get
+    )
+
+
+def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
+    plot_df,
+    cag_estimate_dict,
+    enrichment_df,
+):
+
+    data = [
+        draw_cag_annotation_panel(
+            plot_df,
+            xaxis="x",
+            yaxis="y"
+        ),
+        draw_cag_estimate_panel(
+            cag_estimate_dict,
+            plot_df.index.values,
+            xaxis="x2",
+            yaxis="y"
+        ),
+        draw_enrichment_estimate_panel(
+            enrichment_df,
+            plot_df.columns.values,
+            plot_df.columns.values,
+            xaxis="x",
+            yaxis="y2",
+            orientation="horizontal"
+        ),
+    ]
+
+    layout = go.Layout(
+        xaxis=dict(domain=[0, 0.85]),
+        yaxis=dict(domain=[0, 0.85]),
+        xaxis2=dict(domain=[0.86, 1.0]),
+        yaxis2=dict(domain=[0.86, 1.0]),
+    )
+
+    fig = go.Figure(data=data, layout=layout)
+
+    return fig
+
+
+def draw_cag_annot_heatmap_with_cag_estimates(
+    plot_df,
+    cag_estimate_dict,
+):
+
+    fig = make_subplots(
+        rows=1, 
+        cols=2, 
+        shared_yaxes=True,
+        column_widths=[
+            0.85, 0.15
+        ],
+        horizontal_spacing=0.005,
+    )
+
+    # Plot the abundances on the left
+    fig.add_trace(
+        draw_cag_annotation_panel(
+            plot_df
+        ),
+        row=1, 
+        col=1
+    )
+
+    # Plot the estimates on the right
+    fig.add_trace(
+        draw_cag_estimate_panel(
+            cag_estimate_dict,
+            plot_df.index.values
+        ),
+        row=1,
+        col=2,
+    )
+
+    return fig
+
+def draw_enrichment_estimate_panel(
+    enrichment_df,
+    label_order,
+    label_ids,
+    xaxis="x",
+    yaxis="y",
+    orientation="vertical"
+):
+    """Render the subplot with the estimated coefficients for annotation label."""
+    # Explicitly order the values for plotting
+    plot_df = enrichment_df.reindex(
+        index=label_order
+    )
+    
+    # Render the hover text
+    hovertext = plot_df["wald"].apply(
+        "Wald: {:.2}".format
+    )
+
+    # Pull out the values which will be plotted
+    estimate_values = plot_df["estimate"]
+    error_values = dict(
+        type='data',
+        array=plot_df["std_error"],
+        visible=True
+    )
+
+    if orientation == "horizontal":
+        return go.Scatter(
+            x=label_ids,
+            y=estimate_values,
+            error_y=error_values,
+            ids=plot_df.index.values,
+            text=hovertext,
+            hovertemplate="%{id}<br>Estimated Coefficient: %{y}<br>%{text}<extra></extra>",
+            mode="markers",
+            marker_color="LightSkyBlue",
+            xaxis=xaxis,
+            yaxis=yaxis,
+            showlegend=False,
+        )
+    else:
+        assert orientation == "vertical"
+        return go.Scatter(
+            y=label_ids,
+            x=estimate_values,
+            error_x=error_values,
+            ids=plot_df.index.values,
+            text=hovertext,
+            hovertemplate="%{id}<br>Estimated Coefficient: %{x}<br>%{text}<extra></extra>",
+            mode="markers",
+            marker_color="LightSkyBlue",
+            xaxis=xaxis,
+            yaxis=yaxis,
+            showlegend=False,
+        )
+
+def format_taxonomic_annot_df(cag_annot_df, enrichment_df, n_annots):
+    """Format the table of taxonomic assignment for a set of CAGs."""
+
+    # Make a table with just the taxonomy
+    tax_df = cag_annot_df.drop(
+        columns=["count", "total", "CAG"]
+    ).drop_duplicates(
+    ).set_index(
+        "tax_id"
+    )
+
+    # Calculate the number of counts assigned specifically to each taxon
+    cag_annot_df = cag_annot_df.groupby(
+        "CAG"
+    ).apply(
+        find_counts_at_taxon
+    )
+
+    # Keep track of how many nodes we're adding to the plot
+    terminal_nodes = set([])
+    
+    # If the enrichment values are provided, add the top n_annots / 2
+    if enrichment_df is not None:
+
+        # Iterate over the most consistently associated labels
+        for _, r in enrichment_df.sort_values(
+            by="abs_wald",
+            ascending=False
+        ).iterrows():
+            # If there is an exact match to this label, add it
+            matched_org = tax_df.query(
+                "rank == '{}'".format(r["rank"])
+            ).query(
+                "name == '{}'".format(r["label"])
+            )
+
+            if matched_org.shape[0] == 1:
+                terminal_nodes.add(
+                    matched_org.index.values[0],
+                )
+
+            # Stop once (or if) the limit on terminal nodes has been reached
+            if len(terminal_nodes) >= int(n_annots / 2.):
+                break
+
+    # Now add more taxa according to their frequency in the underlying data
+    for tax_id in cag_annot_df.loc[
+        cag_annot_df["rank"].isin([
+            "species", "genus", "family", "class", "order", "phylum"
+        ])
+    ].sort_values(
+        by="specific_prop",
+        ascending=False
+    )[
+        "tax_id"
+    ].values:
+
+        # Add this node to the plot
+        terminal_nodes.add(
+            tax_id
+        )
+
+        # Stop once (or if) the limit on terminal nodes has been reached
+        if len(terminal_nodes) >= int(n_annots):
+            break
+
+    # For each CAG, we will format the wide table so that each row contains
+    # a terminal node, and the value in each cell is the number of genes
+    # which are assigned to that taxa or its children
+    plot_df = cag_annot_df.loc[
+        cag_annot_df["tax_id"].isin(terminal_nodes)
+    ].reset_index(
+        drop=True
+    ).pivot_table(
+        columns="CAG",
+        index="tax_id",
+        values="at_or_below"
+    ).fillna(
+        0
+    )
+
+    return plot_df, tax_df
+
+
+def find_counts_at_taxon(cag_df):
+
+    # Sum up the number of counts below each taxon
+    counts_below = cag_df.query(
+        "tax_id != parent"
+    ).groupby(
+        "parent"
+    )[
+        "count"
+    ].sum(
+    )
+
+    # Make a vector with the number of counts below each taxon
+    counts_below = cag_df["tax_id"].apply(
+        lambda t: counts_below.get(t, 0)
+    )
+    # Count up the number at each taxon
+    specific_count = cag_df["count"] - counts_below
+    # Compute the proportion of all assignments
+    specific_prop = specific_count / specific_count.sum()
+
+    return cag_df.assign(
+        counts_below = counts_below,
+        specific_count = specific_count,
+        at_or_below = counts_below + specific_count,
+        specific_prop = specific_prop,
+    )
+
+
+def add_tax_node(tax_id, terminal_nodes, internal_nodes, tax_df):
+    """Add a single tax ID and its ancestors, as appropriate."""
+
+    # This tax ID is already present
+    if tax_id in terminal_nodes or tax_id in internal_nodes:
+        return
+
+    # Add the tax ID as a terminal node
+    terminal_nodes.add(tax_id)
+
+    # Now walk up the taxonomy to the root
+    for anc_tax_id in path_to_root(tax_id, tax_df):
+
+        # If the ancestor tax ID is a terminal node, move it to the internal node set
+        if anc_tax_id in terminal_nodes:
+            terminal_nodes.remove(anc_tax_id)
+
+        # Make sure to add this to the internal node set
+        internal_nodes.add(anc_tax_id)
+
+
+def path_to_root(tax_id, tax_df, max_iter=1000):
+    """Parse the taxonomy to walk up to the root (will not yield the query itself)."""
+
+    # Get the parent tax ID
+    anc_tax_id = tax_df.loc[tax_id, "parent"]
+
+    # Keep track of all of the tax IDs that we've visited
+    visited_taxa = set([tax_id])
+
+    # Walk up the taxonomy
+    for _ in range(max_iter):
+
+        # Stop walking up when we reach the end
+        if anc_tax_id in visited_taxa:
+            break
+        elif anc_tax_id is None:
+            break
+        elif anc_tax_id == tax_id:
+            break
+
+        # Add the ancestor
+        visited_taxa.add(anc_tax_id)
+
+        # Yield the ancestor tax ID
+        yield anc_tax_id
+
+        # Now find the parent of this one
+        if anc_tax_id not in tax_df.index.values:
+            break
+
+        # In the next iteration, process the parent tax ID
+        tax_id = anc_tax_id
+        anc_tax_id = tax_df.loc[tax_id, "parent"]
+        
+
+def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
+    """Format the table of CAG annotations."""
+
+    # If the annotations are functional, we can just pivot across those functions
+    if annotation_type == "eggNOG_desc":
+
+        wide_df = cag_annot_df.pivot_table(
+            index="CAG",
+            columns="label",
+            values="count"
+        ).fillna(
+            0
+        )
+
+    else:
+        # Otherwise, the gene annotations are in tax ID space, while the annotation type is either 'species', 'genus', or 'family'
+        
+        # If we are including the non-specific taxa, use the 'consistent' number of hits, otherwise use 'count'
+        wide_df = cag_annot_df.pivot_table(
+            index="CAG",
+            columns="name",
+            values="count"
+        ).fillna(
+            0
+        )
+
+    # If enrichments are provided, keep the top `n_annots` by enrichment (absolute Wald)
+    if enrichment_df is not None:
+        wide_df = wide_df.reindex(
+            columns = enrichment_df.reindex(
+                index=wide_df.columns.values
+            ).dropna(
+            )[
+                "abs_wald"
+            ].sort_values(
+                ascending=False
+            ).head(
+                n_annots
+            ).index.values
+        )
+
+    # Otherwise keep the most abundant annotations (normalizing to the total number of genes per CAG)
+    else:
+        wide_df = wide_df.reindex(
+            columns = (
+                wide_df.T / wide_df.sum(axis=1)
+            ).T.sum().sort_values(
+                ascending=False
+            ).head(
+                n_annots
+            ).index.values
+        )
+
+    return wide_df
+
+def draw_cag_annotation_panel(
+    plot_df,
+    xaxis = "x",
+    yaxis = "y",
+):
+
+    # Scale the assignments to the maximum for each CAG
+    prop_df = 100 * (plot_df.T / plot_df.max(axis=1)).T
+
+    # Format the mouseover text
+    text_df = plot_df.apply(
+        lambda c: [
+            "{}<br>{:,} genes assigned from CAG {}".format(
+                c.name,
+                int(ncounts),
+                cag_id
+            )
+            for cag_id, ncounts in c.items()
+        ]
+    )
+
+    return go.Heatmap(
+        text=text_df.values,
+        z=prop_df.values,
+        y=["CAG {}".format(i) for i in plot_df.index.values],
+        x=[
+            n[:30] + "..." if len(n) > 30 else n
+            for n in plot_df.columns.values
+        ],
+        colorbar={"title": "Percent of gene assignments"},
+        colorscale='blues',
+        hovertemplate = "%{text}<extra></extra>",
+        zmin=0.,
+        zmax=1.,
+        xaxis=xaxis,
+        yaxis=yaxis,
     )
 
 #################
@@ -1084,17 +2307,16 @@ def draw_volcano_graph(
         )
 
     # Subset to the pvalue threshold
-    assert "neg_log_pvalue" in corncob_df.columns.values, corncob_df.columns.values
     plot_df = corncob_df.query(
-        "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
+        "neg_log10_pvalue >= {}".format(neg_log_pvalue_min)
     )
 
     if fdr_on_off == "off":
-        plot_y = "neg_log_pvalue"
+        plot_y = "neg_log10_pvalue"
         hovertemplate = "CAG %{id}<br>Estimate: %{x}<br>p-value (-log10): %{y}<extra></extra>"
         yaxis_title = "p-value (-log10)"
     else:
-        plot_y = "neg_log_qvalue"
+        plot_y = "neg_log10_qvalue"
         hovertemplate = "CAG %{id}<br>Estimate: %{x}<br>q-value (-log10): %{y}<extra></extra>"
         yaxis_title = "q-value (-log10)"
 
@@ -1102,8 +2324,8 @@ def draw_volcano_graph(
         data=go.Scattergl(
             x=plot_df["estimate"],
             y=plot_df[plot_y],
-            ids=plot_df["CAG"].values,
-            text=plot_df["CAG"].values,
+            ids=plot_df.index.values,
+            text=plot_df.index.values,
             hovertemplate=hovertemplate,
             mode="markers",
             opacity=0.5,
@@ -1137,21 +2359,20 @@ def draw_double_volcano_graph(
 
     # Set the metric to plot
     if fdr_on_off == "off":
-        plot_y = "neg_log_pvalue"
+        plot_y = "neg_log10_pvalue"
         hovertemplate = "CAG %{id}<br>" + comparison_parameter + " p-value (-log10): %{x}<br>" + parameter + " p-value (-log10): %{y}<extra></extra>"
         axis_suffix = "p-value (-log10)"
     else:
-        plot_y = "neg_log_qvalue"
+        plot_y = "neg_log10_qvalue"
         hovertemplate = "CAG %{id}<br>" + comparison_parameter + " q-value (-log10): %{x}<br>" + parameter + " q-value (-log10): %{y}<extra></extra>"
         axis_suffix = "q-value (-log10)"
 
     # Subset to these two parameters and pivot to be wide
-    assert "neg_log_pvalue" in corncob_df.columns.values, corncob_df.columns.values
     plot_df = pd.concat([
         corncob_df.query(
             "parameter == '{}'".format(param_name)
         ).query(
-            "neg_log_pvalue >= {}".format(neg_log_pvalue_min)
+            "neg_log10_pvalue >= {}".format(neg_log_pvalue_min)
         )
         for param_name in [parameter, comparison_parameter]
     ]).pivot_table(
@@ -1189,10 +2410,100 @@ def draw_double_volcano_graph(
     return fig
 
 
+####################
+# ENRICHMENT GRAPH #
+####################
+
+def draw_enrichment_graph(
+    enrichment_df, 
+    annotation, 
+    parameter,
+):
+
+    fig = go.Figure(
+        data=go.Scatter(
+            x = enrichment_df["estimate"],
+            y = list(range(enrichment_df.shape[0])),
+            error_x = dict(
+                type='data',
+                array=enrichment_df["std_error"],
+                visible=True
+            ),
+            ids = enrichment_df.index.values,
+            text = enrichment_df.apply(
+                lambda r: "FDR-adjusted p-value: {:.2E}".format(r['q_value']),
+                axis=1
+            ),
+            hovertemplate = "%{id}<br>Estimated Coefficient: %{x}<br>%{text}<extra></extra>",
+            mode = "markers",
+            marker_color = "LightSkyBlue",
+        )
+    )
+
+    # Add a vertical dashed line at x=0 
+    fig.add_shape(
+        dict(
+            type="line",
+            x0=0,
+            y0=0,
+            x1=0,
+            y1=enrichment_df.shape[0],
+            line=dict(
+                dash="dash",
+                width=1,
+            )
+        )
+    )
+    # # Adjust the axis limits so that it is visible
+    xmin = (enrichment_df["estimate"] - (enrichment_df["std_error"] / 2)).min()
+    if xmin > 0:
+        xmin = 0
+    xmax = (enrichment_df["estimate"] + (enrichment_df["std_error"] / 2)).max()
+    if xmax < 0:
+        xmax = 0
+    xpadding = (xmax - xmin) * 0.05
+    fig.update_xaxes(
+        range=[
+            xmin - xpadding,
+            xmax + xpadding,
+        ]
+    )
+
+    fig.update_layout(
+        xaxis_title="Estimated Coefficient of Association",
+        template="simple_white",
+        height=600,
+        width=600,
+        yaxis = dict(
+            tickmode = "array",
+            tickvals = list(range(enrichment_df.shape[0])),
+            ticktext=[
+                n[:30] + "..." if len(n) > 30 else n
+                for n in enrichment_df.index.values
+            ],
+            automargin = True,
+        )
+    )
+
+    return fig
+
+
 ##################
 # TAXONOMY GRAPH #
 ##################
-def draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes):
+def draw_taxonomy_sunburst(
+    cag_tax_df, 
+    plot_title,
+    min_ngenes,
+    ranks_to_plot = [
+        "phylum",
+        "class",
+        "order",
+        "family",
+        "genus",
+        "species",
+    ]
+):
     # If no assignments were made, just show an empty plot
     if cag_tax_df is None:
         fig = go.Figure(data=[])
@@ -1201,14 +2512,74 @@ def draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes):
         )
         return fig, 1, {}
 
-    # Filter by the number of genes
-    if (cag_tax_df["count"] >= min_ngenes).any():
-        cag_tax_df = cag_tax_df.query("count >= {}".format(min_ngenes))
+    # Set the index on the tax ID
+    cag_tax_df = cag_tax_df.set_index("tax_id")
+
+    # Make sure that the parent column is formatted as an integer
+    cag_tax_df = cag_tax_df.apply(
+        lambda c: c.fillna(0).apply(int) if c.name == "parent" else c
+    )
+
+    # Add the tax ID to any duplicated names (to make them unique)
+    # This makes a Series with the name assigned to tax ID, 
+    # but does not add to the table itself
+    name_vc = cag_tax_df["name"].value_counts()
+    name_dict = {
+        tax_id: r["name"] if name_vc[r["name"]] == 1 else "{} (NCBI ID {})".format(
+            r["name"], tax_id
+        )
+        for tax_id, r in cag_tax_df.iterrows()
+    }
+
+    # Remove any rows which are below the threshold, or are at the wrong rank
+    taxa_to_remove = [
+        tax_id
+        for tax_id, r in cag_tax_df.iterrows()
+        if r["count"] < min_ngenes or r["rank"] not in ranks_to_plot
+    ]
+
+    # Make sure that we have some data left to plot
+    if len(taxa_to_remove) == cag_tax_df.shape[0]:
+        fig = go.Figure(data=[])
+        fig.update_layout(
+            template="simple_white",
+        )
+        return fig, 1, {}
+
+    # Walk through and remove the rows, reassigning the 'parent' for each
+    for tax_id in taxa_to_remove:
+        # Get the parent of this taxon
+        parent_tax_id = cag_tax_df.loc[tax_id, "parent"]
+
+        # For any taxa which have this taxon (to be removed) as the parent,
+        # replace that value with the parent of this taxon 
+        if tax_id in cag_tax_df["parent"].values:
+            cag_tax_df = cag_tax_df.replace(
+                to_replace={
+                    "parent": {
+                        tax_id: parent_tax_id
+                    }
+                }
+            ).drop(
+                index=tax_id
+            )
+
+    # Now we will fill in the name of the parent
+    #  (which is currently encoded as a tax ID)
+    # Crucially, set the 'parent_name' to None for any taxon
+    #  which is its own parent
+    cag_tax_df = cag_tax_df.assign(
+        unique_name = pd.Series(name_dict),
+        parent_name = cag_tax_df.apply(
+            lambda r: name_dict[r["parent"]] if r["parent"] != r.name else None,
+            axis=1
+        ),
+    )
 
     fig = go.Figure(
         data=go.Sunburst(
-            labels=cag_tax_df["name"],
-            parents=cag_tax_df["parent"],
+            labels=cag_tax_df["unique_name"],
+            parents=cag_tax_df["parent_name"],
             values=cag_tax_df["count"],
             branchvalues="total",
         )
@@ -1216,7 +2587,7 @@ def draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes):
 
     fig.update_layout(
         title={
-            'text': "CAG {}".format(cag_id),
+            'text': plot_title,
             'y': 0.9,
             'x': 0.5,
             'xanchor': 'center',
@@ -1242,7 +2613,8 @@ def draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes):
 ####################
 def draw_single_cag_graph(
     plot_df,
-    cag_id,
+    plot_title,
+    axis_label,
     xaxis,
     plot_type,
     color,
@@ -1266,7 +2638,7 @@ def draw_single_cag_graph(
     empty_fig = go.Figure()
     empty_fig.update_layout(
         template="simple_white",
-        yaxis_title="CAG {}".format(cag_id)
+        yaxis_title=axis_label
     )
     if plot_df.shape[0] == 0 or (plot_df["CAG_ABUND"] > 0).sum() == 0:
         return empty_fig
@@ -1313,7 +2685,14 @@ def draw_single_cag_graph(
 
     fig.update_layout(
         template="simple_white",
-        yaxis_title="CAG {}".format(cag_id)
+        yaxis_title=axis_label,
+        title={
+            'text': plot_title,
+            'y': 0.9,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
     )
     return fig
 
@@ -1392,25 +2771,7 @@ def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
     )
 
     # Sort the rows and columns with linkage clustering
-    if plot_df.shape[0] > 3:
-        plot_df = plot_df.reindex(
-            index=plot_df.index.values[
-                leaves_list(linkage(
-                    plot_df,
-                    method="ward"
-                ))
-            ]
-        )
-    if plot_df.shape[1] > 3:
-        plot_df = plot_df.reindex(
-            columns=plot_df.columns.values[
-                leaves_list(linkage(
-                    plot_df.T,
-                    method="ward"
-                ))
-            ],
-        )
-
+    plot_df = cluster_dataframe(plot_df)
 
     # Make the text display
     text_df = pd.DataFrame({
@@ -1468,3 +2829,25 @@ def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
     fig.update_yaxes(automargin=True)
 
     return fig
+
+def cluster_dataframe(plot_df):
+    if plot_df.shape[0] > 3:
+        plot_df = plot_df.reindex(
+            index=plot_df.index.values[
+                leaves_list(linkage(
+                    plot_df,
+                    method="ward"
+                ))
+            ]
+        )
+    if plot_df.shape[1] > 3:
+        plot_df = plot_df.reindex(
+            columns=plot_df.columns.values[
+                leaves_list(linkage(
+                    plot_df.T,
+                    method="ward"
+                ))
+            ],
+        )
+
+    return plot_df

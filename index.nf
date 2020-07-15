@@ -50,7 +50,7 @@ if (params.help || params.input == false || params.output_folder == false || par
 // Make CAGs for each set of samples, with the subset of genes for this shard
 process indexGeneshotResults {
     container "${container__pandas}"
-    label "mem_medium"
+    label "mem_veryhigh"
 
     input:
     path input_hdf

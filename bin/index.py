@@ -2,10 +2,130 @@
 
 # Script used to process a set of geneshot results for visualization in the GLAM Browser
 import argparse
+from collections import defaultdict
+from functools import lru_cache
 import logging
 import os
 import pandas as pd
 import numpy as np
+
+
+class Taxonomy:
+
+    def __init__(self, store):
+        """Read in the taxonomy table."""
+
+        # Read the taxonomy table
+        logging.info("Reading in /ref/taxonomy")
+
+        self.taxonomy_df = pd.read_hdf(
+            store,
+            "/ref/taxonomy"
+        ).apply(
+            lambda c: c.fillna(0).apply(float).apply(
+                int) if c.name in ["parent", "tax_id"] else c,
+        ).set_index(
+            "tax_id"
+        )
+
+        self.all_taxids = set(self.taxonomy_df.index.values)
+
+    @lru_cache(maxsize=None)
+    def path_to_root(self, tax_id, max_steps=100):
+        """Parse the taxonomy to yield a list with all of the taxa above this one."""
+
+        visited = []
+
+        for _ in range(max_steps):
+
+            # Skip taxa which are missing
+            if tax_id not in self.all_taxids:
+                break
+
+            # Add to the path we have visited
+            visited.append(tax_id)
+
+            # Get the parent of this taxon
+            parent_id = self.taxonomy_df.loc[tax_id, "parent"]
+
+            # If the chain has ended, stop
+            if parent_id in visited or parent_id == 0:
+                break
+
+            # Otherwise, keep walking up
+            tax_id = parent_id
+
+        return visited
+
+    @lru_cache(maxsize=None)
+    def anc_at_rank(self, tax_id, rank):
+        for anc_tax_id in self.path_to_root(tax_id):
+            if self.taxonomy_df.loc[anc_tax_id, "rank"] == rank:
+                return anc_tax_id
+
+    def name(self, tax_id):
+        if tax_id in self.all_taxids:
+            return self.taxonomy_df.loc[tax_id, "name"]
+
+    def parent(self, tax_id):
+        if tax_id in self.all_taxids:
+            return self.taxonomy_df.loc[tax_id, "parent"]
+
+    def make_cag_tax_df(
+        self,
+        taxa_vc, 
+    ):
+        """Return a nicely formatted taxonomy table from a list of tax IDs and the number of assignments for each."""
+
+        # We will construct a table with all of the taxa in the tree, containing
+        # The ID of that taxon
+        # The name of that taxon
+        # The number of genes assigned to that taxon (or its children)
+        # The rank of that taxon
+        # The ID of the parent of that taxon
+
+        # The number of genes found at that taxon or in its decendents
+        counts = defaultdict(int)
+
+        # Keep track of the total number of genes with a valid tax ID
+        total_genes_assigned = 0
+
+        # Iterate over each terminal leaf
+        for tax_id, n_genes in taxa_vc.items():
+
+            # Skip taxa which aren't in the taxonomy
+            if tax_id not in self.taxonomy_df.index.values:
+                continue
+
+            # Count all genes part of this analysis
+            total_genes_assigned += n_genes
+
+            # Walk up the tree from the leaf to the root
+            for anc_tax_id in self.path_to_root(tax_id):
+
+                # Add to the sum for every node we visit along the way
+                counts[anc_tax_id] += n_genes
+
+        if len(counts) == 0:
+            return pd.DataFrame([{
+                "tax_id": None
+            }])
+
+        # Make a DataFrame
+        df = pd.DataFrame({
+            "count": counts,
+        })
+
+        # Add the name, parent, rank
+        df = df.assign(
+            tax_id=df.index.values,
+            parent=self.taxonomy_df["parent"],
+            rank=self.taxonomy_df["rank"],
+            name=self.taxonomy_df["name"],
+            total=total_genes_assigned,
+        )
+
+        return df
 
 
 def parse_manifest(store):
@@ -47,14 +167,6 @@ def parse_manifest(store):
     return manifest
 
 
-def parse_taxonomy(store):
-    """Read in the taxonomy table."""
-
-    # Read the taxonomy table
-    logging.info("Reading in /ref/taxonomy")
-    return pd.read_hdf(store, "/ref/taxonomy")
-
-
 def parse_experiment_metrics(store):
     """Read in the experiment metrics"""
     key_name = "/summary/experiment"
@@ -94,23 +206,84 @@ def parse_cag_annotations(store):
     )
 
 
-def parse_gene_annotations(store):
-    """Read in the gene-level annotations."""
+def parse_gene_annotations(store, tax):
+    """Make a summary of the gene-level annotations for this subset of CAGs."""
     key_name = "/annot/gene/all"
 
     logging.info("Reading in {}".format(key_name))
 
     df = pd.read_hdf(store, key_name)
 
+    logging.info("Read in annotations for {:,} CAGs".format(df.shape[0]))
+
     # Trim the `eggNOG_desc` to 100 characters, if present
     df = df.apply(
         lambda c: c.apply(lambda n: n[:100] if isinstance(n, str) and len(n) > 100 else n) if c.name == "eggNOG_desc" else c
     )
 
-    # Yield a table for each individual CAG
-    for cag_id, cag_df in df.groupby("CAG"):
-        yield cag_id, cag_df
+    # Summarize the number of genes with each functional annotation, if available
+    if "eggNOG_desc" in df.columns.values:
+        logging.info("Summarizing functional annotations")
+        functional_df = summarize_annotations(df, "eggNOG_desc")
+    else:
+        functional_df = None
 
+    # Summarize the number of genes with each taxonomic annotation, if available
+    # This function also does some taxonomy parsing to count the assignments to higher levels
+    if "tax_id" in df.columns.values and tax is not None:
+        logging.info("Summarizing taxonomic annotations")
+        counts_df, rank_summaries = summarize_taxonomic_annotations(df, tax)
+    else:
+        counts_df, rank_summaries = None, None
+
+    return functional_df, counts_df, rank_summaries
+
+
+def summarize_taxonomic_annotations(df, tax):
+    # Make a DataFrame with the number of taxonomic annotations per CAG
+    counts_df = pd.concat([
+        tax.make_cag_tax_df(
+            cag_df["tax_id"].dropna().apply(int).value_counts()
+        ).assign(
+            CAG = cag_id
+        )
+        for cag_id, cag_df in df.reindex(
+            columns=["CAG", "tax_id"]
+        ).groupby(
+            "CAG"
+        )
+    ]).reset_index(
+        drop=True
+    )
+
+    logging.info("Made tax ID count table")
+
+    rank_summaries = {
+        rank: counts_df.query(
+            "rank == '{}'".format(rank)
+        ).drop(
+            columns=["rank", "parent"]
+        )
+        for rank in ["phylum", "class", "order", "family", "genus", "species"]
+    }
+
+    return counts_df, rank_summaries
+
+
+def summarize_annotations(df, col_name):
+    """Count up the unique annotations for a given CAG."""
+    assert col_name in df.columns.values, (col_name, df.columns.values)
+    assert "CAG" in df.columns.values, ("CAG", df.columns.values)
+
+    return pd.DataFrame([
+        {
+            "label": value,
+            "count": count,
+            "CAG": cag_id
+        }
+        for cag_id, cag_df in df.groupby("CAG")
+        for value, count in cag_df[col_name].dropna().value_counts().items()
+    ])
 
 def parse_cag_abundances(store):
     """Read in the CAG abundances."""
@@ -223,164 +396,6 @@ def add_neg_log10_values(df):
     return df
 
 
-def parse_gene_annotation_summaries(store, dat, annotation_columns=["eggNOG_desc", "tax_id"]):
-    """If we have corncob results, make a summary table for CAGs passing FDR for each."""
-    for key_name, df in dat.items():
-        if key_name.startswith("/cag_associations/"):
-            parameter_name = key_name.replace("/cag_associations/", "")
-
-            # Get the list of CAGs which pass the FDR threshold
-            cag_id_list = df.query(
-                "q_value <= 0.01"
-            )["CAG"].tolist()
-
-            if len(cag_id_list) > 0:
-
-                # Get the annotations for all of the genes in these CAGs
-                summary_df = [
-                    dat["/gene_annotations/CAG/CAG{}".format(cag_id)]
-                    for cag_id in cag_id_list
-                ]
-                if len(summary_df) > 0:
-                    summary_df = pd.concat(summary_df)
-
-                    # If this group of CAGs has any annotations, save it
-                    if any([
-                        k in summary_df.columns.values and summary_df[k].dropna().shape[0] > 0 
-                        for k in annotation_columns
-                    ]):
-
-                        # Compute summary metrics by CAG
-                        yield parameter_name, pd.DataFrame([
-                            {
-                                "CAG": cag_id,
-                                "annotation": col_name,
-                                "key": label,
-                                "count": label_df.shape[0]
-                            }
-                            for cag_id, cag_df in summary_df.groupby("CAG")
-                            for col_name in annotation_columns
-                            if col_name in cag_df.columns.values
-                            for label, label_df in cag_df.groupby(col_name)
-                        ])
-
-
-def get_cags_to_include(dat, top_n=10000):
-    """Limit the number of CAGs for which we will save information."""
-    cags_to_include = set([])
-
-    for key_name, df in dat.items():
-
-        # Table with CAG annotations
-        if key_name == "/cag_annotations":
-
-            # Keep the top_n CAGs by size and mean abundance
-            for col_name in ["size", "mean_abundance"]:
-                
-                logging.info("Selecting the top {:,} CAGs by {}".format(
-                    top_n,
-                    col_name
-                ))
-
-                cags_to_include.update(set(
-                    df.sort_values(
-                        by=col_name,
-                        ascending=False
-                    ).head(
-                        top_n
-                    )["CAG"].tolist()
-                ))
-                logging.info("Total number of CAGs to display: {:,}".format(
-                    len(cags_to_include)
-                ))
-
-        # Table with the abundances of each CAG
-        elif key_name == "/cag_abundances":
-
-            logging.info("Selecting the top {:,} CAGs by maximum abundance".format(
-                top_n
-            ))
-
-            # Compute the maximum relative abundance of every CAG
-            max_abund = df.set_index("CAG").max(axis=1)
-
-            # Keep the top_n CAGs by maximum relative abundances
-            cags_to_include.update(set(
-                [
-                    cag_id
-                    for cag_id in max_abund.sort_values(
-                        ascending=False
-                    ).head(top_n).index.values
-                ]
-            ))
-            logging.info("Total number of CAGs to display: {:,}".format(
-                len(cags_to_include)
-            ))
-
-        # Table with CAG association metrics
-        elif key_name.startswith("/cag_associations"):
-
-            logging.info("Selecting the top {:,} CAGs by absolute Wald ({})".format(
-                top_n,
-                key_name
-            ))
-
-            # Keep the top_n CAGs by absolute Wald metric
-            cags_to_include.update(set(
-                df.sort_values(
-                    by="abs_wald",
-                    ascending=False
-                ).head(
-                    top_n
-                )["CAG"].tolist()
-            ))
-            logging.info("Total number of CAGs to display: {:,}".format(
-                len(cags_to_include)
-            ))
-
-    return cags_to_include
-
-
-def filter_data_to_selected_cags(dat, cags_to_include):
-    """Reduce the size of the data that will be saved by filtering to these CAGs."""
-
-    # ABUNDANCES #
-    # Only keep abundances for the CAGs in the list
-    logging.info("Retaining abundances for {:,} / {:,} CAGs".format(
-        len(cags_to_include), dat["/cag_abundances"].shape[0]
-    ))
-    # Subset the table 
-    dat["/cag_abundances"] = dat["/cag_abundances"].loc[
-        dat["/cag_abundances"]["CAG"].isin(cags_to_include)
-    ]
-    # Every CAG should have an annotation
-    assert dat["/cag_abundances"].shape[0] == len(cags_to_include)
-
-    # Iterate over the tables to access programmatically named tables
-    tables_to_delete = []
-    for table_name in dat:
-        # ASSOCIATIONS #
-        # Consider all of the CAG association tables
-        if table_name.startswith("/cag_associations/"):
-            # Subset the table
-            dat[table_name] = dat[table_name].loc[
-                dat[table_name]["CAG"].isin(cags_to_include)
-            ]
-            # Every set of associations should have some CAGs included
-            assert dat[table_name].shape[0] > 0
-
-        # DETAILED ANNOTATIONS #
-        elif table_name.startswith("/gene_annotations/CAG/CAG"):
-            cag_id = int(table_name.replace("/gene_annotations/CAG/CAG", ""))
-
-            # Delete tables for CAGs that aren't in this list
-            if cag_id not in cags_to_include:
-                tables_to_delete.append(table_name)
-
-    for key_name in tables_to_delete:
-        del dat[key_name]
-
-
 def index_geneshot_results(input_fp, output_fp):
 
     # Keep all of the data in a dict linking the key to the table
@@ -407,10 +422,6 @@ def index_geneshot_results(input_fp, output_fp):
 
         # Read in the CAG abundances
         dat["/cag_abundances"] = parse_cag_abundances(store)
-
-        # Read in the taxonomy
-        if "/ref/taxonomy" in all_keys:
-            dat["/taxonomy"] = parse_taxonomy(store)
 
         # Read in the distance matrices
         for metric_name, metric_df in parse_distance_matrices(store, all_keys):
@@ -458,35 +469,28 @@ def index_geneshot_results(input_fp, output_fp):
             # Store the actual betta results
             dat["/enrichments/{}/{}".format(parameter, annotation)] = df
 
-        # Read in the gene annotations
-        for cag_id, cag_annotations in parse_gene_annotations(store):
-            dat["/gene_annotations/CAG/CAG{}".format(cag_id)] = cag_annotations
+        # Assemble the `analysis_features` table
+        dat["/analysis_features"] = pd.DataFrame(
+            analysis_features
+        ).drop_duplicates()
 
-        # If we have corncob results, make aggregate tables for each parameter
-        # which include all CAGs with FDR alpha=0.01 and summarize the number
-        # of genes from each CAG which have a given annotation
-        items_to_add = {
-            "/gene_annotations/parameter/{}".format(parameter): parameter_df
-            for parameter, parameter_df in parse_gene_annotation_summaries(store, dat)
-        }
-        # Add those items to the larger `dat` object as a second isolated step
-        for k, v in items_to_add.items():
-            dat[k] = v
+        # Read in the taxonomy, if present
+        if "/ref/taxonomy" in all_keys:
+            tax = Taxonomy(store)
+        else:
+            tax = None
 
-    # Assemble the `analysis_features` table
-    dat["/analysis_features"] = pd.DataFrame(
-        analysis_features
-    ).drop_duplicates()
+        # Read in the gene annotations for just those CAGs
+        functional_annot_df, counts_df, rank_summaries = parse_gene_annotations(store, tax)
 
-    # Limit the number of CAGs for which we will save information
-    cags_to_include = get_cags_to_include(dat)
-    logging.info("Indexing details for {:,} CAGs out of {:,} total".format(
-        len(cags_to_include),
-        dat["/cag_abundances"].shape[0]
-    ))
+    # Store the summary annotation tables if the annotations are available
+    if functional_annot_df is not None:
+        dat["/gene_annotations/functional"] = functional_annot_df
+    if counts_df is not None:
+        dat["/gene_annotations/taxonomic/all"] = counts_df
 
-    # Now actually subset the information to this set of CAGs
-    filter_data_to_selected_cags(dat, cags_to_include)
+        for rank, rank_df in rank_summaries.items():
+            dat["/gene_annotations/taxonomic/{}".format(rank)] = rank_df
 
     # Write out all of the tables to HDF5
     with pd.HDFStore(output_fp, "w") as store:
