@@ -1628,30 +1628,108 @@ def update_volcano_pvalue_slider_marks(selected_dataset, parameter):
         Output('cag-tax-ngenes', 'marks'),
     ],
     [
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
+        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-multiselector", "value"),
         Input("selected-dataset", "children"),
         Input('cag-tax-ngenes', 'value'),
         Input('plot-cag-multiselector', 'value'),
     ])
-def update_taxonomy_graph(selected_dataset, min_ngenes, cag_id):
+def update_taxonomy_graph(
+    selection_type,
+    parameter,
+    max_neglog_pvalue,
+    annotation,
+    selected_dataset, 
+    min_ngenes, 
+    cag_id
+):
     # Get the path to the selected dataset
     fp = parse_fp(selected_dataset)
 
+    # Marks for an empty taxonomy plot
+    marks = {
+        n: n
+        for n in ["0", "1"]
+    }
+
     if fp is None:
-        marks = {
-            n: n
-            for n in ["0", "1"]
-        }
         return empty_figure(), 1, marks
 
-    cag_id = int(cag_id)
+    # If a single CAG has been selected, add that to the plot
+    if selection_type == "cag_id":
+        cag_id = int(cag_id)
 
-    # Format the DataFrame as needed to make a go.Sunburst
-    cag_tax_df = taxonomic_gene_annotations(fp, cag_id=cag_id)
+        # Format the DataFrame as needed to make a go.Sunburst
+        cag_tax_df = taxonomic_gene_annotations(fp, cag_id=cag_id)
+
+        plot_title = "CAG {}".format(cag_id)
+
+    else:
+        # Read the association metrics for each CAG against this parameter
+        corncob_df = cag_associations(fp, parameter)
+        if corncob_df is None:
+            return empty_figure(), 1, marks
+
+        # Filter by p-value
+        all_cags = set(corncob_df.query(
+            "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
+        ).index.values)
+
+        if len(all_cags) == 0:
+            return empty_figure(), 1, marks
+
+        # Get the list of CAGs based on these criteria
+        selected_cags = set([])
+
+        # Include all of the taxa annotated for these CAGs
+        for rank in ["family", "genus", "species"]:
+            rank_df = taxonomic_gene_annotations(
+                fp, rank=rank
+            )
+            # Filter to these CAGs
+            rank_df = rank_df.loc[rank_df["CAG"].isin(all_cags)]
+
+            # Add any CAGs with this annotation
+            selected_cags.update(set(rank_df.loc[
+                rank_df["name"].isin(annotation),
+                "CAG"
+            ].tolist()))
+
+        selected_cags = list(selected_cags)
+        
+        if len(selected_cags) == 0:
+            return empty_figure(), 1, marks
+
+        # Format the DataFrame as needed to make a go.Sunburst
+        cag_tax_df = taxonomic_gene_annotations(fp)
+        cag_tax_df = cag_tax_df.loc[cag_tax_df["CAG"].isin(selected_cags)]
+        cag_tax_df = cag_tax_df.drop(
+            columns="CAG"
+        ).groupby(
+            ["name", "rank", "tax_id", "parent"]
+        ).sum(
+        ).reset_index(
+        )
+
+        if len(selected_cags) > 1:
+            plot_title = "{:,} CAGs with annotations for {}".format(
+                len(selected_cags),
+                " / ".join(annotation)
+            )
+            axis_label = "Relative Abundance"
+        else:
+            plot_title = "CAG {} - with annotations for {}".format(
+                int(selected_cags[0]),
+                " / ".join(annotation)
+            )
+
 
     if cag_tax_df is None:
-        return empty_figure()
+        return empty_figure(), 1, marks
     else:
-        return draw_taxonomy_sunburst(cag_tax_df, cag_id, min_ngenes)
+        return draw_taxonomy_sunburst(cag_tax_df, plot_title, min_ngenes)
 ###########################
 # / CAG TAXONOMY CALLBACK #
 ###########################
@@ -1674,6 +1752,76 @@ def plot_cag_show_hide_selection_controls(
         return {"display": "block"}, {"display": "none"}
     else:
         return {"display": "none"}, {"display": "block"}
+
+@app.callback(
+    Output("plot-cag-annotation-multiselector", "options"),
+    [
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
+        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
+        Input("selected-dataset", "children")
+    ]
+)
+def plot_cag_annotation_options(
+    selection_type,
+    parameter,
+    max_neglog_pvalue,
+    selected_dataset,
+):
+    """When the user selects 'Association & Annotation', show the appropriate annotations."""
+    options = [{"label": "None", "value": "None"}]
+    if selection_type == "cag_id":
+        return options
+
+    # Get the path to the selected dataset
+    fp = parse_fp(selected_dataset)
+
+    # Make sure that this parameter is valid
+    if parameter not in valid_parameters(fp):
+        return options
+
+    # Get the table of CAG associations
+    corncob_df = cag_associations(fp, parameter)
+    if corncob_df is None:
+        return options
+
+    # Filter by p-value
+    corncob_df = corncob_df.query(
+        "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
+    )
+
+    if corncob_df.shape[0] == 0:
+        return options
+
+    # Get the annotations for this set of CAGs
+    all_annot = defaultdict(int)
+
+    # Include all of the taxa annotated for these CAGs
+    for rank in ["family", "genus", "species"]:
+        for label in filter_by_cags(
+            taxonomic_gene_annotations(
+                fp, rank=rank
+            ),
+            corncob_df.index.values
+        )["name"].values:
+            all_annot[label] += 1
+    
+    if len(all_annot) == 0:
+        return [{"label": "None", "value": "None"}]
+
+    # Sort the annotations by the number of CAGs found
+    return [
+            {"label": label, "value": label}
+        for label in pd.Series(
+            all_annot
+        ).sort_values(
+            ascending=False
+        ).index.values
+    ]
+
+def filter_by_cags(df, cag_id_list):
+    return df.loc[df["CAG"].isin(cag_id_list)]
+    
 
 @app.callback(
     Output("plot-cag-multiselector", 'options'),
@@ -1751,6 +1899,10 @@ def update_single_cag_dropdown_value(
 @app.callback(
     Output('plot-cag-graph', 'figure'),
     [
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
+        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-multiselector", "value"),
         Input('plot-cag-multiselector', 'value'),
         Input({'name': 'plot-cag-xaxis',
                "type": "metadata-field-dropdown"}, 'value'),
@@ -1765,6 +1917,10 @@ def update_single_cag_dropdown_value(
         State("selected-dataset", "children")
     ])
 def update_single_cag_graph(
+    selection_type,
+    parameter,
+    max_neglog_pvalue,
+    annotation,
     cag_id,
     xaxis,
     plot_type,
@@ -1786,13 +1942,74 @@ def update_single_cag_graph(
         manifest(fp)
     )
 
-    plot_df = plot_manifest_df.assign(
-        CAG_ABUND = cag_abundances(fp).loc[int(cag_id)]
-    )
+    # If a single CAG has been selected, add that to the plot
+    if selection_type == "cag_id":
+        plot_df = plot_manifest_df.assign(
+            CAG_ABUND = cag_abundances(fp).loc[int(cag_id)]
+        )
+        plot_title = "CAG {}".format(cag_id)
+
+    else:
+        # Read the association metrics for each CAG against this parameter
+        corncob_df = cag_associations(fp, parameter)
+        if corncob_df is None:
+            return empty_figure()
+
+        # Filter by p-value
+        all_cags = set(corncob_df.query(
+            "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
+        ).index.values)
+
+        if len(all_cags) == 0:
+            return empty_figure()
+
+        # Get the list of CAGs based on these criteria
+        selected_cags = set([])
+
+        # Include all of the taxa annotated for these CAGs
+        for rank in ["family", "genus", "species"]:
+            rank_df = taxonomic_gene_annotations(
+                fp, rank=rank
+            )
+            # Filter to these CAGs
+            rank_df = rank_df.loc[rank_df["CAG"].isin(all_cags)]
+
+            # Add any CAGs with this annotation
+            selected_cags.update(set(rank_df.loc[
+                rank_df["name"].isin(annotation),
+                "CAG"
+            ].tolist()))
+
+        selected_cags = list(selected_cags)
+
+        if len(selected_cags) == 0:
+            return empty_figure()
+
+        # Now that we have a list of CAGs, add the abundance and format the title
+        plot_df = plot_manifest_df.assign(
+            CAG_ABUND = cag_abundances(fp).reindex(
+                index=selected_cags
+            ).sum()
+        )
+
+        if len(selected_cags) > 1:
+            plot_title = "{:,} CAGs with annotations for {}".format(
+                len(selected_cags),
+                " / ".join(annotation)
+            )
+            axis_label = "Relative Abundance"
+        else:
+            plot_title = "CAG {} - with annotations for {}".format(
+                int(selected_cags[0]),
+                " / ".join(annotation)
+            )
+
+    axis_label = "Relative Abundance"
 
     return draw_single_cag_graph(
         plot_df,
-        int(cag_id),
+        plot_title,
+        axis_label,
         xaxis,
         plot_type,
         color,
@@ -1802,35 +2019,6 @@ def update_single_cag_graph(
 #######################
 # / PLOT CAG CALLBACK #
 #######################
-
-
-#########################
-# SELECTED CAG CALLBACK #
-#########################
-@app.callback(
-    Output('global-selected-cag', 'children'),
-    [
-        Input('cag-summary-selected-cag', 'children'),
-        Input('volcano-selected-cag', 'children'),
-    ])
-def save_global_selected_cag(cag_summary_click, volcano_click):
-    """Save the most recent click"""
-    output_time = None
-    output_dat = None
-
-    for click_json in [cag_summary_click, volcano_click]:
-        if click_json is None:
-            continue
-        click_dat = json.loads(click_json)
-        if output_time is None or click_dat["time"] > output_time:
-            output_time = click_dat["time"]
-            output_dat = click_dat
-
-    if output_dat is not None:
-        return json.dumps(output_dat, indent=2)
-###########################
-# / SELECTED CAG CALLBACK #
-###########################
 
 
 ######################

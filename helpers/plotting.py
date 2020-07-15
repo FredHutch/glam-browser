@@ -2493,7 +2493,7 @@ def draw_enrichment_graph(
 ##################
 def draw_taxonomy_sunburst(
     cag_tax_df, 
-    cag_id, 
+    plot_title,
     min_ngenes,
     ranks_to_plot = [
         "phylum",
@@ -2587,7 +2587,7 @@ def draw_taxonomy_sunburst(
 
     fig.update_layout(
         title={
-            'text': "CAG {}".format(cag_id),
+            'text': plot_title,
             'y': 0.9,
             'x': 0.5,
             'xanchor': 'center',
@@ -2613,7 +2613,8 @@ def draw_taxonomy_sunburst(
 ####################
 def draw_single_cag_graph(
     plot_df,
-    cag_id,
+    plot_title,
+    axis_label,
     xaxis,
     plot_type,
     color,
@@ -2637,7 +2638,7 @@ def draw_single_cag_graph(
     empty_fig = go.Figure()
     empty_fig.update_layout(
         template="simple_white",
-        yaxis_title="CAG {}".format(cag_id)
+        yaxis_title=axis_label
     )
     if plot_df.shape[0] == 0 or (plot_df["CAG_ABUND"] > 0).sum() == 0:
         return empty_fig
@@ -2684,7 +2685,14 @@ def draw_single_cag_graph(
 
     fig.update_layout(
         template="simple_white",
-        yaxis_title="CAG {}".format(cag_id)
+        yaxis_title=axis_label,
+        title={
+            'text': plot_title,
+            'y': 0.9,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
     )
     return fig
 
