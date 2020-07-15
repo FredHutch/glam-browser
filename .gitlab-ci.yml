@@ -7,7 +7,7 @@ build_test:
   script:
     - mkdir -p share
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/oca/glam/2020-05-05-OCA/2020-05-05-OCA-participant_day.participant_day.corncob.index.hdf5 share/
-    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-07-15-1-manifest.json share/
+    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-07-15-1-manifest.json share/manifest.json
     - docker build -t dockerimages.fhcrc.org/glam:latest .
     - rm -rf share/
     - echo write some unit tests
