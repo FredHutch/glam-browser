@@ -1654,7 +1654,7 @@ def update_taxonomy_graph(
         for n in ["0", "1"]
     }
 
-    if fp is None:
+    if fp is None or cag_id is None:
         return empty_figure(), 1, marks
 
     # If a single CAG has been selected, add that to the plot
@@ -1824,60 +1824,45 @@ def filter_by_cags(df, cag_id_list):
     
 
 @app.callback(
-    Output("plot-cag-multiselector", 'options'),
+    Output("plot-cag-multiselector", 'max'),
     [
         Input("selected-dataset", "children"),
     ])
 def update_single_cag_multiselector_options(
     selected_dataset
 ):
-    """When a new dataset is selected, fill in the names of all the CAGs as options."""
+    """When a new dataset is selected, fill in maximum allowed CAG ID value."""
 
     # Get the path to the selected dataset
     fp = parse_fp(selected_dataset)
 
     if fp is None:
-        options = [{
-            "label": "None",
-            "value": 0
-        }]
+        return 1
 
     else:
 
         # Get the list of all CAGs
         cag_id_list = cag_annotations(fp).index.values
 
-        # Get the list of CAGs
-        options = [
-            {
-                "label": "CAG {}".format(cag_id),
-                "value": cag_id
-            }
-            for cag_id in cag_id_list
-        ]
-
-    return options
+        return max(cag_id_list)
     
 @app.callback(
     Output('plot-cag-multiselector', 'value'),
     [
         Input("selected-dataset", "children"),
-    ],
-    [
-        State('plot-cag-multiselector', 'value')
     ]
 )
 def update_single_cag_dropdown_value(
-    selected_dataset, selected_cag
+    selected_dataset
 ):
-    # If a new dataset is selected, remove all selected values
+    # If a new dataset is selected, update the default CAG selected
     if isinstance(selected_dataset, list):
         selected_dataset = selected_dataset[0]
     selected_dataset = int(selected_dataset)
 
-    # If the Main Menu button has been clicked, just return the existing value
+    # If the Main Menu button has been clicked, just return 0
     if selected_dataset == -1:
-        return selected_cag
+        return 0
 
     # Otherwise return the most abundant CAG
     else:

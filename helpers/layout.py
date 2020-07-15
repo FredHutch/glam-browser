@@ -754,11 +754,15 @@ def plot_cag_card():
                         html.Br(),
                         html.Div(
                             [
-                                html.Label("CAG ID"),
-                                dcc.Dropdown(
+                                html.Label("CAG ID", style={"margin-right": "15px"}),
+                                dcc.Input(
                                     id="plot-cag-multiselector",
-                                    options=[],
-                                    value=[],
+                                    type="number",
+                                    placeholder="<CAG ID>",
+                                    debounce=True,
+                                    min=0,
+                                    max=1, # Will be updated by callbacks
+                                    step=1
                                 ),
                                 html.Br(),
                             ], 
