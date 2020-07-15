@@ -7,9 +7,9 @@ import pandas as pd
 import numpy as np
 
 # NAVBAR AT THE TOP
-def navbar_simple(page_data):
+def navbar_simple():
     return dbc.NavbarSimple(
-        brand=page_data["page_title"],
+        brand="GLAM Browser",
         dark=True,
         color="#112345",
         children=[
@@ -19,14 +19,15 @@ def navbar_simple(page_data):
                     "type": "open-dataset-button",
                     "index": -1,
                 },
-                n_clicks=0,
+                n_clicks=1,
             ),
             html.Div(  # Store the button-press time
                 id={
                     "type": "open-dataset-pressed",
                     "index": -1
                 },
-                style={"display": "none"}
+                style={"display": "none"},
+                children=-1
             ),
             html.Div(  # Store which dataset is selected
                 id="selected-dataset",
@@ -34,6 +35,7 @@ def navbar_simple(page_data):
                 style={"display": "none"}
             )
         ],
+        id="page-title"
     )
 
 
@@ -64,7 +66,8 @@ def dataset_summary_card(ix, dataset):
                                     "type": "open-dataset-pressed",
                                     "index": ix
                                 },
-                                style={"display": "none"}
+                                style={"display": "none"},
+                                children=-1
                             )],
                         style={"text-align": "right"}
                     ),
@@ -1082,7 +1085,7 @@ def card_wrapper(
                     dbc.Col(
                         html.Div(
                             card_name,
-                            style={"vertical-align": "middle"}
+                            style={"verticalAlign": "middle"}
                         ),
                         width=10,
                     ),

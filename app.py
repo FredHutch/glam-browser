@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from collections import defaultdict
-from helpers.io import parse_directory
+from helpers.io import Manifest
 from helpers.io import hdf5_get_item
 from helpers.layout import navbar_simple
 from helpers.layout import dataset_summary_card
@@ -76,30 +76,9 @@ data_folder = os.getenv("DATA_FOLDER")
 assert os.path.exists(data_folder), "Path does not exist: {}".format(data_folder)
 
 # Parse the contents of the directory
-page_data = parse_directory(data_folder)
+# See the documentation for options on how to structure the data folder
+page_data = Manifest(data_folder)
 
-def parse_fp(selected_dataset):
-    """Function to return the file path for whichever dataset is selected."""
-    if selected_dataset == [-1] or selected_dataset == ["-1"]:
-        # No dataset was selected
-        return None
-    else:
-        # Return the path to the indicated HDF5
-        return page_data["contents"][selected_dataset[0]]["fp"]
-
-# All of the data in the indicated folder is loaded as a dict
-# in the following format:
-# {
-#   "page_title": "Title for the navbar at the top of the page", 
-#   "page_description": "Additional text for landing page",
-#   "contents": [
-#     {
-#       "fp": "path_to_file.hdf5", 
-#       "name": "Optional name from manifest.json", 
-#       "description": "Optional description (markdown) from manifest.json", 
-#     },
-#   ] 
-# } 
 
 ###################
 # CSS STYLESHEETS #
@@ -327,20 +306,10 @@ def empty_figure():
 #   - Togglable div with the detailed view (detail-display)
 app.layout = html.Div(
     children=[
-        navbar_simple(page_data),
+        dcc.Location(id='url', refresh=False),
+        navbar_simple(),
         html.Div(
-            children=[
-                dbc.Card(
-                    dbc.CardBody([
-                        dcc.Markdown(page_data.get("page_description", "")),
-                    ])
-                )
-            ] + [
-                dataset_summary_card(
-                    ix, dataset
-                )
-                for ix, dataset in enumerate(page_data["contents"])
-            ],
+            children=[],
             id="summary-display",
         ),
         html.Div(
@@ -368,6 +337,74 @@ app.layout = html.Div(
 # / SET UP THE PAGE LAYOUT #
 ############################
 
+#############################
+# SUMMARY DISPLAY CALLBACKS #
+#############################
+@app.callback(
+    Output("page-title", "brand"),
+    [
+        Input("selected-dataset", 'children'),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
+)
+def page_title_callback(selected_dataset, page, key):
+    """Return the title of the page."""
+    page_title = page_data.page_title(page=page, key=key)
+
+    if page_title is None:
+        return "GLAM Browser"
+    else:
+        return page_title
+
+@app.callback(
+    Output("summary-display", "children"),
+    [
+        Input({
+            "type": "open-dataset-pressed",
+            "index": -1
+        }, "children")
+    ],
+    [
+        State("selected-dataset", 'children'),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ],
+)
+def summary_display_callback(_, selected_dataset, page, key):
+    """Fill out the summary display div."""
+    page_description = page_data.page_description(page=page, key=key)
+    if page_description is None:
+        page_description = """
+This page may have been reached in error, please check your URL and try again.
+
+For assistance, please consult the GLAM Browser documentation or contact its maintainers.
+"""
+
+    # The summary page will start with a description panel
+    children = [
+        dbc.Card(
+            dbc.CardBody([
+                dcc.Markdown(page_description),
+            ])
+        )
+    ]
+
+    # Add the summary cards for each dataset
+    for ix, dataset in enumerate(page_data.dataset_list(page=page, key=key)):
+        children.append(
+            dataset_summary_card(
+                ix, dataset
+            )
+        )
+
+    return children
+
+###############################
+# / SUMMARY DISPLAY CALLBACKS #
+###############################
+
+
 
 ################################
 # OPEN DATASET BUTTON CALLBACK #
@@ -383,7 +420,10 @@ app.layout = html.Div(
     )],
 )
 def open_dataset_button_click(n_clicks):
-    return time()
+    if n_clicks > 0:
+        return time()
+    else:
+        return -1
 ##################################
 # / OPEN DATASET BUTTON CALLBACK #
 ##################################
@@ -463,27 +503,28 @@ def toggle_card_button_click(n_clicks):
             "index": ALL
         },
         'children'
-    )],
-    [dash.dependencies.State("selected-dataset", "children")]
+    )]
 )
-def open_dataset_switch(button_timestamps, currently_selected):
-    # Only switch the dataset if more than 0.1 seconds passed between button press
-
+def open_dataset_switch(button_timestamps):
+    """Control whether a dataset is open, or the summary page."""
+    
     # Make a list of the timestamps
     button_timestamps = [
         float(t)
         for t in button_timestamps
     ]
 
-    # Get the rank order
-    rank_order = list(range(len(button_timestamps)))
-    # Sort by time
-    rank_order.sort(key=lambda ix: button_timestamps[ix], reverse=True)
+    # Get the most recent timestamp
+    most_recent_timestamp = max(button_timestamps)
 
-    if button_timestamps[rank_order[0]] - button_timestamps[rank_order[1]] > 0.1:
-        return [rank_order[0] - 1]
-    else:
-        return currently_selected
+    # Switch to whichever button was pressed most recently
+    for button_ix, button_timestamp in enumerate(button_timestamps):
+
+        # If this button was pressed most recently
+        if button_timestamp == most_recent_timestamp:
+
+            # Return the index position (adjusted -1 to include the main menu)
+            return [button_ix - 1]
 ##################################
 # / OPEN DATASET SWITCH CALLBACK #
 ##################################
@@ -499,17 +540,19 @@ def open_dataset_switch(button_timestamps, currently_selected):
     }, 'options'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input({
             "type": "metadata-field-dropdown",
             "name": MATCH
         }, "value"),
     ],
 )
-def metadata_field_dropdown_callback(selected_dataset, dummy_value):
+def metadata_field_dropdown_callback(selected_dataset, page, key, dummy_value):
     """Update the metadata field dropdown for the selected dataset."""
 
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         # No dataset was selected
@@ -540,6 +583,8 @@ def metadata_field_dropdown_callback(selected_dataset, dummy_value):
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input({
             "type": "cag-metric-slider",
             "name": MATCH,
@@ -547,12 +592,12 @@ def metadata_field_dropdown_callback(selected_dataset, dummy_value):
         }, "id"),
     ],
 )
-def cag_metric_slider_callback_max(selected_dataset, slider_id):
+def cag_metric_slider_callback_max(selected_dataset, page, key, slider_id):
     """Update any CAG metric slider for the selected dataset."""
     metric = slider_id["metric"]
 
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         min_val = 0
@@ -589,17 +634,19 @@ def cag_metric_slider_callback_max(selected_dataset, slider_id):
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input({
             "type": "cag-size-slider",
             "name": MATCH
         }, "id"),
     ],
 )
-def cag_size_slider_callback(selected_dataset, dummy_value):
+def cag_size_slider_callback(selected_dataset, page, key, dummy_value):
     """Update the CAG size slider for the selected dataset."""
 
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         max_value = 3
@@ -626,11 +673,15 @@ def cag_size_slider_callback(selected_dataset, dummy_value):
 ###############################
 @app.callback(
     Output("summary-display", 'style'),
-    [Input("selected-dataset", "children")],
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
 )
-def show_hide_summary_display(selected_dataset):
+def show_hide_summary_display(selected_dataset, page, key):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return {"display": "block"}
@@ -646,11 +697,15 @@ def show_hide_summary_display(selected_dataset):
 ##############################
 @app.callback(
     Output("detail-display", 'style'),
-    [Input("selected-dataset", "children")],
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
 )
-def show_hide_detail_display(selected_dataset):
+def show_hide_detail_display(selected_dataset, page, key):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return {"display": "none"}
@@ -666,11 +721,15 @@ def show_hide_detail_display(selected_dataset):
 ####################################
 @app.callback(
     Output("experiment-summary-card", 'children'),
-    [Input("selected-dataset", "children")],
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
 )
-def experiment_summary_card_callback(selected_dataset):
+def experiment_summary_card_callback(selected_dataset, page, key):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return
@@ -680,14 +739,32 @@ def experiment_summary_card_callback(selected_dataset):
         )
 @app.callback(
     Output("experiment-summary-card-header", 'children'),
-    [Input("selected-dataset", "children")],
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ],
 )
-def experiment_summary_card_header_callback(selected_dataset):
+def experiment_summary_card_header_callback(selected_dataset, page, key):
     if selected_dataset == [-1] or selected_dataset == ["-1"]:
         return "Experiment"
     else:
+        # Get the list of datasets on this page
+        dataset_list = page_data.dataset_list(
+            page=page,
+            key=key
+        )
+
+        # If we cannot access the data, return a safe value
+        if dataset_list is None or len(dataset_list) == 0:
+            return "Experiment"
+
         # Return the name of the indicated HDF5
-        return "Experiment: {}".format(page_data["contents"][selected_dataset[0]]["name"])
+        return "Experiment: {}".format(dataset_list[
+            selected_dataset[0]
+        ][
+            "name"
+        ])
 ######################################
 # / EXPERIMENT SUMMARY CARD CALLBACK #
 ######################################
@@ -708,7 +785,11 @@ def experiment_summary_card_header_callback(selected_dataset):
         Input('richness-log-x', 'value'),
         Input('manifest-filtered', 'children'),
     ],
-    [State("selected-dataset", "children")],
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ],
 )
 def richness_graph_callback(
     selected_metric, 
@@ -717,9 +798,11 @@ def richness_graph_callback(
     log_x,
     manifest_json,
     selected_dataset, 
+    page,
+    key,
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return empty_figure()
@@ -748,16 +831,22 @@ def richness_graph_callback(
         Input('single-sample-secondary-dropdown', 'value'),
         Input('single-sample-metric', 'value'),
     ],
-    [State("selected-dataset", "children")],
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ],
 )
 def single_sample_graph_callback(
     primary_sample, 
     secondary_sample, 
     display_metric,
     selected_dataset, 
+    page,
+    key,
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return empty_figure()
@@ -789,13 +878,15 @@ def single_sample_graph_callback(
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ],
 )
 def update_single_sample_primary_dropdown(
-    selected_dataset, 
+    selected_dataset, page, key
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     options = [
         {'label': 'None', 'value': 'none'}
@@ -821,13 +912,15 @@ def update_single_sample_primary_dropdown(
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ],
 )
 def update_single_sample_secondary_dropdown(
-    selected_dataset, 
+    selected_dataset, page, key
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     options = [
         {'label': 'CAG Size', 'value': 'cag_size'}
@@ -900,7 +993,9 @@ def show_hide_ordination_perplexity(algorithm):
         Input('manifest-filtered', 'children'),
     ],
     [
-        State("selected-dataset", "children")
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
     ])
 def ordination_graph_callback(
     algorithm,
@@ -911,9 +1006,11 @@ def ordination_graph_callback(
     metadata,
     manifest_json,
     selected_dataset,
+    page,
+    key,
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return empty_figure()
@@ -934,16 +1031,20 @@ def ordination_graph_callback(
         Input('ordination-metric', 'value'),
         Input({'type': 'metadata-field-dropdown', 'name': 'ordination-metadata'}, 'value'),
         Input('manifest-filtered', 'children'),
-        Input("selected-dataset", "children")
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ])
 def ordination_anosim_callback(
     metric,
     metadata,
     manifest_json,
     selected_dataset,
+    page,
+    key,
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return dcc.Markdown("")
@@ -970,6 +1071,8 @@ def ordination_anosim_callback(
     Output('cag-summary-graph-hist', 'figure'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input('cag-summary-metric-primary', 'value'),
         Input('cag-summary-nbinsx-slider', 'value'),
         Input('cag-summary-histogram-log', 'value'),
@@ -977,13 +1080,15 @@ def ordination_anosim_callback(
     ])
 def cag_summary_graph_hist_callback(
     selected_dataset,
+    page,
+    key,
     metric_primary,
     nbinsx,
     log_scale,
     hist_metric,
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return empty_figure()
@@ -1011,9 +1116,11 @@ def cag_summary_graph_hist_callback(
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ],
     [State({"type": "heatmap-select-cags-by", "parent": MATCH}, 'value')])
-def abundance_heatmap_graph_select_cags_callback(selected_dataset, _):
+def abundance_heatmap_graph_select_cags_callback(selected_dataset, page, key, _):
     """Add the corncob parameters to the CAG abundance heatmap CAG selection options."""
 
     # Set the base options
@@ -1023,7 +1130,7 @@ def abundance_heatmap_graph_select_cags_callback(selected_dataset, _):
     ]
 
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         # Return the base options if no dataset is selected
@@ -1088,7 +1195,11 @@ def get_cags_selected_by_criterion(fp, select_cags_by, n_cags, cag_size_range):
         Input('cag-abundance-heatmap-annotate-cags-by', 'value'),
         Input('manifest-filtered', 'children'),
     ],
-    [State("selected-dataset", "children")])
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ])
 def abundance_heatmap_graph_callback(
     select_cags_by,
     n_cags,
@@ -1099,9 +1210,11 @@ def abundance_heatmap_graph_callback(
     taxa_rank,
     manifest_json,
     selected_dataset,
+    page,
+    key,
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return empty_figure()
@@ -1163,13 +1276,15 @@ def abundance_heatmap_graph_callback(
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ])
 def update_heatmap_metadata_dropdown(
-    selected_dataset,
+    selected_dataset, page, key
 ):
     """When a new dataset is selected, fill in the available metadata."""
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return [], []
@@ -1201,7 +1316,11 @@ def update_heatmap_metadata_dropdown(
         Input('cag-annotation-heatmap-annotation-type', 'value'),
         Input('cag-annotation-heatmap-nannots', 'value'),
     ],
-    [State("selected-dataset", "children")])
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ])
 def annotation_heatmap_graph_callback(
     select_cags_by,
     n_cags,
@@ -1209,9 +1328,11 @@ def annotation_heatmap_graph_callback(
     annotation_type,
     n_annots,
     selected_dataset,
+    page,
+    key,
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return empty_figure()
@@ -1323,7 +1444,11 @@ def annotation_heatmap_graph_callback(
         Input("annotation-enrichment-show-pos-neg", "value"),
         Input("annotation-enrichment-page-num", "children"),
     ],
-    [State("selected-dataset", "children")]
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ]
 )
 def annotation_enrichment_graph_callback(
     annotation,
@@ -1332,11 +1457,13 @@ def annotation_enrichment_graph_callback(
     show_pos_neg,
     page_num,
     selected_dataset,
+    page,
+    key,
 ):
     """Render the graph for the annotation enrichment card."""
     
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     # No dataset has been selected or no parameter has been selected
     if fp is None or parameter == "none":
@@ -1422,6 +1549,8 @@ def annotation_enrichment_click(btn1, btn2, btn3, page_num):
     Output('volcano-graph', 'figure'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input({
             "type": "corncob-parameter-dropdown", 
             "group": "volcano-parameter",
@@ -1436,6 +1565,8 @@ def annotation_enrichment_click(btn1, btn2, btn3, page_num):
     ])
 def volcano_graph_callback(
     selected_dataset,
+    page,
+    key,
     parameter, 
     comparison_parameter,
     cag_size_range,
@@ -1443,7 +1574,7 @@ def volcano_graph_callback(
     fdr_on_off, 
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     # No dataset has been selected or no parameter has been selected
     if fp is None or parameter == "none":
@@ -1463,11 +1594,13 @@ def volcano_graph_callback(
     Output({"type": "corncob-parameter-dropdown", "group": MATCH}, "options"),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ],
     [State({"type": "corncob-parameter-dropdown", "group": MATCH}, "value")])
-def update_volcano_parameter_dropdown_options(selected_dataset, dummy):
+def update_volcano_parameter_dropdown_options(selected_dataset, page, key, dummy):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return [
@@ -1489,14 +1622,18 @@ def update_volcano_parameter_dropdown_options(selected_dataset, dummy):
 
 @app.callback(
     [Output("corncob-comparison-parameter-dropdown", value) for value in ["options", "value"]],
-    [Input("selected-dataset", "children")]
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ]
 )
-def update_volcano_comparison_dropdown(selected_dataset):
+def update_volcano_comparison_dropdown(selected_dataset, page, key):
     options = [{'label': 'Estimated Coefficient', 'value': 'coef'}]
     value = "coef"
 
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return [options, value]
@@ -1519,11 +1656,13 @@ def update_volcano_comparison_dropdown(selected_dataset):
     Output({"type": "corncob-parameter-dropdown", "group": MATCH}, "value"),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ],
     [State({"type": "corncob-parameter-dropdown", "group": MATCH}, "options")])
-def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
+def update_volcano_parameter_dropdown_value(selected_dataset, page, key, dummy):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return "none"
@@ -1546,13 +1685,15 @@ def update_volcano_parameter_dropdown_value(selected_dataset, dummy):
     }, "max"),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input({
             "type": "corncob-parameter-dropdown", 
             "group": MATCH}, 'value'),
     ])
-def update_volcano_pvalue_slider_max(selected_dataset, parameter):
+def update_volcano_pvalue_slider_max(selected_dataset, page, key, parameter):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     # No dataset selected, or no parameter selected
     if fp is None or parameter == "none":
@@ -1576,13 +1717,15 @@ def update_volcano_pvalue_slider_max(selected_dataset, parameter):
     }, "marks"),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input({
             "type": "corncob-parameter-dropdown", 
             "group": MATCH}, 'value'),
     ])
-def update_volcano_pvalue_slider_marks(selected_dataset, parameter):
+def update_volcano_pvalue_slider_marks(selected_dataset, page, key, parameter):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     # No dataset selected, or no parameter selected
     if fp is None or parameter == "none":
@@ -1633,6 +1776,8 @@ def update_volcano_pvalue_slider_marks(selected_dataset, parameter):
         Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
         Input("plot-cag-annotation-multiselector", "value"),
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input('cag-tax-ngenes', 'value'),
         Input('plot-cag-multiselector', 'value'),
     ])
@@ -1642,11 +1787,13 @@ def update_taxonomy_graph(
     max_neglog_pvalue,
     annotation,
     selected_dataset, 
+    page,
+    key,
     min_ngenes, 
     cag_id
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     # Marks for an empty taxonomy plot
     marks = {
@@ -1759,7 +1906,9 @@ def plot_cag_show_hide_selection_controls(
         Input("plot-cag-selection-type", "value"),
         Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
         Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
-        Input("selected-dataset", "children")
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ]
 )
 def plot_cag_annotation_options(
@@ -1767,6 +1916,8 @@ def plot_cag_annotation_options(
     parameter,
     max_neglog_pvalue,
     selected_dataset,
+    page,
+    key,
 ):
     """When the user selects 'Association & Annotation', show the appropriate annotations."""
     options = [{"label": "None", "value": "None"}]
@@ -1774,7 +1925,7 @@ def plot_cag_annotation_options(
         return options
 
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     # Make sure that this parameter is valid
     if parameter not in valid_parameters(fp):
@@ -1827,14 +1978,16 @@ def filter_by_cags(df, cag_id_list):
     Output("plot-cag-multiselector", 'max'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ])
 def update_single_cag_multiselector_options(
-    selected_dataset
+    selected_dataset, page, key
 ):
     """When a new dataset is selected, fill in maximum allowed CAG ID value."""
 
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return 1
@@ -1850,10 +2003,12 @@ def update_single_cag_multiselector_options(
     Output('plot-cag-multiselector', 'value'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
     ]
 )
 def update_single_cag_dropdown_value(
-    selected_dataset
+    selected_dataset, page, key
 ):
     # If a new dataset is selected, update the default CAG selected
     if isinstance(selected_dataset, list):
@@ -1868,7 +2023,7 @@ def update_single_cag_dropdown_value(
     else:
         
         # Get the path to the selected dataset
-        fp = parse_fp([selected_dataset])
+        fp = page_data.parse_fp([selected_dataset])
 
         # Pick the top CAG to display by mean abundance
         top_cag = cag_annotations(
@@ -1899,7 +2054,9 @@ def update_single_cag_dropdown_value(
         Input('plot-cag-log', 'value'),
         Input('manifest-filtered', 'children'),
     ],[
-        State("selected-dataset", "children")
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
     ])
 def update_single_cag_graph(
     selection_type,
@@ -1914,9 +2071,11 @@ def update_single_cag_graph(
     log_scale,
     manifest_json,
     selected_dataset,
+    page,
+    key,
 ):
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return empty_figure()
@@ -2019,15 +2178,23 @@ def update_single_cag_graph(
     ],
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input("manifest-table-bulk-select-apply", "n_clicks")
     ],
     [State("manifest-table-bulk-select-formula", "value")]
 )
-def update_manifest_table(selected_dataset, bulk_select_button, bulk_select_formula):
+def update_manifest_table(
+    selected_dataset, 
+    page,
+    key,
+    bulk_select_button, 
+    bulk_select_formula
+):
     """Fill in the values of the manifest with the selected dataset."""
 
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         # Deselect and return empty values
@@ -2097,12 +2264,14 @@ def manifest_save_rows_selected(selected_rows):
     Output('manifest-filtered', 'children'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input('manifest-rows-selected', 'children'),
     ])
-def manifest_save_filtered(selected_dataset, selected_rows_json):
+def manifest_save_filtered(selected_dataset, page, key, selected_rows_json):
     """Save the filtered manifest to a hidden div.."""
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return None
@@ -2125,12 +2294,14 @@ def manifest_save_filtered(selected_dataset, selected_rows_json):
     Output('manifest-table', 'hidden_columns'),
     [
         Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
         Input('manifest-table-select-columns', 'value'),
     ])
-def manifest_update_columns_selected(selected_dataset, selected_columns):
+def manifest_update_columns_selected(selected_dataset, page, key, selected_columns):
     """Allow the user to hide selected columns in the manifest table."""
     # Get the path to the selected dataset
-    fp = parse_fp(selected_dataset)
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
         return []
