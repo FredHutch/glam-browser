@@ -6,8 +6,10 @@ before_script:
 build_test:
   script:
     - mkdir -p share
+    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/colon-cleanout/glam/2020-04-23-colon-cleanout/2020-04-23-colon-cleanout-Colon_Cleanout_Interval_host_subject_id.Colon_Cleanout_Interval.corncob.index.hdf5 share/
+    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/underfeeding/glam/2020-06-14-underfeeding/2020-06-14-underfeeding-host_subject_id_host_diet.host_subject_id_host_diet.corncob.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/oca/glam/2020-05-05-OCA/2020-05-05-OCA-participant_day.participant_day.corncob.index.hdf5 share/
-    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-07-15-1-manifest.json share/manifest.json
+    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-07-16-1-manifest.json share/manifest.json
     - docker build -t dockerimages.fhcrc.org/glam:latest .
     - rm -rf share/
     - echo write some unit tests
