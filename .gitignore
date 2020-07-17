@@ -51,3 +51,4 @@ testing/
 .nextflow*
 .nextflow/*
 work/
+manifests/
