@@ -12,8 +12,11 @@ build_test:
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/crc/glam/2020-06-18-Yachida/2020-06-18-Yachida.results.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-07-16-2-manifest.json share/manifest.json
     - docker build -t dockerimages.fhcrc.org/glam:latest .
+    - docker-compose up -d
+    - sleep 25
+    - curl -I http://localhost:8050 | grep -q "HTTP/1.1 200 OK"
+    - docker-compose down
     - rm -rf share/
-    - echo write some unit tests
   
   
 deploy:
