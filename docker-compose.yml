@@ -3,7 +3,7 @@ services:
   glam:
     ports:
       - "8050:8050"
-    image: dockerimages.fhcrc.org/glam:latest
+    image: 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam:latest
 
     labels:
       io.rancher.container.pull_image: always

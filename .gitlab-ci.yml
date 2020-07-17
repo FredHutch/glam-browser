@@ -11,7 +11,7 @@ build_test:
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/oca/glam/2020-05-05-OCA/2020-05-05-OCA-day.day.corncob.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/crc/glam/2020-06-18-Yachida/2020-06-18-Yachida.results.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-07-16-2-manifest.json share/manifest.json
-    - docker build -t dockerimages.fhcrc.org/glam:latest .
+    - docker build -t 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam:latest .
     - docker-compose up -d
     - sleep 25
     - curl -I http://localhost:8050 | grep -q "HTTP/1.1 200 OK"
@@ -24,8 +24,8 @@ deploy:
     refs:
        - deployment # TODO FIXME change to master at some point
   script:
-    - docker login --username $DOCKERIMAGES_USER --password $DOCKERIMAGES_PASS https://dockerimages.fhcrc.org
-    - docker push dockerimages.fhcrc.org/glam:latest
+    - AWS_ACCESS_KEY_ID=$ECR_ACCESS_KEY AWS_SECRET_ACCESS_KEY=$ECR_SECRET_KEY AWS_DEFAULT_REGION=$ECR_REGION aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 458818213009.dkr.ecr.us-west-2.amazonaws.com
+    - docker push 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam:latest
     - sleep 15
     - rancher-v0.6.2/rancher --url https://ponderosa.fhcrc.org --access-key $RANCHERAPI_KEY --secret-key $RANCHERAPI_SECRET up -d --pull --force-upgrade --confirm-upgrade --stack glam --file docker-compose.yml --rancher-file rancher-compose.yml
   
