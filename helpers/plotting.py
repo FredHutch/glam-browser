@@ -1251,6 +1251,15 @@ def draw_cag_abund_heatmap_with_metadata_tax_and_estimates(
         layout=layout
     )
 
+    # Add dashed lines for the estimate = 0 in the CAG estimate plot
+    fig.add_shape(
+        vertical_line(
+            height=cag_abund_df.shape[0],
+            xref="x3",
+            yref="y",
+        )
+    )
+
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
 
@@ -1595,6 +1604,14 @@ def plot_taxonomic_annotations_with_enrichment(
         ),
 
     )
+    # Add dashed lines for the estimate = 0 in the CAG estimate plot
+    fig.add_shape(
+        vertical_line(
+            height=plot_df.shape[1],
+            xref="x2",
+            yref="y3",
+        )
+    )
 
     fig.add_trace(
         draw_enrichment_estimate_panel(
@@ -1608,6 +1625,14 @@ def plot_taxonomic_annotations_with_enrichment(
             xaxis="x",
             yaxis="y2",
             orientation="horizontal"
+        )
+    )
+    # Add dashed lines for the estimate = 0 in the enrichment estimate plot
+    fig.add_shape(
+        horizontal_line(
+            width=plot_df.shape[1],
+            xref="x",
+            yref="y2",
         )
     )
 
@@ -1700,6 +1725,14 @@ def plot_taxonomic_annotations_with_cag_associations_only(
             orientation="vertical"
         ),
 
+    )
+    # Add dashed lines for the estimate = 0 in the CAG estimate plot
+    fig.add_shape(
+        vertical_line(
+            height=plot_df.shape[1],
+            xref="x2",
+            yref="y2",
+        )
     )
 
     # Edit yaxis for the dendrogram
@@ -1914,6 +1947,22 @@ def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
 
     fig = go.Figure(data=data, layout=layout)
 
+    # Add dashed lines for the estimate = 0 in the CAG and annotation estimate plots
+    fig.add_shape(
+        vertical_line(
+            height=plot_df.shape[0],
+            xref="x2",
+            yref="y",
+        )
+    )
+    fig.add_shape(
+        horizontal_line(
+            width=plot_df.shape[1],
+            xref="x",
+            yref="y2",
+        )
+    )
+
     return fig
 
 
@@ -1949,6 +1998,14 @@ def draw_cag_annot_heatmap_with_cag_estimates(
         ),
         row=1,
         col=2,
+    )
+    # Add dashed lines for the estimate = 0 in the CAG and annotation estimate plots
+    fig.add_shape(
+        vertical_line(
+            height=plot_df.shape[0],
+            xref="x",
+            yref="y2",
+        )
     )
 
     return fig
@@ -2209,7 +2266,7 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
     if enrichment_df is not None:
         wide_df = wide_df.reindex(
             columns = enrichment_df.reindex(
-                index=wide_df.columns.values
+                index=list(set(wide_df.columns.values))
             ).dropna(
             )[
                 "abs_wald"
@@ -2851,3 +2908,61 @@ def cluster_dataframe(plot_df):
         )
 
     return plot_df
+
+def vertical_line(
+    height=None, 
+    offset=-0.5, 
+    intercept=0,
+    color="RoyalBlue", 
+    linewidth=2,
+    dash="dash",
+    xref=None,
+    yref=None,
+):
+    assert height is not None
+    assert xref is not None
+    assert yref is not None
+
+    return dict(
+        type="line",
+        x0=intercept,
+        y0=offset,
+        x1=intercept,
+        y1=height + offset,
+        line=dict(
+            color=color,
+            width=linewidth,
+            dash=dash
+        ),
+        xref=xref,
+        yref=yref,
+    )
+
+def horizontal_line(
+    width=None, 
+    offset=-0.5, 
+    intercept=0,
+    color="RoyalBlue", 
+    linewidth=2,
+    dash="dash",
+    xref=None,
+    yref=None,
+):
+    assert width is not None
+    assert xref is not None
+    assert yref is not None
+
+    return dict(
+        type="line",
+        x0=offset,
+        y0=intercept,
+        x1=width + offset,
+        y1=intercept,
+        line=dict(
+            color=color,
+            width=linewidth,
+            dash=dash
+        ),
+        xref=xref,
+        yref=yref,
+    )
