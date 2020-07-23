@@ -209,7 +209,17 @@ def enrichments(fp, parameter, annotation):
         "/enrichments/{}/{}".format(parameter, annotation)
     )
     if df is not None:
-        df.set_index("label", inplace=True)
+        # Protect against duplicate labels by taking the most associated one
+        df = df.sort_values(
+            by="abs_wald",
+            ascending=False,
+        ).groupby(
+            "label"
+        ).head(
+            1
+        ).set_index(
+            "label"
+        )
     return df
 
 @cache.memoize()
