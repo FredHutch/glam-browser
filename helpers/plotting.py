@@ -2727,7 +2727,7 @@ def draw_single_cag_graph(
         yaxis_title=axis_label,
         title={
             'text': plot_title,
-            'y': 0.9,
+            'y': 1.0,
             'x': 0.5,
             'xanchor': 'center',
             'yanchor': 'top',
