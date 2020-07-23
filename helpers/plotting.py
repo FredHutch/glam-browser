@@ -1241,7 +1241,12 @@ def draw_cag_abund_heatmap_with_metadata_tax_and_estimates(
     layout = go.Layout(
         xaxis = dict(domain=[0, 0.8]),
         xaxis2 = dict(domain=[0.81, 0.85]),
-        xaxis3 = dict(domain=[0.86, 1.0]),
+        xaxis3 = dict(
+            domain=[0.86, 1.0],
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor='Grey',
+        ),
         yaxis = dict(domain=[0, 0.99 - metadata_height]),
         yaxis2 = dict(domain=[1 - metadata_height, 1.]),
     )
@@ -1623,10 +1628,13 @@ def plot_taxonomic_annotations_with_enrichment(
             'ticks': ""
         }
     )
-    # Edit yaxis for the enrichment metrics
+    # Edit yaxis for the enrichment metrics, style the zeroline
     fig.update_layout(
         yaxis2={
             'domain': [0.7, 0.79],
+            'zeroline': True,
+            'zerolinewidth': 1,
+            'zerolinecolor': 'Grey',
         }
     )
     # Edit yaxis for the heatmap and CAG association metrics
@@ -1654,6 +1662,9 @@ def plot_taxonomic_annotations_with_enrichment(
         xaxis2={
             'domain': [0.91, 1],
             'anchor': "y3",
+            'zeroline': True,
+            'zerolinewidth': 1,
+            'zerolinecolor': 'Grey',
         }
     )
 
@@ -1739,6 +1750,9 @@ def plot_taxonomic_annotations_with_cag_associations_only(
         xaxis2={
             'domain': [0.91, 1],
             'anchor': "y2",
+            'zeroline': True,
+            'zerolinewidth': 1,
+            'zerolinecolor': 'Grey',
         }
     )
 
@@ -1908,8 +1922,18 @@ def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
     layout = go.Layout(
         xaxis=dict(domain=[0, 0.85]),
         yaxis=dict(domain=[0, 0.85]),
-        xaxis2=dict(domain=[0.86, 1.0]),
-        yaxis2=dict(domain=[0.86, 1.0]),
+        xaxis2=dict(
+            domain=[0.86, 1.0],
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor='Grey',
+        ),
+        yaxis2=dict(
+            domain=[0.86, 1.0],
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor='Grey',
+        ),
     )
 
     fig = go.Figure(data=data, layout=layout)
@@ -1950,6 +1974,13 @@ def draw_cag_annot_heatmap_with_cag_estimates(
         row=1,
         col=2,
     )
+    fig.update_layout(
+        xaxis2=dict(
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor='Grey',
+        )
+    )
 
     return fig
 
@@ -1979,6 +2010,12 @@ def draw_enrichment_estimate_panel(
         array=plot_df["std_error"],
         visible=True
     )
+
+    # Trim the label names
+    label_ids = [
+        n[:30] + "..." if isinstance(n, str) and len(n) > 30 else n
+        for n in label_ids
+    ]
 
     if orientation == "horizontal":
         return go.Scatter(
@@ -2188,7 +2225,8 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
         wide_df = cag_annot_df.pivot_table(
             index="CAG",
             columns="label",
-            values="count"
+            values="count",
+            aggfunc=sum,
         ).fillna(
             0
         )
@@ -2200,7 +2238,8 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
         wide_df = cag_annot_df.pivot_table(
             index="CAG",
             columns="name",
-            values="count"
+            values="count",
+            aggfunc=sum,
         ).fillna(
             0
         )
@@ -2209,7 +2248,7 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
     if enrichment_df is not None:
         wide_df = wide_df.reindex(
             columns = enrichment_df.reindex(
-                index=wide_df.columns.values
+                index=list(set(wide_df.columns.values))
             ).dropna(
             )[
                 "abs_wald"
@@ -2688,7 +2727,7 @@ def draw_single_cag_graph(
         yaxis_title=axis_label,
         title={
             'text': plot_title,
-            'y': 0.9,
+            'y': 1.0,
             'x': 0.5,
             'xanchor': 'center',
             'yanchor': 'top',
