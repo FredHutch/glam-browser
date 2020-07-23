@@ -1241,7 +1241,12 @@ def draw_cag_abund_heatmap_with_metadata_tax_and_estimates(
     layout = go.Layout(
         xaxis = dict(domain=[0, 0.8]),
         xaxis2 = dict(domain=[0.81, 0.85]),
-        xaxis3 = dict(domain=[0.86, 1.0]),
+        xaxis3 = dict(
+            domain=[0.86, 1.0],
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor='Grey',
+        ),
         yaxis = dict(domain=[0, 0.99 - metadata_height]),
         yaxis2 = dict(domain=[1 - metadata_height, 1.]),
     )
@@ -1249,15 +1254,6 @@ def draw_cag_abund_heatmap_with_metadata_tax_and_estimates(
     fig = go.Figure(
         data=data,
         layout=layout
-    )
-
-    # Add dashed lines for the estimate = 0 in the CAG estimate plot
-    fig.add_shape(
-        vertical_line(
-            height=cag_abund_df.shape[0],
-            xref="x3",
-            yref="y",
-        )
     )
 
     # Rotate the angle of the x-tick labels
@@ -1604,14 +1600,6 @@ def plot_taxonomic_annotations_with_enrichment(
         ),
 
     )
-    # Add dashed lines for the estimate = 0 in the CAG estimate plot
-    fig.add_shape(
-        vertical_line(
-            height=plot_df.shape[1],
-            xref="x2",
-            yref="y3",
-        )
-    )
 
     fig.add_trace(
         draw_enrichment_estimate_panel(
@@ -1627,14 +1615,6 @@ def plot_taxonomic_annotations_with_enrichment(
             orientation="horizontal"
         )
     )
-    # Add dashed lines for the estimate = 0 in the enrichment estimate plot
-    fig.add_shape(
-        horizontal_line(
-            width=plot_df.shape[1],
-            xref="x",
-            yref="y2",
-        )
-    )
 
     # Edit yaxis for the dendrogram
     fig.update_layout(
@@ -1648,10 +1628,13 @@ def plot_taxonomic_annotations_with_enrichment(
             'ticks': ""
         }
     )
-    # Edit yaxis for the enrichment metrics
+    # Edit yaxis for the enrichment metrics, style the zeroline
     fig.update_layout(
         yaxis2={
             'domain': [0.7, 0.79],
+            'zeroline': True,
+            'zerolinewidth': 1,
+            'zerolinecolor': 'Grey',
         }
     )
     # Edit yaxis for the heatmap and CAG association metrics
@@ -1679,6 +1662,9 @@ def plot_taxonomic_annotations_with_enrichment(
         xaxis2={
             'domain': [0.91, 1],
             'anchor': "y3",
+            'zeroline': True,
+            'zerolinewidth': 1,
+            'zerolinecolor': 'Grey',
         }
     )
 
@@ -1726,14 +1712,6 @@ def plot_taxonomic_annotations_with_cag_associations_only(
         ),
 
     )
-    # Add dashed lines for the estimate = 0 in the CAG estimate plot
-    fig.add_shape(
-        vertical_line(
-            height=plot_df.shape[1],
-            xref="x2",
-            yref="y2",
-        )
-    )
 
     # Edit yaxis for the dendrogram
     fig.update_layout(
@@ -1772,6 +1750,9 @@ def plot_taxonomic_annotations_with_cag_associations_only(
         xaxis2={
             'domain': [0.91, 1],
             'anchor': "y2",
+            'zeroline': True,
+            'zerolinewidth': 1,
+            'zerolinecolor': 'Grey',
         }
     )
 
@@ -1941,27 +1922,21 @@ def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
     layout = go.Layout(
         xaxis=dict(domain=[0, 0.85]),
         yaxis=dict(domain=[0, 0.85]),
-        xaxis2=dict(domain=[0.86, 1.0]),
-        yaxis2=dict(domain=[0.86, 1.0]),
+        xaxis2=dict(
+            domain=[0.86, 1.0],
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor='Grey',
+        ),
+        yaxis2=dict(
+            domain=[0.86, 1.0],
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor='Grey',
+        ),
     )
 
     fig = go.Figure(data=data, layout=layout)
-
-    # Add dashed lines for the estimate = 0 in the CAG and annotation estimate plots
-    fig.add_shape(
-        vertical_line(
-            height=plot_df.shape[0],
-            xref="x2",
-            yref="y",
-        )
-    )
-    fig.add_shape(
-        horizontal_line(
-            width=plot_df.shape[1],
-            xref="x",
-            yref="y2",
-        )
-    )
 
     return fig
 
@@ -1999,12 +1974,11 @@ def draw_cag_annot_heatmap_with_cag_estimates(
         row=1,
         col=2,
     )
-    # Add dashed lines for the estimate = 0 in the CAG and annotation estimate plots
-    fig.add_shape(
-        vertical_line(
-            height=plot_df.shape[0],
-            xref="x",
-            yref="y2",
+    fig.update_layout(
+        xaxis2=dict(
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor='Grey',
         )
     )
 
@@ -2908,61 +2882,3 @@ def cluster_dataframe(plot_df):
         )
 
     return plot_df
-
-def vertical_line(
-    height=None, 
-    offset=-0.5, 
-    intercept=0,
-    color="RoyalBlue", 
-    linewidth=2,
-    dash="dash",
-    xref=None,
-    yref=None,
-):
-    assert height is not None
-    assert xref is not None
-    assert yref is not None
-
-    return dict(
-        type="line",
-        x0=intercept,
-        y0=offset,
-        x1=intercept,
-        y1=height + offset,
-        line=dict(
-            color=color,
-            width=linewidth,
-            dash=dash
-        ),
-        xref=xref,
-        yref=yref,
-    )
-
-def horizontal_line(
-    width=None, 
-    offset=-0.5, 
-    intercept=0,
-    color="RoyalBlue", 
-    linewidth=2,
-    dash="dash",
-    xref=None,
-    yref=None,
-):
-    assert width is not None
-    assert xref is not None
-    assert yref is not None
-
-    return dict(
-        type="line",
-        x0=offset,
-        y0=intercept,
-        x1=width + offset,
-        y1=intercept,
-        line=dict(
-            color=color,
-            width=linewidth,
-            dash=dash
-        ),
-        xref=xref,
-        yref=yref,
-    )
