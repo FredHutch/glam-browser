@@ -2011,6 +2011,12 @@ def draw_enrichment_estimate_panel(
         visible=True
     )
 
+    # Trim the label names
+    label_ids = [
+        n[:30] + "..." if isinstance(n, str) and len(n) > 30 else n
+        for n in label_ids
+    ]
+
     if orientation == "horizontal":
         return go.Scatter(
             x=label_ids,
@@ -2219,7 +2225,8 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
         wide_df = cag_annot_df.pivot_table(
             index="CAG",
             columns="label",
-            values="count"
+            values="count",
+            aggfunc=sum,
         ).fillna(
             0
         )
@@ -2231,7 +2238,8 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
         wide_df = cag_annot_df.pivot_table(
             index="CAG",
             columns="name",
-            values="count"
+            values="count",
+            aggfunc=sum,
         ).fillna(
             0
         )
