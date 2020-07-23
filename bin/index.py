@@ -588,14 +588,21 @@ def index_geneshot_results(input_fp, output_fp):
     with pd.HDFStore(output_fp, "w") as store:
         logging.info("Writing to {}".format(output_fp))
         for key_name, df in dat.items():
-            logging.info("Writing a table with {:,} rows and {:,} columns to {}".format(
-                df.shape[0], df.shape[1], key_name
-            ))
 
-            df.to_hdf(
-                store,
-                key_name
-            )
+            if df is None:
+                logging.info(
+                    "No information found for {}".format(key_name)
+                )
+
+            else:
+                logging.info("Writing a table with {:,} rows and {:,} columns to {}".format(
+                    df.shape[0], df.shape[1], key_name
+                ))
+
+                df.to_hdf(
+                    store,
+                    key_name
+                )
 
 
 if __name__ == "__main__":
