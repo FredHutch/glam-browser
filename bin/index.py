@@ -322,6 +322,53 @@ def parse_cag_abundances(store, max_n_cags=250000):
     return df
 
 
+def parse_genome_manifest(store):
+    """Read in the manifest describing genomes used for alignment."""
+    key_name = "/genomes/manifest"
+
+    if key_name in store:
+
+        logging.info("Reading in {}".format(key_name))
+
+        return pd.read_hdf(store, key_name)
+
+    else:
+
+        logging.info("No genome manifest found")
+
+        return
+
+
+def parse_genome_containment(store, max_n_cags=250000):
+    """Read in a summary of CAGs aligned against genomes."""
+    key_name = "/genomes/cags/containment"
+
+    if key_name in store:
+
+        logging.info("Reading in {}".format(key_name))
+
+        df = pd.read_hdf(store, key_name)
+
+        # Store information for no more than `max_n_cags`
+        if max_n_cags is not None:
+            logging.info("Subsetting to {:,} CAGs".format(max_n_cags))
+            df = df.query(
+                "CAG < {}".format(max_n_cags)
+            )
+            logging.info("Retained {:,} alignments for {:,} CAGs".format(
+                df.shape[0],
+                df["CAG"].unique().shape[0]
+            ))
+
+        return df
+
+    else:
+
+        logging.info("No genome alignments found")
+
+        return
+
+
 def parse_distance_matrices(store, all_keys):
     """Read in each of the distance matrices in the store."""
 
@@ -461,6 +508,12 @@ def index_geneshot_results(input_fp, output_fp):
 
         # Read in the CAG abundances
         dat["/cag_abundances"] = parse_cag_abundances(store)
+
+        # Read in the genome manifest
+        dat["/genome_manifest"] = parse_genome_manifest(store)
+
+        # Read in the genome containments
+        dat["/genome_containment"] = parse_genome_containment(store)
 
         # Read in the distance matrices
         for metric_name, metric_df in parse_distance_matrices(store, all_keys):
