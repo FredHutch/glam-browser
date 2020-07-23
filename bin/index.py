@@ -190,13 +190,19 @@ def parse_specimen_metrics(store):
     )
 
 
-def parse_cag_annotations(store):
+def parse_cag_annotations(store, max_n_cags=250000):
     """Read in the CAG annotations."""
     key_name = "/annot/cag/all"
 
     logging.info("Reading in {}".format(key_name))
 
     df = pd.read_hdf(store, key_name)
+
+    # Store information for no more than `max_n_cags`
+    if max_n_cags is not None:
+        df = df.head(
+            max_n_cags
+        )
 
     # Compute `prop_reads`
     return df.assign(
@@ -206,7 +212,7 @@ def parse_cag_annotations(store):
     )
 
 
-def parse_gene_annotations(store, tax):
+def parse_gene_annotations(store, tax, max_n_cags=250000):
     """Make a summary of the gene-level annotations for this subset of CAGs."""
     key_name = "/annot/gene/all"
 
@@ -214,7 +220,21 @@ def parse_gene_annotations(store, tax):
 
     df = pd.read_hdf(store, key_name)
 
-    logging.info("Read in annotations for {:,} CAGs".format(df.shape[0]))
+    logging.info("Read in {:,} annotations for {:,} CAGs".format(
+        df.shape[0],
+        df["CAG"].unique().shape[0],
+    ))
+
+    # Store information for no more than `max_n_cags`
+    if max_n_cags is not None:
+        logging.info("Limiting annotations to {:,} CAGs".format(max_n_cags))
+        df = df.query(
+            "CAG < {}".format(max_n_cags)
+        )
+        logging.info("Filtered down to {:,} annotations for {:,} CAGs".format(
+            df.shape[0],
+            df["CAG"].unique().shape[0],
+        ))
 
     # Trim the `eggNOG_desc` to 100 characters, if present
     df = df.apply(
@@ -285,13 +305,21 @@ def summarize_annotations(df, col_name):
         for value, count in cag_df[col_name].dropna().value_counts().items()
     ])
 
-def parse_cag_abundances(store):
+def parse_cag_abundances(store, max_n_cags=250000):
     """Read in the CAG abundances."""
     key_name = "/abund/cag/wide"
 
     logging.info("Reading in {}".format(key_name))
 
-    return pd.read_hdf(store, key_name)
+    df = pd.read_hdf(store, key_name)
+
+    # Store information for no more than `max_n_cags`
+    if max_n_cags is not None:
+        df = df.head(
+            max_n_cags
+        )
+
+    return df
 
 
 def parse_distance_matrices(store, all_keys):
@@ -303,7 +331,7 @@ def parse_distance_matrices(store, all_keys):
             yield k.replace("/distances/", ""), pd.read_hdf(store, k)
 
 
-def parse_corncob_results(store, all_keys):
+def parse_corncob_results(store, all_keys, max_n_cags=250000):
     """Read in and parse the corncob results from the store."""
 
     key_name = "/stats/cag/corncob"
@@ -316,6 +344,17 @@ def parse_corncob_results(store, all_keys):
             store,
             key_name
         )
+
+        # Store information for no more than `max_n_cags`
+        if max_n_cags is not None:
+            logging.info("Limiting annotations to {:,} CAGs".format(max_n_cags))
+            df = df.query(
+                "CAG < {}".format(max_n_cags)
+            )
+            logging.info("Filtered down to {:,} associations for {:,} CAGs".format(
+                df.shape[0],
+                df["CAG"].unique().shape[0],
+            ))
 
         # Compute the log10 p_value and q_value
         logging.info("Corncob: Calculating -log10 p-values and q-values")
