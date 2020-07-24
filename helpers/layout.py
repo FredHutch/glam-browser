@@ -472,9 +472,9 @@ def cag_abundance_heatmap_card():
                         "cag-abundance-heatmap-ncags",
                         "Number of CAGs to Display",
                         min_value=5,
-                        max_value=50,
-                        default_value=10,
-                        marks=[5, 10, 25, 50]
+                        max_value=100,
+                        default_value=20,
+                        marks=[5, 25, 50, 75, 100]
                     ) + cag_size_slider(
                         "cag-abundance-heatmap-size-range"
                     ),
@@ -825,7 +825,7 @@ def plot_cag_card():
                         "cag-tax-ngenes",
                         "Minimum Number of Genes",
                         included=False,
-                        default_value=5,
+                        marks=[1, 5, 10],
                     ),
                     width=4,
                     align="center",
@@ -1379,7 +1379,7 @@ def cag_metric_dropdown(slider_id, label_text='Metric', default_value="size"):
     ]
 
 
-def log_scale_radio_button(id_string, default="off", label_text="Log Scale"):
+def log_scale_radio_button(id_string, default="on", label_text="Log Scale"):
     return [
         html.Br(),
         html.Label(label_text),
@@ -1399,15 +1399,14 @@ def nbins_slider(id_string):
         html.Label('Number of Bins'),
         dcc.Slider(
             id=id_string,
-            min=5,
+            min=10,
             max=100,
             step=1,
             marks={
-                "5": "5",
-                "20": "20",
-                "100": "100",
+                str(v): str(v)
+                for v in range(10, 101, 10)
             },
-            value=20,
+            value=50,
             included=False,
         ),
         html.Br()

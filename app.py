@@ -1035,6 +1035,28 @@ def ordination_graph_callback(
             manifest_json,
             manifest(fp),
         )
+
+@app.callback(
+    Output({'type': 'metadata-field-dropdown', 'name': 'ordination-metadata'}, 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ]
+)
+def ordination_graph_metadata(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the default value, if specified
+    default_value = page_data.default(selected_dataset, "overlay_label", page=page, key=key)
+
+    if default_value is None:
+        return "none"
+    else:
+        return default_value
+
 @app.callback(
     Output('ordination-anosim-results', 'children'),
     [
@@ -1146,12 +1168,28 @@ def abundance_heatmap_graph_select_cags_callback(selected_dataset, page, key, _)
         # Return the base options if no dataset is selected
         return options, "abundance"
     else:
-        # TODO Add the default parameter from the manifest, if specified
-        # Add the parameters
-        return options + [
+        # Get the default parameter, if defined in the manifest
+        default_parameter = page_data.default(
+            selected_dataset,
+            "parameter",
+            key=key,
+            page=page
+        )
+        
+        # Get the list of available parameters
+        parameter_list = valid_parameters(fp)
+        
+        # Add the parameters to the list of options
+        options = options + [
             {"label": parameter, "value": "parameter-{}".format(parameter)}
-            for parameter in valid_parameters(fp)
-        ], "abundance"
+            for parameter in parameter_list
+        ]
+
+        # If the default in the manifest is valid, use that
+        if default_parameter in parameter_list:
+            return options, "parameter-{}".format(default_parameter)
+        else:
+            return options, "abundance"
 
 
 def get_cags_selected_by_criterion(fp, select_cags_by, n_cags, cag_size_range):
@@ -1683,7 +1721,17 @@ def update_volcano_parameter_dropdown_value(selected_dataset, page, key, dummy):
         if len(parameter_list) == 0:
             return "none"
 
-        if len(parameter_list) > 1:
+        # Get the default parameter, if defined in the manifest
+        default_parameter = page_data.default(
+            selected_dataset, 
+            "parameter", 
+            key=key, 
+            page=page
+        )
+        if default_parameter is not None and default_parameter in parameter_list:
+            return default_parameter
+
+        elif len(parameter_list) > 1:
             return parameter_list[1]
         else:
             return parameter_list[0]
@@ -1775,11 +1823,7 @@ def update_volcano_pvalue_slider_marks(selected_dataset, page, key, parameter):
 # CAG TAXONOMY CALLBACK #
 #########################
 @app.callback(
-    [
-        Output('cag-tax-graph', 'figure'),
-        Output('cag-tax-ngenes', 'max'),
-        Output('cag-tax-ngenes', 'marks'),
-    ],
+    Output('cag-tax-graph', 'figure'),
     [
         Input("plot-cag-selection-type", "value"),
         Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
@@ -1805,14 +1849,8 @@ def update_taxonomy_graph(
     # Get the path to the selected dataset
     fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
-    # Marks for an empty taxonomy plot
-    marks = {
-        n: n
-        for n in ["0", "1"]
-    }
-
     if fp is None or cag_id is None:
-        return empty_figure(), 1, marks
+        return empty_figure()
 
     # If a single CAG has been selected, add that to the plot
     if selection_type == "cag_id":
@@ -1827,7 +1865,7 @@ def update_taxonomy_graph(
         # Read the association metrics for each CAG against this parameter
         corncob_df = cag_associations(fp, parameter)
         if corncob_df is None:
-            return empty_figure(), 1, marks
+            return empty_figure()
 
         # Filter by p-value
         all_cags = set(corncob_df.query(
@@ -1835,7 +1873,7 @@ def update_taxonomy_graph(
         ).index.values)
 
         if len(all_cags) == 0:
-            return empty_figure(), 1, marks
+            return empty_figure()
 
         # Get the list of CAGs based on these criteria
         selected_cags = set([])
@@ -1857,7 +1895,7 @@ def update_taxonomy_graph(
         selected_cags = list(selected_cags)
         
         if len(selected_cags) == 0:
-            return empty_figure(), 1, marks
+            return empty_figure()
 
         # Format the DataFrame as needed to make a go.Sunburst
         cag_tax_df = taxonomic_gene_annotations(fp)
@@ -1882,9 +1920,8 @@ def update_taxonomy_graph(
                 " / ".join(annotation)
             )
 
-
     if cag_tax_df is None:
-        return empty_figure(), 1, marks
+        return empty_figure()
     else:
         return draw_taxonomy_sunburst(cag_tax_df, plot_title, min_ngenes)
 ###########################
@@ -1915,7 +1952,6 @@ def plot_cag_show_hide_selection_controls(
     [
         Input("plot-cag-selection-type", "value"),
         Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
-        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
         Input("selected-dataset", "children"),
         Input("url", 'pathname'),
         Input("url", 'hash'),
@@ -1924,7 +1960,6 @@ def plot_cag_show_hide_selection_controls(
 def plot_cag_annotation_options(
     selection_type,
     parameter,
-    max_neglog_pvalue,
     selected_dataset,
     page,
     key,
@@ -1946,9 +1981,9 @@ def plot_cag_annotation_options(
     if corncob_df is None:
         return options
 
-    # Filter by p-value
+    # Filter by p-value < 0.1
     corncob_df = corncob_df.query(
-        "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
+        "neg_log10_pvalue >= 1"
     )
 
     if corncob_df.shape[0] == 0:
@@ -2033,12 +2068,38 @@ def update_single_cag_dropdown_value(
     else:
         
         # Get the path to the selected dataset
-        fp = page_data.parse_fp([selected_dataset])
+        fp = page_data.parse_fp(
+            [selected_dataset], 
+            page=page, 
+            key=key
+        )
 
-        # Pick the top CAG to display by mean abundance
-        top_cag = cag_annotations(
-            fp
-        )[
+        # See if there is a default parameter
+        default_parameter = page_data.default(
+            selected_dataset,
+            "parameter",
+            page=page,
+            key=key
+        )
+
+        # Get the table of CAG annotations
+        annot_df = cag_annotations(fp)
+
+        if default_parameter is not None:
+
+            # Get the table of CAG associations with this parameter
+            assoc_df = cag_associations(fp, default_parameter)
+
+            if assoc_df is not None:
+
+                # Pick the top CAG based on the wald and size
+                cag_scoring = assoc_df["abs_wald"] * annot_df["size_log10"]
+                cag_scoring = cag_scoring.dropna().sort_values()
+                if cag_scoring.shape[0] > 1:
+                    return cag_scoring.index.values[-1]
+
+        # Otherwise, pick the top CAG to display by mean abundance
+        top_cag = annot_df[
             "mean_abundance"
         ].sort_values(
             ascending=False
@@ -2046,6 +2107,111 @@ def update_single_cag_dropdown_value(
 
         # With a new dataset, select the first five CAGs
         return top_cag
+
+@app.callback(
+    Output({'name': 'plot-cag-xaxis',
+            "type": "metadata-field-dropdown"}, 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def update_single_cag_default_x(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return "none"
+
+    # See if there is a default value specified in the manifest
+    default_value = page_data.default(selected_dataset, "x")
+    if default_value is not None and default_value in manifest(fp).columns.values:
+        return default_value
+    else:
+        return "none"
+
+@app.callback(
+    Output('plot-cag-plot-type', 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def update_single_cag_default_plot_type(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return "scatter"
+
+    # See if there is a default value specified in the manifest
+    default_value = page_data.default(selected_dataset, "plot_type")
+
+    if default_value is not None and default_value in ["scatter", "line", "boxplot", "strip"]:
+        return default_value
+    else:
+        return "scatter"
+
+@app.callback(
+    Output({'name': 'plot-cag-color',
+            "type": "metadata-field-dropdown"}, 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def update_single_cag_default_color(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return "none"
+
+    # See if there is a default value specified in the manifest
+    default_value = page_data.default(selected_dataset, "color")
+    if default_value is not None and default_value in manifest(fp).columns.values:
+        return default_value
+    else:
+        return "none"
+
+@app.callback(
+    Output({'name': 'plot-cag-facet',
+            "type": "metadata-field-dropdown"}, 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def update_single_cag_default_facet(
+    selected_dataset,
+    page,
+    key,
+):
+        # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return "none"
+
+    # See if there is a default value specified in the manifest
+    default_value = page_data.default(selected_dataset, "facet")
+    if default_value is not None and default_value in manifest(fp).columns.values:
+        return default_value
+    else:
+        return "none"
+
 @app.callback(
     Output('plot-cag-graph', 'figure'),
     [
