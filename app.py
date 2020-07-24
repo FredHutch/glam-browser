@@ -1904,7 +1904,6 @@ def plot_cag_show_hide_selection_controls(
     [
         Input("plot-cag-selection-type", "value"),
         Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
-        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
         Input("selected-dataset", "children"),
         Input("url", 'pathname'),
         Input("url", 'hash'),
@@ -1913,7 +1912,6 @@ def plot_cag_show_hide_selection_controls(
 def plot_cag_annotation_options(
     selection_type,
     parameter,
-    max_neglog_pvalue,
     selected_dataset,
     page,
     key,
@@ -1935,9 +1933,9 @@ def plot_cag_annotation_options(
     if corncob_df is None:
         return options
 
-    # Filter by p-value
+    # Filter by p-value < 0.1
     corncob_df = corncob_df.query(
-        "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
+        "neg_log10_pvalue >= 1"
     )
 
     if corncob_df.shape[0] == 0:
