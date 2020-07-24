@@ -1379,7 +1379,7 @@ def cag_metric_dropdown(slider_id, label_text='Metric', default_value="size"):
     ]
 
 
-def log_scale_radio_button(id_string, default="off", label_text="Log Scale"):
+def log_scale_radio_button(id_string, default="on", label_text="Log Scale"):
     return [
         html.Br(),
         html.Label(label_text),
