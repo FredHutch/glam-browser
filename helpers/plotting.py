@@ -1643,6 +1643,12 @@ def plot_taxonomic_annotations_with_enrichment(
             'domain': [0, 0.69],
             'showline': False,
             'zeroline': False,
+            'showspikes': True,
+            'spikethickness': 2,
+            'spikedash': "dot",
+            'spikecolor': "#999999",
+            'spikemode': "across",
+            'spikesnap': 'cursor',
         }
     )
     # Edit xaxis shared by heatmap, enrichment values and dendrogram
@@ -1655,6 +1661,12 @@ def plot_taxonomic_annotations_with_enrichment(
             'zeroline': False,
             'ticks': "",
             'anchor': "y3",
+            'showspikes': True,
+            'spikethickness': 2,
+            'spikedash': "dot",
+            'spikecolor': "#999999",
+            'spikemode': "across",
+            'spikesnap': 'cursor',
         }
     )
     # Edit xaxis used for the CAG association metrics
@@ -1731,6 +1743,12 @@ def plot_taxonomic_annotations_with_cag_associations_only(
             'domain': [0, 0.79],
             'showline': False,
             'zeroline': False,
+            'showspikes': True,
+            'spikethickness': 2,
+            'spikedash': "dot",
+            'spikecolor': "#999999",
+            'spikemode': "across",
+            'spikesnap': 'cursor',
         }
     )
     # Edit xaxis shared by heatmap, enrichment values and dendrogram
@@ -1743,6 +1761,12 @@ def plot_taxonomic_annotations_with_cag_associations_only(
             'zeroline': False,
             'ticks': "",
             'anchor': "y2",
+            'showspikes': True,
+            'spikethickness': 2,
+            'spikedash': "dot",
+            'spikecolor': "#999999",
+            'spikemode': "across",
+            'spikesnap': 'cursor',
         }
     )
     # Edit xaxis used for the CAG association metrics
@@ -1818,6 +1842,12 @@ def plot_taxonomic_annotations_without_enrichment(
             'zeroline': False,
             'ticks':"",
             'anchor': "y2",
+            'showspikes': True,
+            'spikethickness': 2,
+            'spikedash': "dot",
+            'spikecolor': "#999999",
+            'spikemode': "across",
+            'spikesnap': 'cursor',
         }
     )
 
@@ -1845,10 +1875,10 @@ def draw_taxonomic_annotation_heatmap_panel(
     # Make the table with text to display
     text_df = plot_df.apply(
         lambda c: pd.Series(
-            ["{:,} genes from CAG {} assigned to {} or its constituents".format(
-                int(count),
+            ["CAG {}<br>Label: {}<br>Genes assigned: {:,}".format(
                 c.name,
-                org_name
+                org_name,
+                int(count),
             ) for org_name, count in c.items()],
             index=c.index
         )
@@ -1920,8 +1950,24 @@ def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
     ]
 
     layout = go.Layout(
-        xaxis=dict(domain=[0, 0.85]),
-        yaxis=dict(domain=[0, 0.85]),
+        xaxis=dict(
+            domain=[0, 0.85],
+            showspikes= True,
+            spikethickness= 2,
+            spikedash= "dot",
+            spikecolor= "#999999",
+            spikemode= "across",
+            spikesnap="cursor"
+        ),
+        yaxis=dict(
+            domain=[0, 0.85],
+            showspikes=True,
+            spikethickness=2,
+            spikedash="dot",
+            spikecolor="#999999",
+            spikemode="across",
+            spikesnap="cursor"
+        ),
         xaxis2=dict(
             domain=[0.86, 1.0],
             zeroline=True,
@@ -1979,7 +2025,15 @@ def draw_cag_annot_heatmap_with_cag_estimates(
             zeroline=True,
             zerolinewidth=1,
             zerolinecolor='Grey',
-        )
+        ),
+        yaxis=dict(
+            showspikes= True,
+            spikethickness= 2,
+            spikedash= "dot",
+            spikecolor= "#999999",
+            spikemode= "across",
+            spikesnap="cursor"
+        ),
     )
 
     return fig
@@ -2285,10 +2339,10 @@ def draw_cag_annotation_panel(
     # Format the mouseover text
     text_df = plot_df.apply(
         lambda c: [
-            "{}<br>{:,} genes assigned from CAG {}".format(
+            "CAG {}<br>{}<br>Genes assigned: {:,}".format(
+                cag_id,
                 c.name,
                 int(ncounts),
-                cag_id
             )
             for cag_id, ncounts in c.items()
         ]
