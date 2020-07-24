@@ -53,11 +53,37 @@ class Manifest:
             return []
         else:
             return dataset_list
-    
+
+    def default(self, selected_dataset, default_field, page=None, key=None):
+        if selected_dataset in [[-1], ["-1"], -1, "-1"]:
+            # No dataset was selected
+            return None
+
+        if isinstance(selected_dataset, list):
+            selected_dataset = selected_dataset[0]
+        selected_dataset = int(selected_dataset)
+
+        # Get the list of datasets
+        dataset_list = self.dataset_list(page=page, key=key)
+
+        if len(dataset_list) < (selected_dataset + 1):
+            return None
+
+        if "defaults" not in dataset_list[selected_dataset]:
+            return None
+        
+        return dataset_list[selected_dataset]["defaults"].get(default_field)
+
     def get_page_info(self, info_name, page=None, key=None):
 
         # Limit the amount of data available to prevent accessing the key directly
-        if info_name not in ["page_title", "page_description", "contents"]:
+        if isinstance(info_name, str):
+            if info_name not in ["page_title", "page_description", "contents"]:
+                return None
+        elif isinstance(info_name, tuple):
+            if info_name[0] != "default":
+                return None
+        else:
             return None
 
         # If no page was selected, use 'main'
@@ -78,13 +104,19 @@ class Manifest:
         # If a key is required, only return the file if the provided key matches
         if "key" in self.page_data[page]:
             if key is not None and key == self.page_data[page]["key"]:
-                return self.page_data[page][info_name]
+                if isinstance(info_name, str):
+                    return self.page_data[page][info_name]
+                else:
+                    return self.page_data[page]["defaults"][info_name[1]]
             else:
                 return None
         
         # No key is required
         else:
-            return self.page_data[page][info_name]
+            if isinstance(info_name, str):
+                return self.page_data[page][info_name]
+            else:
+                return self.page_data[page]["defaults"][info_name[1]]
 
 
     def parse_directory(self, folder_path):
@@ -164,6 +196,19 @@ class Manifest:
                 if verbose:
                     print("Missing key '{}' in '{}'".format(k, json.dumps(page_data)))
                 return False
+
+        # Check for defaults
+        if "defaults" in page_data:
+            if isinstance(page_data["defaults"], dict) is False:
+                if verbose:
+                    print("Section 'defaults' must be a dict")
+                return False
+            for k, v in page_data["defaults"].items():
+                for t in [k, v]:
+                    if isinstance(t, str) is False:
+                        if verbose:
+                            print("All defaults must be formatted as strings")
+                        return False
 
         if isinstance(page_data["page_title"], str) is False:
             return False

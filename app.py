@@ -1035,6 +1035,28 @@ def ordination_graph_callback(
             manifest_json,
             manifest(fp),
         )
+
+@app.callback(
+    Output({'type': 'metadata-field-dropdown', 'name': 'ordination-metadata'}, 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ]
+)
+def ordination_graph_metadata(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the default value, if specified
+    default_value = page_data.default(selected_dataset, "overlay_label", page=page, key=key)
+
+    if default_value is None:
+        return "none"
+    else:
+        return default_value
+
 @app.callback(
     Output('ordination-anosim-results', 'children'),
     [
@@ -1146,12 +1168,28 @@ def abundance_heatmap_graph_select_cags_callback(selected_dataset, page, key, _)
         # Return the base options if no dataset is selected
         return options, "abundance"
     else:
-        # TODO Add the default parameter from the manifest, if specified
-        # Add the parameters
-        return options + [
+        # Get the default parameter, if defined in the manifest
+        default_parameter = page_data.default(
+            selected_dataset,
+            "parameter",
+            key=key,
+            page=page
+        )
+        
+        # Get the list of available parameters
+        parameter_list = valid_parameters(fp)
+        
+        # Add the parameters to the list of options
+        options = options + [
             {"label": parameter, "value": "parameter-{}".format(parameter)}
-            for parameter in valid_parameters(fp)
-        ], "abundance"
+            for parameter in parameter_list
+        ]
+
+        # If the default in the manifest is valid, use that
+        if default_parameter in parameter_list:
+            return options, "parameter-{}".format(default_parameter)
+        else:
+            return options, "abundance"
 
 
 def get_cags_selected_by_criterion(fp, select_cags_by, n_cags, cag_size_range):
@@ -1683,7 +1721,17 @@ def update_volcano_parameter_dropdown_value(selected_dataset, page, key, dummy):
         if len(parameter_list) == 0:
             return "none"
 
-        if len(parameter_list) > 1:
+        # Get the default parameter, if defined in the manifest
+        default_parameter = page_data.default(
+            selected_dataset, 
+            "parameter", 
+            key=key, 
+            page=page
+        )
+        if default_parameter is not None and default_parameter in parameter_list:
+            return default_parameter
+
+        elif len(parameter_list) > 1:
             return parameter_list[1]
         else:
             return parameter_list[0]
