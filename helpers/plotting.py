@@ -1457,7 +1457,7 @@ def draw_cag_annotation_heatmap(
     enrichment_df,
     cag_estimate_dict,
     n_annots,
-    figure_width=800,
+    figure_width=1000,
     figure_height=800,
 ):
     """Render the heatmap with CAG annotations."""
@@ -1567,6 +1567,123 @@ def draw_cag_annotation_heatmap(
 
     return fig
 
+def draw_path_to_root_tree(path_to_root_df):
+
+    # Set up the figure
+    fig = go.Figure()
+
+    # Keep track of where each taxon has been plotted
+    taxon_position = {}
+
+    # Add to the figure by walking over each of the ranks in reverse order
+    for rank_ix, rank in enumerate(path_to_root_df.columns.values[::-1]):
+
+        # Iterate over each organism at this level
+        for org_name in path_to_root_df[rank].dropna().unique():
+            
+            # Set the vertical position based on the position in the DataFrame
+            y = np.mean([
+                ix
+                for ix, v in enumerate(path_to_root_df[rank].values)
+                if v == org_name
+            ])
+
+            # Set the horizontal position based on the rank
+            x = path_to_root_df.shape[1] - rank_ix
+
+            # Save the position
+            taxon_position["{}-{}".format(rank, org_name)] = (x, y)
+
+            # Draw a point for this organism
+            fig.add_trace(
+                go.Scatter(
+                    x = [x],
+                    y = [y],
+                    ids = ["{}: {}".format(rank, org_name)],
+                    hovertemplate = "%{id}<extra></extra>",
+                    showlegend=False,
+                    mode="markers",
+                    marker=dict(color="Blue", size=6)
+                )
+            )
+
+    # There will be some taxa in the table which do not have terminal assignments
+    # To capture those in the tree, we will add them to the left-most column
+    # purely for the purpose of drawing lines to ancestors
+    first_rank = path_to_root_df.columns.values[0]
+    for ix, v in path_to_root_df[first_rank].items():
+        if v is None:
+            # Add a value to the table
+            path_to_root_df.loc[ix, first_rank] = ix
+            # Also add a pseudo position for plotting dashed lines
+            taxon_position[
+                "{}-{}".format(
+                    first_rank, ix
+                )
+            ] = (
+                0, 
+                np.where(path_to_root_df.index.values == ix)[0][0]
+            )
+    
+    # For each taxon in the tree, add a line to its parent
+    for rank_ix, rank in enumerate(path_to_root_df.columns.values[:-1]):
+
+        # Iterate over each unique organism at this level
+        for org_name in path_to_root_df[rank].dropna().unique():
+
+            # Find the parent of this organism in the table
+            parent_taxa = None
+            for parent_rank, parent_orgs in path_to_root_df.loc[
+                path_to_root_df[rank] == org_name
+            ].drop(
+                columns=path_to_root_df.columns.values[:(rank_ix + 1)]
+            ).iteritems():
+
+                # Check to see that there is a unique parent taxon
+                if parent_orgs.isnull().sum() == 0 and parent_orgs.unique().shape[0] == 1:
+                    parent_taxa = "{}-{}".format(
+                        parent_rank,
+                        parent_orgs.values[0]
+                    )
+                    break
+
+            # Get the position for this organism
+            org_position = taxon_position["{}-{}".format(rank, org_name)]
+
+            # Get the position for the parent
+            if parent_taxa is None:
+                # If there is no parent in the table, draw a line back to the root
+                parent_position = (path_to_root_df.shape[1], org_position[1])
+            else:
+                # Look up the position used earlier
+                parent_position = taxon_position[parent_taxa]
+
+            print(rank, org_name, org_position, parent_taxa, parent_position)
+            
+            # Add to the figure
+            fig.add_trace(
+                go.Scatter(
+                    x = [org_position[0], parent_position[0] - 0.5, parent_position[0]],
+                    y = [org_position[1], org_position[1], parent_position[1]],
+                    showlegend=False,
+                    mode="lines",
+                    hoverinfo='skip',
+                    line=dict(color='grey', width=1)
+                )
+            )
+
+
+    # Set the tick values and text to sync with other subplots
+    fig.update_layout(
+        yaxis = dict(
+            tickmode = 'array',
+            tickvals = list(range(path_to_root_df.shape[0])),
+            ticktext = path_to_root_df.index.values
+        )
+    )
+
+    return fig
+
 
 def plot_taxonomic_annotations_with_enrichment(
     plot_df,
@@ -1578,14 +1695,12 @@ def plot_taxonomic_annotations_with_enrichment(
 
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
     path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
-
+    
     # Make the dendrogram
-    fig = ff.create_dendrogram(
-        path_to_root_df.values,
-        color_threshold=0,
-        labels=path_to_root_df.index.values,
-        orientation='left',
+    fig = draw_path_to_root_tree(
+        path_to_root_df
     )
+
     # Get the order of taxa from the dendrogram
     dendro_leaves = fig['layout']['yaxis']['ticktext']
     dendro_ticks = fig['layout']['yaxis']['tickvals']
@@ -1705,11 +1820,8 @@ def plot_taxonomic_annotations_with_cag_associations_only(
     path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
 
     # Make the dendrogram
-    fig = ff.create_dendrogram(
-        path_to_root_df.values,
-        color_threshold=0,
-        labels=path_to_root_df.index.values,
-        orientation='left',
+    fig = draw_path_to_root_tree(
+        path_to_root_df
     )
     # Get the order of taxa from the dendrogram
     dendro_leaves = fig['layout']['yaxis']['ticktext']
@@ -1805,12 +1917,10 @@ def plot_taxonomic_annotations_without_enrichment(
     path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
 
     # Make the dendrogram
-    fig = ff.create_dendrogram(
-        path_to_root_df.values, 
-        color_threshold=0,
-        labels=path_to_root_df.index.values,
-        orientation='left',
+    fig = draw_path_to_root_tree(
+        path_to_root_df
     )
+
     # Get the order of taxa from the dendrogram
     dendro_leaves = fig['layout']['yaxis']['ticktext']
     dendro_ticks = fig['layout']['yaxis']['tickvals']
@@ -1923,19 +2033,30 @@ def draw_taxonomic_annotation_heatmap_panel(
     )
 
 
-def format_path_to_root_df(tax_id_list, tax_df):
+def format_path_to_root_df(
+    tax_id_list, 
+    tax_df, 
+    rank_list = [
+        "species", 
+        "genus", 
+        "family",
+        "order",
+        "class",
+        "phylum",
+    ]
+):
     return pd.DataFrame({
         tax_id: {
-            anc_tax_id: 1
-            for anc_tax_id in [tax_id] + [
-                t for t in path_to_root(tax_id, tax_df)
-            ]
+            rank: anc_at_rank(tax_id, tax_df, rank)
+            for rank in rank_list
         }
         for tax_id in tax_id_list
-    }).T.fillna(
-        0
-    ).rename(
+    }).T.rename(
         index=tax_df["name"].get
+    ).reindex(
+        columns=rank_list
+    ).sort_values(
+        by=rank_list[::-1]
     )
 
 
@@ -2253,6 +2374,24 @@ def add_tax_node(tax_id, terminal_nodes, internal_nodes, tax_df):
 
         # Make sure to add this to the internal node set
         internal_nodes.add(anc_tax_id)
+
+
+def anc_at_rank(tax_id, tax_df, rank):
+    """Return the name of the parent of a taxon at a given rank."""
+
+    # Check to see if we are already at this rank
+    if tax_df.loc[tax_id, "rank"] == rank:
+        return tax_df.loc[tax_id, "name"]
+
+    # Otherwise, walk up the parents until you find it
+    else:
+        for anc_tax_id in path_to_root(tax_id, tax_df):
+            # Check to see if we have reached the rank of interest
+            if tax_df.loc[anc_tax_id, "rank"] == rank:
+                return tax_df.loc[anc_tax_id, "name"]
+
+    # If none was found, return None
+    return
 
 
 def path_to_root(tax_id, tax_df, max_iter=1000):
