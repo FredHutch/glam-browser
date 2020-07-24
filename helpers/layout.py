@@ -1399,15 +1399,14 @@ def nbins_slider(id_string):
         html.Label('Number of Bins'),
         dcc.Slider(
             id=id_string,
-            min=5,
+            min=10,
             max=100,
             step=1,
             marks={
-                "5": "5",
-                "20": "20",
-                "100": "100",
+                str(v): str(v)
+                for v in range(10, 101, 10)
             },
-            value=20,
+            value=50,
             included=False,
         ),
         html.Br()
