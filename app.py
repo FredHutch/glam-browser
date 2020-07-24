@@ -2068,12 +2068,38 @@ def update_single_cag_dropdown_value(
     else:
         
         # Get the path to the selected dataset
-        fp = page_data.parse_fp([selected_dataset])
+        fp = page_data.parse_fp(
+            [selected_dataset], 
+            page=page, 
+            key=key
+        )
 
-        # Pick the top CAG to display by mean abundance
-        top_cag = cag_annotations(
-            fp
-        )[
+        # See if there is a default parameter
+        default_parameter = page_data.default(
+            selected_dataset,
+            "parameter",
+            page=page,
+            key=key
+        )
+
+        # Get the table of CAG annotations
+        annot_df = cag_annotations(fp)
+
+        if default_parameter is not None:
+
+            # Get the table of CAG associations with this parameter
+            assoc_df = cag_associations(fp, default_parameter)
+
+            if assoc_df is not None:
+
+                # Pick the top CAG based on the wald and size
+                cag_scoring = assoc_df["abs_wald"] * annot_df["size_log10"]
+                cag_scoring = cag_scoring.dropna().sort_values()
+                if cag_scoring.shape[0] > 1:
+                    return cag_scoring.index.values[-1]
+
+        # Otherwise, pick the top CAG to display by mean abundance
+        top_cag = annot_df[
             "mean_abundance"
         ].sort_values(
             ascending=False
@@ -2081,6 +2107,111 @@ def update_single_cag_dropdown_value(
 
         # With a new dataset, select the first five CAGs
         return top_cag
+
+@app.callback(
+    Output({'name': 'plot-cag-xaxis',
+            "type": "metadata-field-dropdown"}, 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def update_single_cag_default_x(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return "none"
+
+    # See if there is a default value specified in the manifest
+    default_value = page_data.default(selected_dataset, "x")
+    if default_value is not None and default_value in manifest(fp).columns.values:
+        return default_value
+    else:
+        return "none"
+
+@app.callback(
+    Output('plot-cag-plot-type', 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def update_single_cag_default_plot_type(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return "scatter"
+
+    # See if there is a default value specified in the manifest
+    default_value = page_data.default(selected_dataset, "plot_type")
+
+    if default_value is not None and default_value in ["scatter", "line", "boxplot", "strip"]:
+        return default_value
+    else:
+        return "scatter"
+
+@app.callback(
+    Output({'name': 'plot-cag-color',
+            "type": "metadata-field-dropdown"}, 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def update_single_cag_default_color(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return "none"
+
+    # See if there is a default value specified in the manifest
+    default_value = page_data.default(selected_dataset, "color")
+    if default_value is not None and default_value in manifest(fp).columns.values:
+        return default_value
+    else:
+        return "none"
+
+@app.callback(
+    Output({'name': 'plot-cag-facet',
+            "type": "metadata-field-dropdown"}, 'value'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def update_single_cag_default_facet(
+    selected_dataset,
+    page,
+    key,
+):
+        # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return "none"
+
+    # See if there is a default value specified in the manifest
+    default_value = page_data.default(selected_dataset, "facet")
+    if default_value is not None and default_value in manifest(fp).columns.values:
+        return default_value
+    else:
+        return "none"
+
 @app.callback(
     Output('plot-cag-graph', 'figure'),
     [
