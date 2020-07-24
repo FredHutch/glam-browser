@@ -472,9 +472,9 @@ def cag_abundance_heatmap_card():
                         "cag-abundance-heatmap-ncags",
                         "Number of CAGs to Display",
                         min_value=5,
-                        max_value=50,
-                        default_value=10,
-                        marks=[5, 10, 25, 50]
+                        max_value=100,
+                        default_value=20,
+                        marks=[5, 25, 50, 75, 100]
                     ) + cag_size_slider(
                         "cag-abundance-heatmap-size-range"
                     ),
