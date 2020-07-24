@@ -2549,7 +2549,7 @@ def draw_taxonomy_sunburst(
         fig.update_layout(
             template="simple_white",
         )
-        return fig, 1, {}
+        return fig
 
     # Set the index on the tax ID
     cag_tax_df = cag_tax_df.set_index("tax_id")
@@ -2583,7 +2583,7 @@ def draw_taxonomy_sunburst(
         fig.update_layout(
             template="simple_white",
         )
-        return fig, 1, {}
+        return fig
 
     # Walk through and remove the rows, reassigning the 'parent' for each
     for tax_id in taxa_to_remove:
@@ -2592,16 +2592,15 @@ def draw_taxonomy_sunburst(
 
         # For any taxa which have this taxon (to be removed) as the parent,
         # replace that value with the parent of this taxon 
-        if tax_id in cag_tax_df["parent"].values:
-            cag_tax_df = cag_tax_df.replace(
-                to_replace={
-                    "parent": {
-                        tax_id: parent_tax_id
-                    }
+        cag_tax_df = cag_tax_df.replace(
+            to_replace={
+                "parent": {
+                    tax_id: parent_tax_id
                 }
-            ).drop(
-                index=tax_id
-            )
+            }
+        ).drop(
+            index=tax_id
+        )
 
     # Now we will fill in the name of the parent
     #  (which is currently encoded as a tax ID)
@@ -2634,17 +2633,7 @@ def draw_taxonomy_sunburst(
         },
     )
 
-    # Format the marks for the updated slider
-    marks = {
-        str(int(n)): str(int(n))
-        for n in [
-            1,
-            int(cag_tax_df["count"].max() / 2),
-            cag_tax_df["count"].max(),
-        ]
-    }
-
-    return fig, cag_tax_df["count"].max(), marks
+    return fig
 
 
 ####################

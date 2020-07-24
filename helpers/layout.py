@@ -825,7 +825,7 @@ def plot_cag_card():
                         "cag-tax-ngenes",
                         "Minimum Number of Genes",
                         included=False,
-                        default_value=5,
+                        marks=[1, 5, 10],
                     ),
                     width=4,
                     align="center",

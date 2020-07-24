@@ -1775,11 +1775,7 @@ def update_volcano_pvalue_slider_marks(selected_dataset, page, key, parameter):
 # CAG TAXONOMY CALLBACK #
 #########################
 @app.callback(
-    [
-        Output('cag-tax-graph', 'figure'),
-        Output('cag-tax-ngenes', 'max'),
-        Output('cag-tax-ngenes', 'marks'),
-    ],
+    Output('cag-tax-graph', 'figure'),
     [
         Input("plot-cag-selection-type", "value"),
         Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
@@ -1805,14 +1801,8 @@ def update_taxonomy_graph(
     # Get the path to the selected dataset
     fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
-    # Marks for an empty taxonomy plot
-    marks = {
-        n: n
-        for n in ["0", "1"]
-    }
-
     if fp is None or cag_id is None:
-        return empty_figure(), 1, marks
+        return empty_figure()
 
     # If a single CAG has been selected, add that to the plot
     if selection_type == "cag_id":
@@ -1827,7 +1817,7 @@ def update_taxonomy_graph(
         # Read the association metrics for each CAG against this parameter
         corncob_df = cag_associations(fp, parameter)
         if corncob_df is None:
-            return empty_figure(), 1, marks
+            return empty_figure()
 
         # Filter by p-value
         all_cags = set(corncob_df.query(
@@ -1835,7 +1825,7 @@ def update_taxonomy_graph(
         ).index.values)
 
         if len(all_cags) == 0:
-            return empty_figure(), 1, marks
+            return empty_figure()
 
         # Get the list of CAGs based on these criteria
         selected_cags = set([])
@@ -1857,7 +1847,7 @@ def update_taxonomy_graph(
         selected_cags = list(selected_cags)
         
         if len(selected_cags) == 0:
-            return empty_figure(), 1, marks
+            return empty_figure()
 
         # Format the DataFrame as needed to make a go.Sunburst
         cag_tax_df = taxonomic_gene_annotations(fp)
@@ -1882,9 +1872,8 @@ def update_taxonomy_graph(
                 " / ".join(annotation)
             )
 
-
     if cag_tax_df is None:
-        return empty_figure(), 1, marks
+        return empty_figure()
     else:
         return draw_taxonomy_sunburst(cag_tax_df, plot_title, min_ngenes)
 ###########################
