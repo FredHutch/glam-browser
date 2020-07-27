@@ -224,10 +224,17 @@ def enrichments(fp, parameter, annotation):
 
 @cache.memoize()
 def functional_gene_annotations(fp):
-    return hdf5_get_item(
+    df = hdf5_get_item(
         fp,
         "/gene_annotations/functional"
     )
+    if df is None:
+        return
+    # Explicitly mask the "Psort" annotations
+    return df.loc[
+        df["label"].apply(lambda n: n.startswith("Psort") is False)
+    ]
+
 
 @cache.memoize()
 def taxonomic_gene_annotations(fp, rank="all", cag_id=None):

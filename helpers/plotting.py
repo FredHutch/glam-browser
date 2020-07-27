@@ -1499,7 +1499,7 @@ def draw_cag_annotation_heatmap(
             )
 
         # Sort the rows and columns with linkage clustering
-        plot_df = cluster_dataframe(plot_df)
+        plot_df = cluster_dataframe(plot_df.T).T
 
     # Lacking functional/taxonomic enrichments or CAG-level estimated coefficients of association
     if enrichment_df is None and (cag_estimate_dict is None or len(cag_estimate_dict) == 0):
