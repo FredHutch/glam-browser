@@ -1457,6 +1457,7 @@ def draw_cag_annotation_heatmap(
     enrichment_df,
     cag_estimate_dict,
     n_annots,
+    annotation_names,
     figure_width=1000,
     figure_height=800,
 ):
@@ -1490,6 +1491,12 @@ def draw_cag_annotation_heatmap(
             enrichment_df, 
             n_annots
         )
+
+        # Replace the annotation names, if provided
+        if annotation_names is not None:
+            plot_df = plot_df.rename(
+                columns=annotation_names.get
+            )
 
         # Sort the rows and columns with linkage clustering
         plot_df = cluster_dataframe(plot_df)
@@ -2131,11 +2138,11 @@ def draw_cag_annot_heatmap_with_cag_estimates(
 ):
 
     fig = make_subplots(
-        rows=1, 
-        cols=2, 
-        shared_yaxes=True,
-        column_widths=[
-            0.85, 0.15
+        rows=2, 
+        cols=1, 
+        shared_xaxes=True,
+        row_heights=[
+            0.15, 0.85
         ],
         horizontal_spacing=0.005,
     )
@@ -2145,7 +2152,7 @@ def draw_cag_annot_heatmap_with_cag_estimates(
         draw_cag_annotation_panel(
             plot_df
         ),
-        row=1, 
+        row=2, 
         col=1
     )
 
@@ -2153,11 +2160,11 @@ def draw_cag_annot_heatmap_with_cag_estimates(
     fig.add_trace(
         draw_cag_estimate_panel(
             cag_estimate_dict,
-            plot_df.columns.values
+            plot_df.index.values,
+            orientation="horizontal",
         ),
         row=1,
-        col=2,
-        orientation="horizontal"
+        col=1,
     )
     fig.update_layout(
         xaxis2=dict(
