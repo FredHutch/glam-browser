@@ -2498,7 +2498,7 @@ def draw_cag_annotation_panel(
 ):
 
     # Scale the assignments to the maximum for each CAG
-    prop_df = 100 * (plot_df.T / plot_df.max(axis=1))
+    prop_df = 100 * (plot_df.T / plot_df.max(axis=1).clip(lower=1))
 
     # Format the mouseover text
     text_df = plot_df.apply(
@@ -2510,15 +2510,20 @@ def draw_cag_annotation_panel(
             )
             for cag_id, ncounts in c.items()
         ]
-    ).T
+    ).T.reindex(
+        index=prop_df.index.values,
+        columns=prop_df.columns.values,
+    ).fillna(
+        ""
+    )
 
     return go.Heatmap(
         text=text_df.values,
         z=prop_df.values,
-        x=["CAG {}".format(i) for i in plot_df.index.values],
+        x=["CAG {}".format(i) for i in prop_df.columns.values],
         y=[
             n[:30] + "..." if len(n) > 30 else n
-            for n in plot_df.columns.values
+            for n in prop_df.index.values
         ],
         colorbar={"title": "Percent of gene assignments"},
         colorscale='blues',
