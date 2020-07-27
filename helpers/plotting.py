@@ -1657,8 +1657,6 @@ def draw_path_to_root_tree(path_to_root_df):
             else:
                 # Look up the position used earlier
                 parent_position = taxon_position[parent_taxa]
-
-            print(rank, org_name, org_position, parent_taxa, parent_position)
             
             # Add to the figure
             fig.add_trace(
@@ -3072,23 +3070,35 @@ def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
     return fig
 
 def cluster_dataframe(plot_df):
+    # Cluster on the basis of the proportion of counts from each column
+    prop_df = plot_df / plot_df.sum().clip(lower=1)
+
+    # Only cluster on each axis if there are >3 elements on the axis
     if plot_df.shape[0] > 3:
-        plot_df = plot_df.reindex(
-            index=plot_df.index.values[
-                leaves_list(linkage(
-                    plot_df,
-                    method="ward"
-                ))
-            ]
-        )
+
+        # Get the labels on the sorted axis
+        label_list = plot_df.index.values[
+            leaves_list(linkage(
+                prop_df,
+                method="ward"
+            ))
+        ]
+
+        # Apply the new order to the tables
+        plot_df = plot_df.reindex(index=label_list)
+        prop_df = prop_df.reindex(index=label_list)
+
     if plot_df.shape[1] > 3:
-        plot_df = plot_df.reindex(
-            columns=plot_df.columns.values[
-                leaves_list(linkage(
-                    plot_df.T,
-                    method="ward"
-                ))
-            ],
-        )
+        # Get the labels on the sorted axis
+        label_list = plot_df.columns.values[
+            leaves_list(linkage(
+                prop_df.T,
+                method="ward"
+            ))
+        ]
+
+        # Apply the new order to the tables
+        plot_df = plot_df.reindex(columns=label_list)
+        prop_df = prop_df.reindex(columns=label_list)
 
     return plot_df
