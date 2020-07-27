@@ -2524,7 +2524,7 @@ def draw_cag_annotation_panel(
         colorscale='blues',
         hovertemplate = "%{text}<extra></extra>",
         zmin=0.,
-        zmax=1.,
+        zmax=100.,
         xaxis=xaxis,
         yaxis=yaxis,
     )
