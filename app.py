@@ -224,10 +224,17 @@ def enrichments(fp, parameter, annotation):
 
 @cache.memoize()
 def functional_gene_annotations(fp):
-    return hdf5_get_item(
+    df = hdf5_get_item(
         fp,
         "/gene_annotations/functional"
     )
+    if df is None:
+        return
+    # Explicitly mask the "Psort" annotations
+    return df.loc[
+        df["label"].apply(lambda n: n.startswith("Psort") is False)
+    ]
+
 
 @cache.memoize()
 def taxonomic_gene_annotations(fp, rank="all", cag_id=None):
@@ -254,6 +261,42 @@ def taxonomic_gene_annotations(fp, rank="all", cag_id=None):
         # Sort by number of hits
         df = df.sort_values(
             by="count", 
+            ascending=False
+        )
+
+    return df
+
+@cache.memoize()
+def genome_manifest(fp):
+    return hdf5_get_item(
+        fp,
+        "/genome_manifest"
+    )
+@cache.memoize()
+def genomic_alignment_annotations(fp, cag_id=None):
+    df = hdf5_get_item(
+        fp,
+        "/genome_containment"
+    )
+
+    if df is None:
+        return
+
+    df = df.reindex(
+        columns = ["genome", "CAG", "n_genes"]
+    )
+    
+    if cag_id is not None:
+        df = df.query(
+            "CAG == {}".format(cag_id)
+        )
+
+        if df.shape[0] == 0:
+            return
+
+        # Sort by number of hits
+        df = df.sort_values(
+            by="n_genes", 
             ascending=False
         )
 
@@ -1404,6 +1447,20 @@ def annotation_heatmap_graph_callback(
         # Read in the full set of taxonomic annotations
         cag_annot_df = taxonomic_gene_annotations(fp)
 
+    elif annotation_type == "genomes":
+
+        # Read in the full set of genome alignment data
+        cag_annot_df = genomic_alignment_annotations(fp)
+
+        # Rename the columns so that it's compatible with downstream plotting
+        if cag_annot_df is not None:
+            cag_annot_df = cag_annot_df.rename(
+                columns = {
+                    "genome": "name",
+                    "n_genes": "count",
+                }
+            )
+
     else:
         # Read in the taxonomic annotations at this rank
         cag_annot_df = taxonomic_gene_annotations(fp, rank=annotation_type)
@@ -1436,6 +1493,13 @@ def annotation_heatmap_graph_callback(
             ]).reset_index(
                 drop=True
             )
+        
+        # The annotation type is genome alignment
+        elif annotation_type == "genomes":
+
+            # There are no annotations computed genome-by-genome
+            enrichment_df = None
+
         else:
             # Otherwise just show the enrichments at this single level
             enrichment_df = enrichments(
@@ -1464,6 +1528,23 @@ def annotation_heatmap_graph_callback(
         # Do not show any estimates for CAGs
         cag_estimate_dict = None
 
+    # If the annotation type is "genomes", read in the table of genome names
+    if annotation_type == "genomes":
+
+        # Read in the table linking the genome 'id' to its name
+        annotation_names = genome_manifest(fp)
+
+        # Make sure that the data exists
+        if annotation_names is not None:
+
+            # Format as a Series, indexed by 'id'
+            annotation_names = annotation_names.set_index("id")["name"]
+        else:
+
+            annotation_names = None
+    else:
+        annotation_names = None
+
     # Draw the figure
     return draw_cag_annotation_heatmap(
         cag_annot_df,
@@ -1471,6 +1552,7 @@ def annotation_heatmap_graph_callback(
         enrichment_df,
         cag_estimate_dict,
         n_annots,
+        annotation_names,
     )
 ######################################
 # / CAG ANNOTATION HEATMAP CALLBACKS #

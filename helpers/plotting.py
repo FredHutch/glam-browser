@@ -1457,6 +1457,7 @@ def draw_cag_annotation_heatmap(
     enrichment_df,
     cag_estimate_dict,
     n_annots,
+    annotation_names,
     figure_width=1000,
     figure_height=800,
 ):
@@ -1491,8 +1492,14 @@ def draw_cag_annotation_heatmap(
             n_annots
         )
 
+        # Replace the annotation names, if provided
+        if annotation_names is not None:
+            plot_df = plot_df.rename(
+                columns=annotation_names.get
+            )
+
         # Sort the rows and columns with linkage clustering
-        plot_df = cluster_dataframe(plot_df)
+        plot_df = cluster_dataframe(plot_df.T).T
 
     # Lacking functional/taxonomic enrichments or CAG-level estimated coefficients of association
     if enrichment_df is None and (cag_estimate_dict is None or len(cag_estimate_dict) == 0):
@@ -2131,11 +2138,11 @@ def draw_cag_annot_heatmap_with_cag_estimates(
 ):
 
     fig = make_subplots(
-        rows=1, 
-        cols=2, 
-        shared_yaxes=True,
-        column_widths=[
-            0.85, 0.15
+        rows=2, 
+        cols=1, 
+        shared_xaxes=True,
+        row_heights=[
+            0.15, 0.85
         ],
         horizontal_spacing=0.005,
     )
@@ -2145,7 +2152,7 @@ def draw_cag_annot_heatmap_with_cag_estimates(
         draw_cag_annotation_panel(
             plot_df
         ),
-        row=1, 
+        row=2, 
         col=1
     )
 
@@ -2153,11 +2160,11 @@ def draw_cag_annot_heatmap_with_cag_estimates(
     fig.add_trace(
         draw_cag_estimate_panel(
             cag_estimate_dict,
-            plot_df.columns.values
+            plot_df.index.values,
+            orientation="horizontal",
         ),
         row=1,
-        col=2,
-        orientation="horizontal"
+        col=1,
     )
     fig.update_layout(
         xaxis2=dict(
@@ -2491,7 +2498,7 @@ def draw_cag_annotation_panel(
 ):
 
     # Scale the assignments to the maximum for each CAG
-    prop_df = 100 * (plot_df.T / plot_df.max(axis=1))
+    prop_df = 100 * (plot_df.T / plot_df.max(axis=1).clip(lower=1))
 
     # Format the mouseover text
     text_df = plot_df.apply(
@@ -2503,21 +2510,26 @@ def draw_cag_annotation_panel(
             )
             for cag_id, ncounts in c.items()
         ]
-    ).T
+    ).T.reindex(
+        index=prop_df.index.values,
+        columns=prop_df.columns.values,
+    ).fillna(
+        ""
+    )
 
     return go.Heatmap(
         text=text_df.values,
         z=prop_df.values,
-        x=["CAG {}".format(i) for i in plot_df.index.values],
+        x=["CAG {}".format(i) for i in prop_df.columns.values],
         y=[
             n[:30] + "..." if len(n) > 30 else n
-            for n in plot_df.columns.values
+            for n in prop_df.index.values
         ],
         colorbar={"title": "Percent of gene assignments"},
         colorscale='blues',
         hovertemplate = "%{text}<extra></extra>",
         zmin=0.,
-        zmax=1.,
+        zmax=100.,
         xaxis=xaxis,
         yaxis=yaxis,
     )
@@ -2975,97 +2987,6 @@ def plot_genome_scatter(genome_df, parameter, genome_manifest):
         height=400,
         width=600,
     )
-
-    return fig
-
-def plot_genome_heatmap(genome_df, genome_manifest_df, cag_summary_df):
-    # Calculate the product of cag_prop and genome_prop
-    genome_df = genome_df.assign(
-        product = genome_df["cag_prop"] * genome_df["genome_prop"]
-    )
-    # Use the product to figure out which CAGs to plot
-    cags_to_plot = pd.Series({
-        cag_id: cag_df["product"].max()
-        for cag_id, cag_df in genome_df.groupby(
-            "CAG"
-        )
-    }).sort_values(
-        ascending=False
-    ).head(
-        30
-    ).index.values
-
-    # Format as a list
-    cags_to_plot = [cag_id for cag_id in cags_to_plot]
-
-    # Make the DataFrame to plot
-    plot_df = genome_df.pivot_table(
-        index="genome",
-        columns="CAG",
-        values="cag_prop"
-    ).reindex(
-        columns=cags_to_plot
-    ).fillna(
-        0
-    )
-
-    # Sort the rows and columns with linkage clustering
-    plot_df = cluster_dataframe(plot_df)
-
-    # Make the text display
-    text_df = pd.DataFrame({
-        cag_id: {
-            genome_id: "CAG Prop.: {} - Genome Prop.: {} - Genome bps: {:,} - Num. Genes: {:,}".format(
-                round(cag_genome_df["cag_prop"].values[0], 2),
-                round(cag_genome_df["genome_prop"].values[0], 4),
-                int(cag_genome_df["genome_bases"].values[0]),
-                int(cag_genome_df["n_genes"].values[0]),
-            )
-            for genome_id, cag_genome_df in cag_df.groupby("genome")
-        }
-        for cag_id, cag_df in genome_df.groupby("CAG")
-        if cag_id in cags_to_plot
-    }).reindex(
-        index=plot_df.index,
-        columns=plot_df.columns
-    )
-
-    # Get the genome names
-    genome_names = genome_manifest_df.set_index(
-        "id"
-    )[
-        "name"
-    ].reindex(
-        index=plot_df.index
-    ).tolist()
-
-    # Format the CAG labels to include sizes
-    cag_names = [
-        "CAG {} ({:,} genes)".format(
-            cag_id,
-            cag_summary_df.loc[cag_id, "size"]
-        )
-        for cag_id in plot_df.columns.values
-    ]
-
-    # Set the hover text format
-    hovertemplate = "%{x}<br>Genome: %{y}<br>%{text}<extra></extra>"
-
-    fig = go.Figure(
-        go.Heatmap(
-            text=text_df.values,
-            z=plot_df.values,
-            y=genome_names,
-            x=cag_names,
-            colorbar={"title": "Proportion of CAG"},
-            colorscale='blues',
-            hovertemplate=hovertemplate,
-            zmin=0.,
-            zmax=1.,
-        )
-    )
-
-    fig.update_yaxes(automargin=True)
 
     return fig
 
