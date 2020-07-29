@@ -360,13 +360,15 @@ def parse_genome_containment(store, max_n_cags=250000):
                 df["CAG"].unique().shape[0]
             ))
 
-        return df
+        # Yield the subset for each CAG
+        for cag_id, cag_df in df.groupby("CAG"):
+            yield cag_id, cag_df.drop(columns="CAG")
 
     else:
 
         logging.info("No genome alignments found")
 
-        return
+        yield None, None
 
 
 def parse_distance_matrices(store, all_keys):
@@ -513,7 +515,9 @@ def index_geneshot_results(input_fp, output_fp):
         dat["/genome_manifest"] = parse_genome_manifest(store)
 
         # Read in the genome containments
-        dat["/genome_containment"] = parse_genome_containment(store)
+        for cag_id, cag_genome_containment_df in parse_genome_containment(store):
+            if cag_id is not None:
+                dat["/genome_containment/{}".format(cag_id)] = cag_genome_containment_df
 
         # Read in the distance matrices
         for metric_name, metric_df in parse_distance_matrices(store, all_keys):
@@ -577,12 +581,22 @@ def index_geneshot_results(input_fp, output_fp):
 
     # Store the summary annotation tables if the annotations are available
     if functional_annot_df is not None:
-        dat["/gene_annotations/functional"] = functional_annot_df
+        for cag_id, cag_df in functional_annot_df.groupby("CAG"):
+            key_name = "/gene_annotations/functional/{}".format(cag_id)
+            dat[key_name] = cag_df.drop(columns="CAG")
+
     if counts_df is not None:
-        dat["/gene_annotations/taxonomic/all"] = counts_df
+        for cag_id, cag_df in counts_df.groupby("CAG"):
+            key_name = "/gene_annotations/taxonomic/all/{}".format(cag_id)
+            dat[key_name] = cag_df.drop(columns="CAG")
 
         for rank, rank_df in rank_summaries.items():
-            dat["/gene_annotations/taxonomic/{}".format(rank)] = rank_df
+            for cag_id, cag_df in rank_df.groupby("CAG"):
+                key_name = "/gene_annotations/taxonomic/{}/{}".format(
+                    rank, 
+                    cag_id
+                )
+                dat[key_name] = cag_df.drop(columns="CAG")
 
     # Write out all of the tables to HDF5
     with pd.HDFStore(output_fp, "w") as store:
