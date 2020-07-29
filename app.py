@@ -1554,6 +1554,45 @@ def annotation_heatmap_graph_callback(
         n_annots,
         annotation_names,
     )
+
+@app.callback(
+    Output('cag-annotation-heatmap-annotation-type', 'options'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def annotation_heatmap_type_options(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # Set the default options
+    options = [
+        {'label': 'Functional', 'value': 'eggNOG_desc'},
+        {'label': 'Taxonomic', 'value': 'taxonomic'},
+        {'label': 'Species', 'value': 'species'},
+        {'label': 'Genus', 'value': 'genus'},
+        {'label': 'Family', 'value': 'family'},
+    ]
+
+    # Return the default options if no dataset is selected
+    if fp is None:
+        return options
+
+    # Request genome alignment information for this dataset
+    df = genome_manifest(fp)
+
+    # Add the option to display genome information, if present
+    if df is not None:
+        options.append(
+            {'label': 'Genomes', 'value': 'genomes'},
+        )
+
+    return options
 ######################################
 # / CAG ANNOTATION HEATMAP CALLBACKS #
 ######################################
