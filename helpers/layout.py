@@ -625,7 +625,6 @@ def cag_annotation_heatmap_card():
                                 {'label': 'Species', 'value': 'species'},
                                 {'label': 'Genus', 'value': 'genus'},
                                 {'label': 'Family', 'value': 'family'},
-                                {'label': 'Genomes', 'value': 'genomes'},
                             ],
                             value='taxonomic',
                         ),
