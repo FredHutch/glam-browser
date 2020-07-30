@@ -191,12 +191,31 @@ def cag_associations(fp, parameter):
     # Make sure that this parameter is valid
     assert parameter in valid_parameters(fp), parameter
 
-    return hdf5_get_item(
+    df = hdf5_get_item(
         fp,
         "/cag_associations/{}".format(parameter)
-    ).set_index(
-        "CAG"
     )
+    
+    if df is None:
+
+        return
+
+    else:
+
+        # Set the index
+        df.set_index("CAG", inplace=True)
+
+        # Calculate the Wald
+        df = df.assign(
+            wald = df["estimate"] / df["std_error"]
+        )
+
+        # Calculate the absolute value of the Wald
+        df = df.assign(
+            abs_wald = df["wald"].abs()
+        )
+
+        return df
 
 @cache.memoize()
 def enrichments(fp, parameter, annotation):
