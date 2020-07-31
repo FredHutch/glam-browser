@@ -361,8 +361,10 @@ def parse_genome_containment(store, max_n_cags=250000):
             ))
 
         # Yield the subset for each CAG
-        for cag_id, cag_df in df.groupby("CAG"):
-            yield cag_id, cag_df.drop(columns="CAG")
+        for group_ix, group_df in df.assign(
+            group=df["CAG"].apply(lambda v: v % 1000)
+        ).groupby("group"):
+            yield group_ix, group_df.drop(columns="group")
 
     else:
 
@@ -515,9 +517,9 @@ def index_geneshot_results(input_fp, output_fp):
         dat["/genome_manifest"] = parse_genome_manifest(store)
 
         # Read in the genome containments
-        for cag_id, cag_genome_containment_df in parse_genome_containment(store):
-            if cag_id is not None:
-                dat["/genome_containment/{}".format(cag_id)] = cag_genome_containment_df
+        for group_ix, group_df in parse_genome_containment(store):
+            if group_ix is not None:
+                dat["/genome_containment/{}".format(group_ix)] = group_df
 
         # Read in the distance matrices
         for metric_name, metric_df in parse_distance_matrices(store, all_keys):

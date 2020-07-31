@@ -242,7 +242,7 @@ def enrichments(fp, parameter, annotation):
     return df
 
 def functional_gene_annotations(fp, cag_id):
-    df = functional_gene_annotations_shard(fp, cag_id)
+    df = functional_gene_annotations_shard(fp, cag_id % 1000)
     if df is None:
         return
     # Filter down to the annotations for this CAG
@@ -262,15 +262,15 @@ def functional_gene_annotations(fp, cag_id):
         return df
 
 @cache.memoize()
-def functional_gene_annotations_shard(fp, cag_id):
+def functional_gene_annotations_shard(fp, group_ix):
     return hdf5_get_item(
         fp,
-        "/gene_annotations/functional/{}".format(cag_id % 1000)
+        "/gene_annotations/functional/{}".format(group_ix)
     )
 
 
 def taxonomic_gene_annotations(fp, cag_id, rank="all"):
-    df = taxonomic_gene_annotations_shard(fp, cag_id)
+    df = taxonomic_gene_annotations_shard(fp, cag_id % 1000)
 
     if df is None:
         return
@@ -297,10 +297,10 @@ def taxonomic_gene_annotations(fp, cag_id, rank="all"):
     return df
 
 @cache.memoize()
-def taxonomic_gene_annotations_shard(fp, cag_id, rank="all"):
+def taxonomic_gene_annotations_shard(fp, group_ix, rank="all"):
     return hdf5_get_item(
         fp,
-        "/gene_annotations/taxonomic/{}/{}".format(rank, cag_id % 1000)
+        "/gene_annotations/taxonomic/{}/{}".format(rank, group_ix)
     )
 
 @cache.memoize()
@@ -310,7 +310,7 @@ def genome_manifest(fp):
         "/genome_manifest"
     )
 def genomic_alignment_annotations(fp, cag_id):
-    df = genomic_alignment_annotations_shard(fp, cag_id)
+    df = genomic_alignment_annotations_shard(fp, cag_id % 1000)
 
     if df is None:
         return
@@ -330,8 +330,11 @@ def genomic_alignment_annotations(fp, cag_id):
 
             return df
 @cache.memoize()
-def genomic_alignment_annotations_shard(fp, cag_id):
-    return hdf5_get_item(fp, cag_id % 1000)
+def genomic_alignment_annotations_shard(fp, group_ix):
+    return hdf5_get_item(
+        fp, 
+        "/genome_containment/{}".format(group_ix)
+    )
 ############################################
 # CACHE DATA SUMMARIZED FROM LARGER TABLES #
 ############################################
