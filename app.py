@@ -241,13 +241,15 @@ def enrichments(fp, parameter, annotation):
         )
     return df
 
-@cache.memoize()
 def functional_gene_annotations(fp, cag_id):
-    df = hdf5_get_item(
-        fp,
-        "/gene_annotations/functional/{}".format(cag_id)
-    )
+    df = functional_gene_annotations_shard(fp, cag_id)
     if df is None:
+        return
+    # Filter down to the annotations for this CAG
+    df = df.query(
+        "CAG == {}".format(cag_id)
+    )
+    if df.shape[0] == 0:
         return
     # Explicitly mask the "Psort" annotations
     df = df.loc[
@@ -259,15 +261,26 @@ def functional_gene_annotations(fp, cag_id):
     else:
         return df
 
-
 @cache.memoize()
-def taxonomic_gene_annotations(fp, cag_id, rank="all"):
-    df = hdf5_get_item(
+def functional_gene_annotations_shard(fp, cag_id):
+    return hdf5_get_item(
         fp,
-        "/gene_annotations/taxonomic/{}/{}".format(rank, cag_id)
+        "/gene_annotations/functional/{}".format(cag_id % 1000)
     )
 
+
+def taxonomic_gene_annotations(fp, cag_id, rank="all"):
+    df = taxonomic_gene_annotations_shard(fp, cag_id)
+
     if df is None:
+        return
+
+    # Filter down to the annotations for this CAG
+    df = df.query(
+        "CAG == {}".format(cag_id)
+    )
+
+    if df.shape[0] == 0:
         return
 
     # Format required  columns as integers
@@ -284,24 +297,41 @@ def taxonomic_gene_annotations(fp, cag_id, rank="all"):
     return df
 
 @cache.memoize()
+def taxonomic_gene_annotations_shard(fp, cag_id, rank="all"):
+    return hdf5_get_item(
+        fp,
+        "/gene_annotations/taxonomic/{}/{}".format(rank, cag_id % 1000)
+    )
+
+@cache.memoize()
 def genome_manifest(fp):
     return hdf5_get_item(
         fp,
         "/genome_manifest"
     )
-@cache.memoize()
 def genomic_alignment_annotations(fp, cag_id):
-    df = hdf5_get_item(
-        fp,
-        "/genome_containment/{}".format(cag_id)
-    )
+    df = genomic_alignment_annotations_shard(fp, cag_id)
 
     if df is None:
         return
     
     else:
 
-        return df
+        # Filter down to the annotations for this CAG
+        df = df.query(
+            "CAG == {}".format(cag_id)
+        )
+
+        if df.shape[0] == 0:
+        
+            return
+        
+        else:
+
+            return df
+@cache.memoize()
+def genomic_alignment_annotations_shard(fp, cag_id):
+    return hdf5_get_item(fp, cag_id % 1000)
 ############################################
 # CACHE DATA SUMMARIZED FROM LARGER TABLES #
 ############################################
@@ -1441,22 +1471,10 @@ def annotation_heatmap_graph_callback(
     if annotation_type == "eggNOG_desc":
 
         # Read in the functional annotations for all CAGs in the index
-        cag_annot_df = {
+        cag_annot_dict = {
             cag_id: functional_gene_annotations(fp, cag_id)
             for cag_id in cags_selected
         }
-        cag_annot_df = {
-            k: v
-            for k, v in cag_annot_df.items()
-            if v is not None
-        }
-        if len(cag_annot_df) == 0:
-            cag_annot_df = None
-        else:
-            cag_annot_df = pd.concat([
-                df.assign(CAG = cag_id)
-                for cag_id, df in cag_annot_df.items()
-            ])
 
     elif annotation_type == "taxonomic":
 
