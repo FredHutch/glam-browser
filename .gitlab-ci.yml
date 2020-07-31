@@ -6,14 +6,14 @@ before_script:
 build_test:
   script:
     - mkdir -p share
-    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/underfeeding/glam/2020-06-14-underfeeding/2020-06-14-underfeeding-host_diet.host_diet.corncob.index.hdf5 share/
+    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/underfeeding/glam/2020-06-14-underfeeding-host_diet.host_diet.2020-07-23-underfeeding.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/oca/glam/2020-05-05-OCA/2020-05-05-OCA-day.day.corncob.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/crc/glam/2020-06-18-Yachida/2020-06-18-Yachida.results.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/crc/glam/2020-06-18-Yachida.2020-07-23-Fusobacterium.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/gvhd/glam/2020-05-08-GVHD/2020-07-09-GVHD-corncob.sampleGroup_log10_MAIT_per_ul_day60_log10_Treg_per_ul_day60.corncob.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/ici/glam/2020-06-04-ICI.2020-07-13-ICI-AMGMA.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/hosting/kublin/POPs/2020-07-01-POPs-geneshot.index.hdf5 share/
-    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-07-28-1-manifest.json share/manifest.json
+    - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-07-31-1-manifest.json share/manifest.json
     - docker build -t 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam:latest .
     - docker-compose up -d
     - sleep 25
