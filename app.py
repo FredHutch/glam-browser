@@ -191,12 +191,31 @@ def cag_associations(fp, parameter):
     # Make sure that this parameter is valid
     assert parameter in valid_parameters(fp), parameter
 
-    return hdf5_get_item(
+    df = hdf5_get_item(
         fp,
         "/cag_associations/{}".format(parameter)
-    ).set_index(
-        "CAG"
     )
+    
+    if df is None:
+
+        return
+
+    else:
+
+        # Set the index
+        df.set_index("CAG", inplace=True)
+
+        # Calculate the Wald
+        df = df.assign(
+            wald = df["estimate"] / df["std_error"]
+        )
+
+        # Calculate the absolute value of the Wald
+        df = df.assign(
+            abs_wald = df["wald"].abs()
+        )
+
+        return df
 
 @cache.memoize()
 def enrichments(fp, parameter, annotation):
@@ -222,49 +241,67 @@ def enrichments(fp, parameter, annotation):
         )
     return df
 
-@cache.memoize()
-def functional_gene_annotations(fp):
-    df = hdf5_get_item(
-        fp,
-        "/gene_annotations/functional"
-    )
+def functional_gene_annotations(fp, cag_id):
+    df = functional_gene_annotations_shard(fp, cag_id % 1000)
     if df is None:
+        return
+    # Filter down to the annotations for this CAG
+    df = df.query(
+        "CAG == {}".format(cag_id)
+    )
+    if df.shape[0] == 0:
         return
     # Explicitly mask the "Psort" annotations
-    return df.loc[
+    df = df.loc[
         df["label"].apply(lambda n: n.startswith("Psort") is False)
     ]
-
+    # Don't return a DataFrame with zero rows
+    if df.shape[0] == 0:
+        return None
+    else:
+        return df
 
 @cache.memoize()
-def taxonomic_gene_annotations(fp, rank="all", cag_id=None):
-    df = hdf5_get_item(
+def functional_gene_annotations_shard(fp, group_ix):
+    return hdf5_get_item(
         fp,
-        "/gene_annotations/taxonomic/{}".format(rank)
+        "/gene_annotations/functional/{}".format(group_ix)
     )
+
+
+def taxonomic_gene_annotations(fp, cag_id, rank="all"):
+    df = taxonomic_gene_annotations_shard(fp, cag_id % 1000)
 
     if df is None:
         return
 
+    # Filter down to the annotations for this CAG
+    df = df.query(
+        "CAG == {}".format(cag_id)
+    )
+
+    if df.shape[0] == 0:
+        return
+
+    # Format required  columns as integers
     df = df.apply(
         lambda c: c.fillna(0).apply(int) if c.name in ["count", "tax_id", "parent", "total", "CAG"] else c
     )
     
-    if cag_id is not None:
-        df = df.query(
-            "CAG == {}".format(cag_id)
-        )
-
-        if df.shape[0] == 0:
-            return
-
-        # Sort by number of hits
-        df = df.sort_values(
-            by="count", 
-            ascending=False
-        )
+    # Sort by number of hits
+    df = df.sort_values(
+        by="count", 
+        ascending=False
+    )
 
     return df
+
+@cache.memoize()
+def taxonomic_gene_annotations_shard(fp, group_ix, rank="all"):
+    return hdf5_get_item(
+        fp,
+        "/gene_annotations/taxonomic/{}/{}".format(rank, group_ix)
+    )
 
 @cache.memoize()
 def genome_manifest(fp):
@@ -272,35 +309,32 @@ def genome_manifest(fp):
         fp,
         "/genome_manifest"
     )
-@cache.memoize()
-def genomic_alignment_annotations(fp, cag_id=None):
-    df = hdf5_get_item(
-        fp,
-        "/genome_containment"
-    )
+def genomic_alignment_annotations(fp, cag_id):
+    df = genomic_alignment_annotations_shard(fp, cag_id % 1000)
 
     if df is None:
         return
-
-    df = df.reindex(
-        columns = ["genome", "CAG", "n_genes"]
-    )
     
-    if cag_id is not None:
+    else:
+
+        # Filter down to the annotations for this CAG
         df = df.query(
             "CAG == {}".format(cag_id)
         )
 
         if df.shape[0] == 0:
+        
             return
+        
+        else:
 
-        # Sort by number of hits
-        df = df.sort_values(
-            by="n_genes", 
-            ascending=False
-        )
-
-    return df
+            return df
+@cache.memoize()
+def genomic_alignment_annotations_shard(fp, group_ix):
+    return hdf5_get_item(
+        fp, 
+        "/genome_containment/{}".format(group_ix)
+    )
 ############################################
 # CACHE DATA SUMMARIZED FROM LARGER TABLES #
 ############################################
@@ -1341,7 +1375,7 @@ def abundance_heatmap_graph_callback(
     if taxa_rank != "none":
         # Otherwise, get the taxonomic IDs for the CAGs
         cag_taxa_dict = {
-            cag_id: taxonomic_gene_annotations(fp, cag_id=cag_id, rank=taxa_rank)
+            cag_id: taxonomic_gene_annotations(fp, cag_id, rank=taxa_rank)
             for cag_id in cags_selected
         }
     else:
@@ -1440,35 +1474,77 @@ def annotation_heatmap_graph_callback(
     if annotation_type == "eggNOG_desc":
 
         # Read in the functional annotations for all CAGs in the index
-        cag_annot_df = functional_gene_annotations(fp)
+        cag_annot_dict = {
+            cag_id: functional_gene_annotations(fp, cag_id)
+            for cag_id in cags_selected
+        }
 
     elif annotation_type == "taxonomic":
 
         # Read in the full set of taxonomic annotations
-        cag_annot_df = taxonomic_gene_annotations(fp)
+        cag_annot_dict = {
+            cag_id: taxonomic_gene_annotations(
+                fp,
+                cag_id
+            )
+            for cag_id in cags_selected
+        }
 
     elif annotation_type == "genomes":
 
         # Read in the full set of genome alignment data
-        cag_annot_df = genomic_alignment_annotations(fp)
-
+        cag_annot_dict = {
+            cag_id: genomic_alignment_annotations(
+                fp, 
+                cag_id
+            )
+            for cag_id in cags_selected
+        }
+        
         # Rename the columns so that it's compatible with downstream plotting
-        if cag_annot_df is not None:
-            cag_annot_df = cag_annot_df.rename(
+        cag_annot_dict = {
+            cag_id: df.rename(
                 columns = {
                     "genome": "name",
                     "n_genes": "count",
                 }
             )
+            for cag_id, df in cag_annot_dict.items()
+            if df is not None
+        }
+
+
 
     else:
         # Read in the taxonomic annotations at this rank
-        cag_annot_df = taxonomic_gene_annotations(fp, rank=annotation_type)
+        cag_annot_dict = {
+            cag_id: taxonomic_gene_annotations(
+                fp,
+                cag_id,
+                rank=rank
+            )
+            for cag_id in cags_selected
+        }
 
-    # Subset to just the CAGs in this list
-    cag_annot_df = cag_annot_df.loc[
-        cag_annot_df["CAG"].isin(cags_selected)
-    ]
+    # Remove all the missing values
+    cag_annot_dict = {
+        k: v
+        for k, v in cag_annot_dict.items()
+        if v is not None
+    }
+
+    # Check to see if the selected annotation information is available for these CAGs
+    if len(cag_annot_dict) > 0:
+
+        cag_annot_df = pd.concat([
+            df.assign(
+                CAG = cag_id
+            )
+            for cag_id, df in cag_annot_dict.items()
+        ])
+    
+    else:
+        cag_annot_df = None
 
     # If the CAGs are selected by parameter, then fetch the annotations by parameter
     if select_cags_by.startswith("parameter-"):
@@ -1554,6 +1630,45 @@ def annotation_heatmap_graph_callback(
         n_annots,
         annotation_names,
     )
+
+@app.callback(
+    Output('cag-annotation-heatmap-annotation-type', 'options'),
+    [
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def annotation_heatmap_type_options(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # Set the default options
+    options = [
+        {'label': 'Functional', 'value': 'eggNOG_desc'},
+        {'label': 'Taxonomic', 'value': 'taxonomic'},
+        {'label': 'Species', 'value': 'species'},
+        {'label': 'Genus', 'value': 'genus'},
+        {'label': 'Family', 'value': 'family'},
+    ]
+
+    # Return the default options if no dataset is selected
+    if fp is None:
+        return options
+
+    # Request genome alignment information for this dataset
+    df = genome_manifest(fp)
+
+    # Add the option to display genome information, if present
+    if df is not None:
+        options.append(
+            {'label': 'Genomes', 'value': 'genomes'},
+        )
+
+    return options
 ######################################
 # / CAG ANNOTATION HEATMAP CALLBACKS #
 ######################################
@@ -1939,7 +2054,7 @@ def update_taxonomy_graph(
         cag_id = int(cag_id)
 
         # Format the DataFrame as needed to make a go.Sunburst
-        cag_tax_df = taxonomic_gene_annotations(fp, cag_id=cag_id)
+        cag_tax_df = taxonomic_gene_annotations(fp, cag_id)
 
         plot_title = "CAG {}".format(cag_id)
 
@@ -1962,17 +2077,17 @@ def update_taxonomy_graph(
 
         # Include all of the taxa annotated for these CAGs
         for rank in ["family", "genus", "species"]:
-            rank_df = taxonomic_gene_annotations(
-                fp, rank=rank
-            )
-            # Filter to these CAGs
-            rank_df = rank_df.loc[rank_df["CAG"].isin(all_cags)]
 
-            # Add any CAGs with this annotation
-            selected_cags.update(set(rank_df.loc[
-                rank_df["name"].isin(annotation),
-                "CAG"
-            ].tolist()))
+            # Check each of the CAGs
+            for cag_id in list(all_cags):
+                # Read the assignments at this level
+                df = taxonomic_gene_annotations(
+                    fp, cag_id, rank=rank
+                )
+                
+                # If this CAG has the annotation of interest, select it
+                if df is not None and df["name"].isin(annotation).any():
+                    selected_cags.add(cag_id)
 
         selected_cags = list(selected_cags)
         
@@ -1980,11 +2095,13 @@ def update_taxonomy_graph(
             return empty_figure()
 
         # Format the DataFrame as needed to make a go.Sunburst
-        cag_tax_df = taxonomic_gene_annotations(fp)
-        cag_tax_df = cag_tax_df.loc[cag_tax_df["CAG"].isin(selected_cags)]
-        cag_tax_df = cag_tax_df.drop(
-            columns="CAG"
-        ).groupby(
+        cag_tax_df = pd.concat([
+            taxonomic_gene_annotations(
+                fp, cag_id
+            )
+            for cag_id in selected_cags
+        ])
+        cag_tax_df = cag_tax_df.groupby(
             ["name", "rank", "tax_id", "parent"]
         ).sum(
         ).reset_index(
@@ -1995,7 +2112,6 @@ def update_taxonomy_graph(
                 len(selected_cags),
                 " / ".join(annotation)
             )
-            axis_label = "Relative Abundance"
         else:
             plot_title = "CAG {} - with annotations for {}".format(
                 int(selected_cags[0]),
@@ -2076,13 +2192,17 @@ def plot_cag_annotation_options(
 
     # Include all of the taxa annotated for these CAGs
     for rank in ["family", "genus", "species"]:
-        for label in filter_by_cags(
-            taxonomic_gene_annotations(
-                fp, rank=rank
-            ),
-            corncob_df.index.values
-        )["name"].values:
-            all_annot[label] += 1
+
+        # Iterate over each CAG
+        for cag_id in corncob_df.index.values:
+            # Read in the taxonomic annotations for this CAG
+            df = taxonomic_gene_annotations(
+                fp, cag_id, rank=rank
+            )
+            # Add the labels
+            if df is not None:
+                for label in df["name"].values:
+                    all_annot[label] += 1
     
     if len(all_annot) == 0:
         return [{"label": "None", "value": "None"}]
@@ -2097,9 +2217,6 @@ def plot_cag_annotation_options(
         ).index.values
     ]
 
-def filter_by_cags(df, cag_id_list):
-    return df.loc[df["CAG"].isin(cag_id_list)]
-    
 
 @app.callback(
     Output("plot-cag-multiselector", 'max'),
@@ -2370,17 +2487,15 @@ def update_single_cag_graph(
 
         # Include all of the taxa annotated for these CAGs
         for rank in ["family", "genus", "species"]:
-            rank_df = taxonomic_gene_annotations(
-                fp, rank=rank
-            )
-            # Filter to these CAGs
-            rank_df = rank_df.loc[rank_df["CAG"].isin(all_cags)]
-
-            # Add any CAGs with this annotation
-            selected_cags.update(set(rank_df.loc[
-                rank_df["name"].isin(annotation),
-                "CAG"
-            ].tolist()))
+            # Iterate over each CAG
+            for cag_id in list(all_cags):
+                # Read in the assignments at this level
+                rank_df = taxonomic_gene_annotations(
+                    fp, cag_id, rank=rank
+                )
+                # Add this CAG if it has the annotation of interest
+                if rank_df is not None and rank_df["name"].isin(annotations).any():
+                    selected_cags.add(cag_id)
 
         selected_cags = list(selected_cags)
 
