@@ -581,22 +581,28 @@ def index_geneshot_results(input_fp, output_fp):
 
     # Store the summary annotation tables if the annotations are available
     if functional_annot_df is not None:
-        for cag_id, cag_df in functional_annot_df.groupby("CAG"):
-            key_name = "/gene_annotations/functional/{}".format(cag_id)
-            dat[key_name] = cag_df.drop(columns="CAG")
+        for group_ix, group_df in functional_annot_df.assign(
+            group = functional_annot_df["CAG"].apply(lambda v: v % 1000)
+        ).groupby("group"):
+            key_name = "/gene_annotations/functional/{}".format(group_ix)
+            dat[key_name] = group_df.drop(columns="group")
 
     if counts_df is not None:
-        for cag_id, cag_df in counts_df.groupby("CAG"):
-            key_name = "/gene_annotations/taxonomic/all/{}".format(cag_id)
-            dat[key_name] = cag_df.drop(columns="CAG")
+        for group_ix, group_df in counts_df.assign(
+            group = counts_df["CAG"].apply(lambda v: v % 1000)
+        ).groupby("group"):
+            key_name = "/gene_annotations/taxonomic/all/{}".format(group_ix)
+            dat[key_name] = group_df.drop(columns="group")
 
         for rank, rank_df in rank_summaries.items():
-            for cag_id, cag_df in rank_df.groupby("CAG"):
+            for group_ix, group_df in rank_df.assign(
+                group = rank_df["CAG"].apply(lambda v: v % 1000)
+            ).groupby("group"):
                 key_name = "/gene_annotations/taxonomic/{}/{}".format(
                     rank, 
-                    cag_id
+                    group_ix
                 )
-                dat[key_name] = cag_df.drop(columns="CAG")
+                dat[key_name] = group_df.drop(columns="group")
 
     # Write out all of the tables to HDF5
     with pd.HDFStore(output_fp, "w") as store:
