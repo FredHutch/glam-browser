@@ -18,7 +18,8 @@ nextflow.preview.dsl=2
 // If these are not set by the user, then they will be set to the values below
 // This is useful for the if/then control syntax below
 params.input = false
-params.output = false
+params.output_folder = false
+params.output_prefix = false
 params.help = false
 
 // Set the containers to user
