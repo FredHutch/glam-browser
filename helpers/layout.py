@@ -745,16 +745,21 @@ def plot_cag_card():
                 ),
                 dbc.Col(
                     [
-                        html.Label("Display CAG(s) By"),
-                        dcc.Dropdown(
-                            id="plot-cag-selection-type",
-                            options=[
-                                {"label": "CAG ID", "value": "cag_id"},
-                                {"label": "Association & Taxonomy", "value": "association"},
+                        html.Div(
+                            [
+                                html.Label("Display CAG(s) By"),
+                                dcc.Dropdown(
+                                    id="plot-cag-selection-type",
+                                    options=[
+                                        {"label": "CAG ID", "value": "cag_id"},
+                                        {"label": "Association & Taxonomy", "value": "association"},
+                                    ],
+                                    value="cag_id",
+                                ),
+                                html.Br(),
                             ],
-                            value="cag_id",
+                            style={"display": "none"}
                         ),
-                        html.Br(),
                         html.Div(
                             [
                                 html.Label("CAG ID", style={"margin-right": "15px"}),

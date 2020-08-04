@@ -6,40 +6,7 @@ shotgun (WGS) sequencing and analyzed with gene-level metagenomic analysis. The
 input file for the GLAM Browser is the output file from the `geneshot` analysis
 tool ([link](https://github.org/golob-minot/geneshot)).
 
-The GLAM Browser displays:
-
-  * Summary of specimens by the number of genes detected and reads aligned
-  * Description of CAG metrics including size, entropy, etc.
-  * Summary of user-defined association testing
-  * Taxonomic summary for selected CAGs
-  * Customizable abundance display for selected CAGs
-  * ... and more
-
-In order to view a set of `geneshot` results, you must first generate a GLAM index
-file using the `index.nf` utility in this repository. That `*.glam.hdf5` file may
-then be viewed in the GLAM Browser by placing it in a single folder and optionally
-providing a `manifest.json` file in that folder which adds a name and description
-for each dataset.
-
-## Generating the GLAM Index File
-
-To process a single `geneshot` output file to produce the GLAM index file, use the
-`index.nf` utility as follows (e.g., on `geneshot.results.hdf5`):
-
-```#!/bin/bash
-nextflow run FredHutch/glam-browser \
-    --input geneshot.results.hdf5 \
-    --output glam.index.hdf5
-```
-
-Run `nextflow run FredHutch/glam-browser --help` for a complete list of options.
-
-## Hosted at Fred Hutch Cancer Research Center
-
-Researchers at Fred Hutch have access to a hosted version of the GLAM Browser at
-[https://glam-mri.fredhutch.org/](https://glam-mri.fredhutch.org/).
-You must be connected to the Fred Hutch VPN to access this site.
-Please contact the maintainers of this repository with any questions.
+Details on how to use the GLAM Browser are found in [the wiki for this repository](https://github.com/FredHutch/glam-browser/wiki).
 
 ## Running the GLAM Browser
 

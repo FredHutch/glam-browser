@@ -273,7 +273,7 @@ def functional_gene_annotations_shard(fp, group_ix):
 
 
 def taxonomic_gene_annotations(fp, cag_id, rank="all"):
-    df = taxonomic_gene_annotations_shard(fp, cag_id % 1000)
+    df = taxonomic_gene_annotations_shard(fp, cag_id % 1000, rank=rank)
 
     if df is None:
         return
@@ -750,7 +750,7 @@ def cag_size_slider_callback(selected_dataset, page, key, dummy_value):
         str(int(n)): str(10**int(n))
         for n in np.arange(min_value, max_value, 1.)
     }
-    value=[np.log10(3), max_value]
+    value=[1., max_value]
 
     return [max_value, min_value, step_value, marks, value]
 ##############################
@@ -1272,8 +1272,8 @@ def abundance_heatmap_graph_select_cags_callback(selected_dataset, page, key, _)
             return options, "abundance"
 
 
-def get_cags_selected_by_criterion(fp, select_cags_by, n_cags, cag_size_range):
-    """Function to select the top N CAGs based on a particular criterion."""
+def get_cags_selected_by_criterion(fp, select_cags_by, cag_size_range):
+    """Function to select the top CAGs sorted on a particular criterion."""
     # Either select based on a parameter, or based on some CAG annotation metric
 
     if select_cags_by.startswith("parameter-"):
@@ -1306,8 +1306,6 @@ def get_cags_selected_by_criterion(fp, select_cags_by, n_cags, cag_size_range):
         "size_log10 >= {}".format(cag_size_range[0])
     ).query(
         "size_log10 <= {}".format(cag_size_range[1])
-    ).head(
-        n_cags
     ).index.values
 
 
@@ -1351,9 +1349,10 @@ def abundance_heatmap_graph_callback(
     cags_selected = get_cags_selected_by_criterion(
         fp,
         select_cags_by, 
-        n_cags,
         cag_size_range,
-    )
+    )[
+        :n_cags
+    ]
     
     # Get the abundance of the selected CAGs
     cag_abund_df = cag_abundances(fp).reindex(
@@ -1469,41 +1468,46 @@ def annotation_heatmap_graph_callback(
     cags_selected = get_cags_selected_by_criterion(
         fp,
         select_cags_by,
-        n_cags,
         cag_size_range,
     )
 
     # Get the full table of CAG annotations
     if annotation_type == "eggNOG_desc":
 
-        # Read in the functional annotations for all CAGs in the index
-        cag_annot_dict = {
-            cag_id: functional_gene_annotations(fp, cag_id)
-            for cag_id in cags_selected
-        }
+        # Read in the functional annotations for `n_cags` CAGs in the index
+        cag_annot_dict = {}
+
+        for cag_id in cags_selected:
+            df = functional_gene_annotations(fp, cag_id)
+            if df is not None:
+                cag_annot_dict[cag_id] = df
+                if len(cag_annot_dict) >= n_cags:
+                    break
 
     elif annotation_type == "taxonomic":
 
-        # Read in the full set of taxonomic annotations
-        cag_annot_dict = {
-            cag_id: taxonomic_gene_annotations(
-                fp,
-                cag_id
-            )
-            for cag_id in cags_selected
-        }
+        # Read in the taxonomic annotations for `n_cags` CAGs in the index
+        cag_annot_dict = {}
+
+        for cag_id in cags_selected:
+            df = taxonomic_gene_annotations(fp, cag_id)
+            if df is not None:
+                cag_annot_dict[cag_id] = df
+                if len(cag_annot_dict) >= n_cags:
+                    break
 
     elif annotation_type == "genomes":
 
-        # Read in the full set of genome alignment data
-        cag_annot_dict = {
-            cag_id: genomic_alignment_annotations(
-                fp, 
-                cag_id
-            )
-            for cag_id in cags_selected
-        }
-        
+        # Read in the genome alignment annotations for `n_cags` CAGs in the index
+        cag_annot_dict = {}
+
+        for cag_id in cags_selected:
+            df = genomic_alignment_annotations(fp, cag_id)
+            if df is not None:
+                cag_annot_dict[cag_id] = df
+                if len(cag_annot_dict) >= n_cags:
+                    break
+
         # Rename the columns so that it's compatible with downstream plotting
         cag_annot_dict = {
             cag_id: df.rename(
@@ -1519,22 +1523,15 @@ def annotation_heatmap_graph_callback(
 
 
     else:
-        # Read in the taxonomic annotations at this rank
-        cag_annot_dict = {
-            cag_id: taxonomic_gene_annotations(
-                fp,
-                cag_id,
-                rank=rank
-            )
-            for cag_id in cags_selected
-        }
+        # Read in the taxonomic annotations at this rank for `n_cags` CAGs in the index
+        cag_annot_dict = {}
 
-    # Remove all the missing values
-    cag_annot_dict = {
-        k: v
-        for k, v in cag_annot_dict.items()
-        if v is not None
-    }
+        for cag_id in cags_selected:
+            df = taxonomic_gene_annotations(fp, cag_id, rank=annotation_type)
+            if df is not None:
+                cag_annot_dict[cag_id] = df
+                if len(cag_annot_dict) >= n_cags:
+                    break
 
     # Check to see if the selected annotation information is available for these CAGs
     if len(cag_annot_dict) > 0:
@@ -2752,5 +2749,4 @@ if __name__ == '__main__':
     app.run_server(
         host='0.0.0.0',
         port=8050,
-        debug=True,
     )

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from collections import defaultdict
 import json
 import numpy as np
 import os
@@ -600,6 +601,11 @@ def print_anosim(
     # Remove any samples with NaN for this field
     samples_to_analyze = plot_manifest_df[metadata].dropna().index.values
 
+    # Make sure that there is more than one group to display
+    vc = plot_manifest_df[metadata].reindex(index=samples_to_analyze).value_counts()
+    if vc.max() == 1 or vc.shape[0] == 1:
+        return dcc.Markdown("")
+
     # Filter down the distance matrix and run permanova
     r = anosim(
         DistanceMatrix(
@@ -965,6 +971,13 @@ def draw_cag_abund_heatmap_with_estimate(
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
 
+    # Add a title for the estimated coefficient
+    fig.update_layout(
+        yaxis=dict(
+            title='Est. Coef.'
+        )
+    )
+
     return fig
 
 def draw_cag_abund_heatmap_with_metadata(
@@ -1125,7 +1138,8 @@ def draw_cag_abund_heatmap_with_metadata_and_estimate(
             domain=[0, 0.99 - metadata_height]
         ),
         yaxis2=dict(
-            domain=[0.86, 1.0]
+            domain=[0.86, 1.0],
+            title='Est. Coef.'
         ),
         xaxis2=dict(
             domain=[1.01 - metadata_height, 1]
@@ -1183,7 +1197,8 @@ def draw_cag_abund_heatmap_with_tax_and_estimates(
             domain=[0.805, 0.845]
         ),
         yaxis3=dict(
-            domain=[0.855, 1.0]
+            domain=[0.855, 1.0],
+            title='Est. Coef.',
         ),
     )
 
@@ -1257,6 +1272,7 @@ def draw_cag_abund_heatmap_with_metadata_tax_and_estimates(
             zeroline=True,
             zerolinewidth=1,
             zerolinecolor='Grey',
+            title='Est. Coef.',
         ),
         xaxis = dict(domain=[0, 0.99 - metadata_height]),
         xaxis2 = dict(domain=[1 - metadata_height, 1.]),
@@ -1282,7 +1298,7 @@ def draw_cag_abund_taxon_panel(
 
     # For each CAG, pick out the top hit
     summary_df = pd.DataFrame([
-        summarize_cag_taxa(cag_id, cag_tax_df)
+        summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank)
         for cag_id, cag_tax_df in cag_tax_dict.items()
     ])
 
@@ -1384,7 +1400,7 @@ def draw_cag_estimate_panel(
         )
 
 
-def summarize_cag_taxa(cag_id, cag_tax_df):
+def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
     """Helper function to summarize the top hit at a given rank."""
 
     # If there are no hits at this level, return None
@@ -1699,8 +1715,8 @@ def plot_taxonomic_annotations_with_enrichment(
     """Plot the number of genes assigned to taxa alongside the tree, with association metrics."""
 
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
-    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
-    
+    path_to_root_df, tax_df = format_path_to_root_df(plot_df.index.values, tax_df)
+
     # Make the dendrogram
     fig = draw_path_to_root_tree(
         path_to_root_df
@@ -1767,6 +1783,7 @@ def plot_taxonomic_annotations_with_enrichment(
             'zeroline': True,
             'zerolinewidth': 1,
             'zerolinecolor': 'Grey',
+            'title': 'Est. Coef.'
         }
     )
     # Edit yaxis for the heatmap and CAG association metrics
@@ -1809,6 +1826,7 @@ def plot_taxonomic_annotations_with_enrichment(
             'zeroline': True,
             'zerolinewidth': 1,
             'zerolinecolor': 'Grey',
+            'title': 'Est. Coef.'
         }
     )
 
@@ -1822,7 +1840,7 @@ def plot_taxonomic_annotations_with_cag_associations_only(
     """Plot the number of genes assigned to taxa alongside the tree, with CAG association metrics only."""
 
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
-    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
+    path_to_root_df, tax_df = format_path_to_root_df(plot_df.index.values, tax_df)
 
     # Make the dendrogram
     fig = draw_path_to_root_tree(
@@ -1879,6 +1897,7 @@ def plot_taxonomic_annotations_with_cag_associations_only(
             'spikecolor': "#999999",
             'spikemode': "across",
             'spikesnap': 'cursor',
+            'title': 'Est. Coef.'
         }
     )
     # Edit xaxis shared by heatmap, enrichment values and dendrogram
@@ -1919,7 +1938,7 @@ def plot_taxonomic_annotations_without_enrichment(
 ):
     """Plot the number of genes assigned to taxa alongside the tree."""
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
-    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
+    path_to_root_df, tax_df = format_path_to_root_df(plot_df.index.values, tax_df)
 
     # Make the dendrogram
     fig = draw_path_to_root_tree(
@@ -2050,19 +2069,49 @@ def format_path_to_root_df(
         "phylum",
     ]
 ):
-    return pd.DataFrame({
+    # First, find the ancestor at each rank
+    ancestor_dict = {
         tax_id: {
             rank: anc_at_rank(tax_id, tax_df, rank)
             for rank in rank_list
         }
         for tax_id in tax_id_list
-    }).T.rename(
+    }
+
+    # Now check to see whether any names are duplicated
+    name_count = defaultdict(set)
+    for tax_id, taxon_ancestors in ancestor_dict.items():
+        for anc_tax_id in taxon_ancestors.values():
+            if anc_tax_id is not None:
+                anc_name = tax_df["name"].get(anc_tax_id)
+                if anc_name is not None:
+                    name_count[anc_name].add(anc_tax_id)
+
+    # Any duplicated names will have the tax ID appended
+    for anc_name, tax_id_set in name_count.items():
+        if len(tax_id_set) > 1:
+            for tax_id in list(tax_id_set):
+                tax_df.loc[
+                    tax_id,
+                    "name"
+                ] = "{} ({})".format(
+                    tax_df.loc[
+                        tax_id,
+                        "name"
+                    ],
+                    tax_id
+                )
+
+    # Format as a DataFrame and fill in the name
+    return pd.DataFrame(ancestor_dict).applymap(
+        lambda v: None if pd.isnull(v) else tax_df["name"].get(int(v))
+    ).T.rename(
         index=tax_df["name"].get
     ).reindex(
         columns=rank_list
     ).sort_values(
         by=rank_list[::-1]
-    )
+    ), tax_df
 
 
 def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
@@ -2118,12 +2167,14 @@ def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
             zeroline=True,
             zerolinewidth=1,
             zerolinecolor='Grey',
+            title='Est. Coef.'
         ),
         xaxis2=dict(
             domain=[0.86, 1.0],
             zeroline=True,
             zerolinewidth=1,
             zerolinecolor='Grey',
+            title='Est. Coef.'
         ),
     )
 
@@ -2178,7 +2229,8 @@ def draw_cag_annot_heatmap_with_cag_estimates(
             spikedash= "dot",
             spikecolor= "#999999",
             spikemode= "across",
-            spikesnap="cursor"
+            spikesnap="cursor",
+            title='Est. Coef.',
         ),
     )
 
@@ -2382,18 +2434,18 @@ def add_tax_node(tax_id, terminal_nodes, internal_nodes, tax_df):
 
 
 def anc_at_rank(tax_id, tax_df, rank):
-    """Return the name of the parent of a taxon at a given rank."""
+    """Return the ID of the parent of a taxon at a given rank."""
 
     # Check to see if we are already at this rank
     if tax_df.loc[tax_id, "rank"] == rank:
-        return tax_df.loc[tax_id, "name"]
+        return tax_id
 
     # Otherwise, walk up the parents until you find it
     else:
         for anc_tax_id in path_to_root(tax_id, tax_df):
             # Check to see if we have reached the rank of interest
             if tax_df.loc[anc_tax_id, "rank"] == rank:
-                return tax_df.loc[anc_tax_id, "name"]
+                return anc_tax_id
 
     # If none was found, return None
     return
@@ -2497,39 +2549,42 @@ def draw_cag_annotation_panel(
     yaxis = "y",
 ):
 
-    # Scale the assignments to the maximum for each CAG
-    prop_df = 100 * (plot_df.T / plot_df.max(axis=1).clip(lower=1))
-
     # Format the mouseover text
-    text_df = plot_df.apply(
-        lambda c: [
+    text = [
+        [
             "CAG {}<br>{}<br>Genes assigned: {:,}".format(
                 cag_id,
-                c.name,
-                int(ncounts),
+                annot_label,
+                int(plot_df.loc[cag_id, annot_label]),
             )
-            for cag_id, ncounts in c.items()
+            for cag_id in plot_df.index.values
         ]
-    ).T.reindex(
-        index=prop_df.index.values,
-        columns=prop_df.columns.values,
-    ).fillna(
-        ""
-    )
+        for annot_label in plot_df.columns.values
+    ]
 
+    # Format the Z values
+    z = [
+        [
+            int(plot_df.loc[cag_id, annot_label])
+            for cag_id in plot_df.index.values
+        ]
+        for annot_label in plot_df.columns.values
+    ]
+
+    # Render the heatmap
     return go.Heatmap(
-        text=text_df.values,
-        z=prop_df.values,
-        x=["CAG {}".format(i) for i in prop_df.columns.values],
+        text=text,
+        z=z,
+        x=["CAG {}".format(i) for i in plot_df.index.values],
         y=[
             n[:30] + "..." if len(n) > 30 else n
-            for n in prop_df.index.values
+            for n in plot_df.columns.values
         ],
-        colorbar={"title": "Percent of gene assignments"},
+        colorbar={"title": "Number of gene assignments"},
         colorscale='blues',
         hovertemplate = "%{text}<extra></extra>",
         zmin=0.,
-        zmax=100.,
+        zmax=plot_df.max().max(),
         xaxis=xaxis,
         yaxis=yaxis,
     )
