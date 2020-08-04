@@ -2724,7 +2724,7 @@ def manifest_bulk_select_toggle_modal(open_n, apply_n):
 server = app.server
 
 # ADD THE GTM CONTAINER, IF PROVIDED
-if gtm_container is not None:
+if gtm_container is not None and isinstance(gtm_container, str) and gtm_container.startswith("GTM-"):
     app.index_string = '''<!DOCTYPE html>
 <html>
     <head>
