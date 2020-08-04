@@ -750,7 +750,7 @@ def cag_size_slider_callback(selected_dataset, page, key, dummy_value):
         str(int(n)): str(10**int(n))
         for n in np.arange(min_value, max_value, 1.)
     }
-    value=[np.log10(3), max_value]
+    value=[1., max_value]
 
     return [max_value, min_value, step_value, marks, value]
 ##############################
