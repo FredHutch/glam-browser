@@ -2674,15 +2674,9 @@ def draw_double_volcano_graph(
     fdr_on_off, 
 ):
 
-    # Set the metric to plot
-    if fdr_on_off == "off":
-        plot_y = "neg_log10_pvalue"
-        hovertemplate = "CAG %{id}<br>" + comparison_parameter + " p-value (-log10): %{x}<br>" + parameter + " p-value (-log10): %{y}<extra></extra>"
-        axis_suffix = "p-value (-log10)"
-    else:
-        plot_y = "neg_log10_qvalue"
-        hovertemplate = "CAG %{id}<br>" + comparison_parameter + " q-value (-log10): %{x}<br>" + parameter + " q-value (-log10): %{y}<extra></extra>"
-        axis_suffix = "q-value (-log10)"
+    # Plot the Wald statistic
+    plot_y = "wald"
+    axis_suffix = "Wald statistic"
 
     # Subset to these two parameters and pivot to be wide
     plot_df = pd.concat([
@@ -2697,19 +2691,38 @@ def draw_double_volcano_graph(
         columns="parameter",
         values=plot_y
     )
-    
-    # Set the minimum value after filtering
-    plot_df.fillna(
-        plot_df.apply(lambda c: c.dropna().min()).min(),
-        inplace=True
-    )
 
+    # Set the hover text
+    hovertemplate = "%{text}<extra></extra>"
+    text_dict = {
+        cag_id: "<br>".join([
+            "CAG {}".format(cag_id),
+            "<br>".join([
+                "<br>".join([
+                    "Parameter: {}".format(r["parameter"]),
+                    "Estimated Coefficient: {} +/- {}".format(
+                        r["estimate"],
+                        r["std_error"]
+                    ),
+                    "p-value: {:.2E}".format(r["p_value"]),
+                    "Wald: {}".format(r["wald"])
+                ])
+                for _, r in cag_corncob.iterrows()
+            ])
+        ])
+        for cag_id, cag_corncob in corncob_df.groupby("CAG")
+    }
+    text = [
+        text_dict.get(cag_id, "")
+        for cag_id in plot_df.index.values
+    ]
+    
     fig = go.Figure(
         data=go.Scattergl(
             x=plot_df[comparison_parameter],
             y=plot_df[parameter],
             ids=plot_df.index.values,
-            text=plot_df.index.values,
+            text=text,
             hovertemplate=hovertemplate,
             mode="markers",
             opacity=0.5,
