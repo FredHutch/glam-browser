@@ -1287,7 +1287,7 @@ def draw_cag_abund_taxon_panel(
 
     # For each CAG, pick out the top hit
     summary_df = pd.DataFrame([
-        summarize_cag_taxa(cag_id, cag_tax_df)
+        summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank)
         for cag_id, cag_tax_df in cag_tax_dict.items()
     ])
 
@@ -1389,7 +1389,7 @@ def draw_cag_estimate_panel(
         )
 
 
-def summarize_cag_taxa(cag_id, cag_tax_df):
+def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
     """Helper function to summarize the top hit at a given rank."""
 
     # If there are no hits at this level, return None
@@ -1399,6 +1399,14 @@ def summarize_cag_taxa(cag_id, cag_tax_df):
             "name": 'none',
             "label": "No genes assigned at this level"
         }
+
+    # Filter down to the rank of interest
+    cag_tax_df = cag_tax_df.query(
+        "rank == '{}'".format(taxa_rank)
+    ).sort_values(
+        by="count",
+        ascending=False
+    )
 
     # Return the top hit
     return {
