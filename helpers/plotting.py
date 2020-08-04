@@ -2533,39 +2533,42 @@ def draw_cag_annotation_panel(
     yaxis = "y",
 ):
 
-    # Scale the assignments to the maximum for each CAG
-    prop_df = 100 * (plot_df.T / plot_df.max(axis=1).clip(lower=1))
-
     # Format the mouseover text
-    text_df = plot_df.apply(
-        lambda c: [
+    text = [
+        [
             "CAG {}<br>{}<br>Genes assigned: {:,}".format(
                 cag_id,
-                c.name,
-                int(ncounts),
+                annot_label,
+                int(plot_df.loc[cag_id, annot_label]),
             )
-            for cag_id, ncounts in c.items()
+            for cag_id in plot_df.index.values
         ]
-    ).T.reindex(
-        index=prop_df.index.values,
-        columns=prop_df.columns.values,
-    ).fillna(
-        ""
-    )
+        for annot_label in plot_df.columns.values
+    ]
 
+    # Format the Z values
+    z = [
+        [
+            int(plot_df.loc[cag_id, annot_label])
+            for cag_id in plot_df.index.values
+        ]
+        for annot_label in plot_df.columns.values
+    ]
+
+    # Render the heatmap
     return go.Heatmap(
-        text=text_df.values,
-        z=prop_df.values,
-        x=["CAG {}".format(i) for i in prop_df.columns.values],
+        text=text,
+        z=z,
+        x=["CAG {}".format(i) for i in plot_df.index.values],
         y=[
             n[:30] + "..." if len(n) > 30 else n
-            for n in prop_df.index.values
+            for n in plot_df.columns.values
         ],
-        colorbar={"title": "Percent of gene assignments"},
+        colorbar={"title": "Number of gene assignments"},
         colorscale='blues',
         hovertemplate = "%{text}<extra></extra>",
         zmin=0.,
-        zmax=100.,
+        zmax=plot_df.max().max(),
         xaxis=xaxis,
         yaxis=yaxis,
     )
