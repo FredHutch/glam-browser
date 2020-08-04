@@ -15,4 +15,6 @@ RUN chown -R dash:dash /home/dash
 WORKDIR /home/dash
 EXPOSE 8050
 ENV DATA_FOLDER=/share
+ARG GTM_CONTAINER
+ENV GTM_CONTAINER=$GTM_CONTAINER
 CMD gunicorn --timeout 120 --workers 4 --worker-class gevent --bind 0.0.0.0:8050 app:server

@@ -14,7 +14,7 @@ build_test:
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/ici/glam/2020-06-04-ICI.2020-07-13-ICI-AMGMA.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/hosting/kublin/POPs/2020-07-01-POPs-geneshot.index.hdf5 share/
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-08-03-1-manifest.json share/manifest.json
-    - docker build -t 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam:latest .
+    - docker build --build-arg GTM_CONTAINER=$GTM_CONTAINER -t 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam:latest .
     - docker-compose up -d
     - sleep 25
     - curl -I http://localhost:8050 | grep -q "HTTP/1.1 200 OK"
