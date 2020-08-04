@@ -1825,8 +1825,24 @@ def volcano_graph_callback(
     if fp is None or parameter == "none":
         return empty_figure()
     else:
+
+        # Get the associations for this parameter
+        plot_df = cag_associations(fp, parameter)
+
+        # If the comparison is to be made against a second parameter, add it
+        if comparison_parameter != "coef":
+            plot_df = pd.concat([
+                plot_df.assign(parameter = parameter),
+                cag_associations(
+                    fp, 
+                    comparison_parameter
+                ).assign(
+                    parameter=comparison_parameter
+                )
+            ])
+
         return draw_volcano_graph(
-            cag_associations(fp, parameter),
+            plot_df,
             cag_annotations(fp),
             parameter, 
             comparison_parameter,
