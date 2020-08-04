@@ -971,6 +971,13 @@ def draw_cag_abund_heatmap_with_estimate(
     # Rotate the angle of the x-tick labels
     fig.update_xaxes(tickangle=90)
 
+    # Add a title for the estimated coefficient
+    fig.update_layout(
+        yaxis=dict(
+            title='Est. Coef.'
+        )
+    )
+
     return fig
 
 def draw_cag_abund_heatmap_with_metadata(
@@ -1131,7 +1138,8 @@ def draw_cag_abund_heatmap_with_metadata_and_estimate(
             domain=[0, 0.99 - metadata_height]
         ),
         yaxis2=dict(
-            domain=[0.86, 1.0]
+            domain=[0.86, 1.0],
+            title='Est. Coef.'
         ),
         xaxis2=dict(
             domain=[1.01 - metadata_height, 1]
@@ -1189,7 +1197,8 @@ def draw_cag_abund_heatmap_with_tax_and_estimates(
             domain=[0.805, 0.845]
         ),
         yaxis3=dict(
-            domain=[0.855, 1.0]
+            domain=[0.855, 1.0],
+            title='Est. Coef.',
         ),
     )
 
@@ -1263,6 +1272,7 @@ def draw_cag_abund_heatmap_with_metadata_tax_and_estimates(
             zeroline=True,
             zerolinewidth=1,
             zerolinecolor='Grey',
+            title='Est. Coef.',
         ),
         xaxis = dict(domain=[0, 0.99 - metadata_height]),
         xaxis2 = dict(domain=[1 - metadata_height, 1.]),
@@ -1773,6 +1783,7 @@ def plot_taxonomic_annotations_with_enrichment(
             'zeroline': True,
             'zerolinewidth': 1,
             'zerolinecolor': 'Grey',
+            'title': 'Est. Coef.'
         }
     )
     # Edit yaxis for the heatmap and CAG association metrics
@@ -1815,6 +1826,7 @@ def plot_taxonomic_annotations_with_enrichment(
             'zeroline': True,
             'zerolinewidth': 1,
             'zerolinecolor': 'Grey',
+            'title': 'Est. Coef.'
         }
     )
 
@@ -1885,6 +1897,7 @@ def plot_taxonomic_annotations_with_cag_associations_only(
             'spikecolor': "#999999",
             'spikemode': "across",
             'spikesnap': 'cursor',
+            'title': 'Est. Coef.'
         }
     )
     # Edit xaxis shared by heatmap, enrichment values and dendrogram
@@ -2154,12 +2167,14 @@ def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
             zeroline=True,
             zerolinewidth=1,
             zerolinecolor='Grey',
+            title='Est. Coef.'
         ),
         xaxis2=dict(
             domain=[0.86, 1.0],
             zeroline=True,
             zerolinewidth=1,
             zerolinecolor='Grey',
+            title='Est. Coef.'
         ),
     )
 
@@ -2214,7 +2229,8 @@ def draw_cag_annot_heatmap_with_cag_estimates(
             spikedash= "dot",
             spikecolor= "#999999",
             spikemode= "across",
-            spikesnap="cursor"
+            spikesnap="cursor",
+            title='Est. Coef.',
         ),
     )
 
