@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from collections import defaultdict
 import json
 import numpy as np
 import os
@@ -1704,8 +1705,8 @@ def plot_taxonomic_annotations_with_enrichment(
     """Plot the number of genes assigned to taxa alongside the tree, with association metrics."""
 
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
-    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
-    
+    path_to_root_df, tax_df = format_path_to_root_df(plot_df.index.values, tax_df)
+
     # Make the dendrogram
     fig = draw_path_to_root_tree(
         path_to_root_df
@@ -1827,7 +1828,7 @@ def plot_taxonomic_annotations_with_cag_associations_only(
     """Plot the number of genes assigned to taxa alongside the tree, with CAG association metrics only."""
 
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
-    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
+    path_to_root_df, tax_df = format_path_to_root_df(plot_df.index.values, tax_df)
 
     # Make the dendrogram
     fig = draw_path_to_root_tree(
@@ -1924,7 +1925,7 @@ def plot_taxonomic_annotations_without_enrichment(
 ):
     """Plot the number of genes assigned to taxa alongside the tree."""
     # Make a DataFrame with the ancestors of each terminal node, which can be used for clustering
-    path_to_root_df = format_path_to_root_df(plot_df.index.values, tax_df)
+    path_to_root_df, tax_df = format_path_to_root_df(plot_df.index.values, tax_df)
 
     # Make the dendrogram
     fig = draw_path_to_root_tree(
@@ -2055,19 +2056,49 @@ def format_path_to_root_df(
         "phylum",
     ]
 ):
-    return pd.DataFrame({
+    # First, find the ancestor at each rank
+    ancestor_dict = {
         tax_id: {
             rank: anc_at_rank(tax_id, tax_df, rank)
             for rank in rank_list
         }
         for tax_id in tax_id_list
-    }).T.rename(
+    }
+
+    # Now check to see whether any names are duplicated
+    name_count = defaultdict(set)
+    for tax_id, taxon_ancestors in ancestor_dict.items():
+        for anc_tax_id in taxon_ancestors.values():
+            if anc_tax_id is not None:
+                anc_name = tax_df["name"].get(anc_tax_id)
+                if anc_name is not None:
+                    name_count[anc_name].add(anc_tax_id)
+
+    # Any duplicated names will have the tax ID appended
+    for anc_name, tax_id_set in name_count.items():
+        if len(tax_id_set) > 1:
+            for tax_id in list(tax_id_set):
+                tax_df.loc[
+                    tax_id,
+                    "name"
+                ] = "{} ({})".format(
+                    tax_df.loc[
+                        tax_id,
+                        "name"
+                    ],
+                    tax_id
+                )
+
+    # Format as a DataFrame and fill in the name
+    return pd.DataFrame(ancestor_dict).applymap(
+        lambda v: None if pd.isnull(v) else tax_df["name"].get(int(v))
+    ).T.rename(
         index=tax_df["name"].get
     ).reindex(
         columns=rank_list
     ).sort_values(
         by=rank_list[::-1]
-    )
+    ), tax_df
 
 
 def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
@@ -2387,18 +2418,18 @@ def add_tax_node(tax_id, terminal_nodes, internal_nodes, tax_df):
 
 
 def anc_at_rank(tax_id, tax_df, rank):
-    """Return the name of the parent of a taxon at a given rank."""
+    """Return the ID of the parent of a taxon at a given rank."""
 
     # Check to see if we are already at this rank
     if tax_df.loc[tax_id, "rank"] == rank:
-        return tax_df.loc[tax_id, "name"]
+        return tax_id
 
     # Otherwise, walk up the parents until you find it
     else:
         for anc_tax_id in path_to_root(tax_id, tax_df):
             # Check to see if we have reached the rank of interest
             if tax_df.loc[anc_tax_id, "rank"] == rank:
-                return tax_df.loc[anc_tax_id, "name"]
+                return anc_tax_id
 
     # If none was found, return None
     return
