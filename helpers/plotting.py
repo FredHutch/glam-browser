@@ -600,6 +600,11 @@ def print_anosim(
     # Remove any samples with NaN for this field
     samples_to_analyze = plot_manifest_df[metadata].dropna().index.values
 
+    # Make sure that there is more than one group to display
+    vc = plot_manifest_df[metadata].reindex(index=samples_to_analyze).value_counts()
+    if vc.max() == 1 or vc.shape[0] == 1:
+        return dcc.Markdown("")
+
     # Filter down the distance matrix and run permanova
     r = anosim(
         DistanceMatrix(
