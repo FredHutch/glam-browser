@@ -1400,14 +1400,6 @@ def summarize_cag_taxa(cag_id, cag_tax_df, taxa_rank):
             "label": "No genes assigned at this level"
         }
 
-    # Filter down to the rank of interest
-    cag_tax_df = cag_tax_df.query(
-        "rank == '{}'".format(taxa_rank)
-    ).sort_values(
-        by="count",
-        ascending=False
-    )
-
     # Return the top hit
     return {
         "CAG": cag_id,

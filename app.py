@@ -273,7 +273,7 @@ def functional_gene_annotations_shard(fp, group_ix):
 
 
 def taxonomic_gene_annotations(fp, cag_id, rank="all"):
-    df = taxonomic_gene_annotations_shard(fp, cag_id % 1000)
+    df = taxonomic_gene_annotations_shard(fp, cag_id % 1000, rank=rank)
 
     if df is None:
         return
