@@ -129,6 +129,8 @@ def manifest(fp):
     return hdf5_get_item(
         fp, 
         "/manifest"
+    ).apply(
+        lambda c: c.apply(str) if c.name == "specimen" else c
     ).set_index(
         "specimen"
     )
@@ -144,12 +146,24 @@ def experiment_metrics(fp):
 
 @cache.memoize()
 def specimen_metrics(fp):
-    return hdf5_get_item(
+    df = hdf5_get_item(
         fp, 
         "/specimen_metrics"
-    ).set_index(
-        "specimen"
     )
+    # Fix the mismatch in index variable type, if any
+    df = pd.DataFrame({
+        col_name: {
+            str(k): v
+            for k, v in zip(
+                df["specimen"].values,
+                df[col_name].values
+            )
+            if pd.isnull(v) is False
+        }
+        for col_name in df.columns.values
+        if col_name != "specimen"
+    })
+    return df
 
 @cache.memoize()
 def analysis_features(fp):

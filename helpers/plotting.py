@@ -28,6 +28,8 @@ def parse_manifest_json(manifest_json, manifest_df):
         # Otherwise, return the table stored in the browser
         return pd.DataFrame(
             json.loads(manifest_json)
+        ).apply(
+            lambda c: c.apply(str) if c.name == "specimen" else c
         ).set_index(
             "specimen"
         )
@@ -134,7 +136,7 @@ def update_richness_graph(
 
     # Subset the richness table based on the filtered manifest
     plot_richness_df = richness_df.reindex(
-        index=list(set([n for n in plot_manifest_df.index.values]))
+        index=list(set([str(n) for n in plot_manifest_df.index.values]))
     )
     
     # Calculate the percent of reads aligned
@@ -715,10 +717,12 @@ def draw_cag_abundance_heatmap(
         ).reindex(
             columns=metadata_selected[::-1],
         )
-    
+
     # Subset the CAG abundances to just those selected samples
     plot_df = cag_abund_df.reindex(
-        index=plot_manifest_df.index
+        index=[
+            str(specimen) for specimen in plot_manifest_df.index
+        ]
     )
 
     if abundance_metric in ["log10", "zscore"]:
