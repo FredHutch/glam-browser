@@ -19,3 +19,4 @@ Flask-Failsafe==0.2
 filelock
 gunicorn
 gevent
+zarr
