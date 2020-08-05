@@ -46,6 +46,9 @@ import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 from seaborn import color_palette
 from time import time
+from filelock import Timeout, FileLock
+import zarr
+
 
 ##########
 # README #
@@ -164,14 +167,93 @@ def cag_annotations(fp):
         "CAG"
     )
 
+
 @cache.memoize()
-def cag_abundances(fp):
-    return hdf5_get_item(
+def cag_abundances(fp, cag_id=None, specimen=None, retry=True, timeout=60):
+    assert cag_id is not None or specimen is not None, "Must specify cag_id or specimen"
+    assert cag_id is None or specimen is None, "Cannot specify cag_id with specimen"
+
+    # Read in the list of specimens and index values
+    specimen_list = cache.get("{}/specimen_index".format(fp))
+    cag_id_list = cache.get("{}/cag_id_index".format(fp))
+
+    if specimen_list is None or cag_id_list is None:
+        if retry:
+            cache_cag_abundances(fp)
+            return cag_abundances(fp, cag_id=cag_id, specimen=specimen, retry=False)
+        else:
+            return
+
+    # Make sure that the CAG ID or specimen is in the index
+    if cag_id is not None:
+        cag_id_ix = cag_id_list.index(int(cag_id))
+        assert cag_id_ix is not None, "Key {} not found in index".format(cag_id)
+    elif specimen is not None:
+        specimen_ix = specimen_list.index(str(specimen))
+        assert specimen_ix is not None, "Key {} not found in index".format(specimen)
+
+    # Set up a file lock to prevent multiple concurrent access attempts
+    lock = FileLock("{}.cag_abundances.zarr.lock".format(fp), timeout=timeout)
+
+    # Read in the abundances from the zarr index
+    with lock:
+        z = zarr.open(
+            "{}.cag_abundances.zarr".format(fp),
+            mode="r"
+        )
+        if cag_id is not None:
+            values = z[cag_id_ix, :]
+            return pd.Series(
+                values,
+                index=specimen_list
+            )
+
+        elif specimen is not None:
+            values = z[:, specimen_ix]
+            return pd.Series(
+                values,
+                index=cag_id_list
+            )
+
+def cache_cag_abundances(fp, timeout=60):
+
+    # If the zarr cache has already been made, don't write it again
+    if cag_abundances(fp, cag_id=0, retry=False) is not None:
+        return
+
+    # Read in the complete set of CAG abundances
+    df = hdf5_get_item(
         fp, 
         "/cag_abundances"
     ).set_index(
         "CAG"
     )
+
+    # Set up a file lock to prevent multiple concurrent access attempts
+    lock = FileLock("{}.cag_abundances.zarr.lock".format(fp), timeout=timeout)
+
+    # Write out in zarr format
+    with lock:
+        zarr.save(
+            "{}.cag_abundances.zarr".format(fp),
+            df
+        )
+
+    # Save the list of specimens and CAG IDs to redis
+    cache.set(
+        "{}/specimen_index".format(fp),
+        [str(v) for v in df.columns.values]
+    )
+    cache.set(
+        "{}/cag_id_index".format(fp),
+        [int(v) for v in df.index.values]
+    )
+
+
+# Populate the cache for all files in this folder
+for fp in page_data.all_filepaths:
+    cache_cag_abundances(fp)
+
 
 @cache.memoize()
 def distances(fp, metric):
@@ -946,16 +1028,16 @@ def single_sample_graph_callback(
 
         if secondary_sample == "cag_size":
             return plot_sample_vs_cag_size(
-                cag_abundances(fp)[primary_sample],
+                cag_abundances(fp, specimen=primary_sample),
                 primary_sample,
                 cag_annotations(fp),
                 display_metric,
             )
         else:
             return plot_samples_pairwise(
-                cag_abundances(fp)[primary_sample],
+                cag_abundances(fp, specimen=primary_sample),
                 primary_sample,
-                cag_abundances(fp)[secondary_sample],
+                cag_abundances(fp, specimen=secondary_sample),
                 secondary_sample,
                 display_metric,
                 cag_annotations(fp),
@@ -1355,9 +1437,10 @@ def abundance_heatmap_graph_callback(
     ]
     
     # Get the abundance of the selected CAGs
-    cag_abund_df = cag_abundances(fp).reindex(
-        index=cags_selected
-    ).T
+    cag_abund_df = pd.DataFrame({
+        cag_id: cag_abundances(fp, cag_id=cag_id)
+        for cag_id in cags_selected
+    })
 
     # If we are selecting CAGs by their association with a given parameter,
     # we will then plot the estimated coefficient with that parameter
@@ -2480,7 +2563,7 @@ def update_single_cag_graph(
     # If a single CAG has been selected, add that to the plot
     if selection_type == "cag_id":
         plot_df = plot_manifest_df.assign(
-            CAG_ABUND = cag_abundances(fp).loc[int(cag_id)]
+            CAG_ABUND = cag_abundances(fp, cag_id=cag_id)
         )
         plot_title = "CAG {}".format(cag_id)
 
@@ -2520,9 +2603,10 @@ def update_single_cag_graph(
 
         # Now that we have a list of CAGs, add the abundance and format the title
         plot_df = plot_manifest_df.assign(
-            CAG_ABUND = cag_abundances(fp).reindex(
-                index=selected_cags
-            ).sum()
+            CAG_ABUND = pd.DataFrame({
+                cag_id: cag_abundances(fp, cag_id=cag_id)
+                for cag_id in cags_selected
+            }).sum(axis=1)
         )
 
         if len(selected_cags) > 1:

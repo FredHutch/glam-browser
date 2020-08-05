@@ -17,6 +17,9 @@ class Manifest:
         # Save the folder path
         self.folder_path = folder_path
 
+        # Keep a list of all files in this folder
+        self.all_filepaths = []
+
         # Read in the page data
         self.page_data = self.parse_directory(folder_path)
 
@@ -46,7 +49,7 @@ class Manifest:
 
     def page_description(self, page=None, key=None):
         return self.get_page_info("page_description", page=page, key=key)
-    
+
     def dataset_list(self, page=None, key=None):
         dataset_list = self.get_page_info("contents", page=page, key=key)
         if dataset_list is None:
@@ -248,8 +251,12 @@ class Manifest:
 
             fp = os.path.join(self.folder_path, file_data["fp"])
 
+            # Make sure that the file exists
             assert os.path.exists(fp), \
                 "File does not exist: {}".format(fp)
+
+            # Add the filepath to the list of all filepaths
+            self.all_filepaths.append(fp)
 
 
 def hdf5_get_item(
