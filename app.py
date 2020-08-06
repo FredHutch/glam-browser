@@ -314,7 +314,11 @@ def cag_associations(fp, parameter):
             abs_wald = df["wald"].abs()
         )
 
-        return df
+        # Sort by abs_wald (descending)
+        return df.sort_values(
+            by="abs_wald",
+            ascending=False,
+        )
 
 @cache.memoize()
 def enrichments(fp, parameter, annotation):
@@ -2137,7 +2141,7 @@ def update_volcano_pvalue_slider_marks(selected_dataset, page, key, parameter):
     [
         Input("plot-cag-selection-type", "value"),
         Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
-        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-ncags", "value"),
         Input("plot-cag-annotation-multiselector", "value"),
         Input("selected-dataset", "children"),
         Input("url", 'pathname'),
@@ -2148,8 +2152,8 @@ def update_volcano_pvalue_slider_marks(selected_dataset, page, key, parameter):
 def update_taxonomy_graph(
     selection_type,
     parameter,
-    max_neglog_pvalue,
-    annotation,
+    annotation_ncags,
+    annotations,
     selected_dataset, 
     page,
     key,
@@ -2172,39 +2176,18 @@ def update_taxonomy_graph(
         plot_title = "CAG {}".format(cag_id)
 
     else:
-        # Read the association metrics for each CAG against this parameter
-        corncob_df = cag_associations(fp, parameter)
-        if corncob_df is None:
-            return empty_figure()
 
-        # Filter by p-value
-        all_cags = set(corncob_df.query(
-            "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
-        ).index.values)
-
-        if len(all_cags) == 0:
-            return empty_figure()
-
-        # Get the list of CAGs based on these criteria
-        selected_cags = set([])
-
-        # Include all of the taxa annotated for these CAGs
-        for rank in ["family", "genus", "species"]:
-
-            # Check each of the CAGs
-            for cag_id in list(all_cags):
-                # Read the assignments at this level
-                df = taxonomic_gene_annotations(
-                    fp, cag_id, rank=rank
-                )
-                
-                # If this CAG has the annotation of interest, select it
-                if df is not None and df["name"].isin(annotation).any():
-                    selected_cags.add(cag_id)
-
-        selected_cags = list(selected_cags)
+        # Pick the CAGs to plot based on their association with
+        # the selected parameter, as well as their annotation with
+        # the selected taxa and/or functions 
+        cags_selected = select_cags_by_association_and_annotation(
+            fp,
+            parameter,
+            annotations,
+            annotation_ncags
+        )
         
-        if len(selected_cags) == 0:
+        if len(cags_selected) == 0:
             return empty_figure()
 
         # Format the DataFrame as needed to make a go.Sunburst
@@ -2212,7 +2195,7 @@ def update_taxonomy_graph(
             taxonomic_gene_annotations(
                 fp, cag_id
             )
-            for cag_id in selected_cags
+            for cag_id in cags_selected
         ])
         cag_tax_df = cag_tax_df.groupby(
             ["name", "rank", "tax_id", "parent"]
@@ -2220,15 +2203,21 @@ def update_taxonomy_graph(
         ).reset_index(
         )
 
-        if len(selected_cags) > 1:
+        if len(cags_selected) > 1:
             plot_title = "{:,} CAGs with annotations for {}".format(
-                len(selected_cags),
-                " / ".join(annotation)
+                len(cags_selected),
+                " / ".join([
+                    a.split("-", 1)[1]
+                    for a in annotations
+                ])
             )
         else:
             plot_title = "CAG {} - with annotations for {}".format(
-                int(selected_cags[0]),
-                " / ".join(annotation)
+                int(cags_selected[0]),
+                " / ".join([
+                    a.split("-", 1)[1]
+                    for a in annotations
+                ])
             )
 
     if cag_tax_df is None:
@@ -2259,7 +2248,10 @@ def plot_cag_show_hide_selection_controls(
         return {"display": "none"}, {"display": "block"}
 
 @app.callback(
-    Output("plot-cag-annotation-multiselector", "options"),
+    [
+        Output("plot-cag-annotation-multiselector", "options"),
+        Output("plot-cag-annotation-multiselector", "placeholder")
+    ],
     [
         Input("plot-cag-selection-type", "value"),
         Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
@@ -2278,57 +2270,79 @@ def plot_cag_annotation_options(
     """When the user selects 'Association & Annotation', show the appropriate annotations."""
     options = [{"label": "None", "value": "None"}]
     if selection_type == "cag_id":
-        return options
+        return options, "Loading..."
 
     # Get the path to the selected dataset
     fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     # Make sure that this parameter is valid
     if parameter not in valid_parameters(fp):
-        return options
+        return options, "Loading..."
 
     # Get the table of CAG associations
     corncob_df = cag_associations(fp, parameter)
     if corncob_df is None:
-        return options
+        return options, "Loading..."
 
-    # Filter by p-value < 0.1
-    corncob_df = corncob_df.query(
-        "neg_log10_pvalue >= 1"
-    )
+    # Get the annotations for no more than 100 CAGs
+    cags_checked = set([])
+    cag_id_list = corncob_df.index.values
 
-    if corncob_df.shape[0] == 0:
-        return options
-
-    # Get the annotations for this set of CAGs
+    # Record the number of times that each annotation is seen
     all_annot = defaultdict(int)
 
-    # Include all of the taxa annotated for these CAGs
-    for rank in ["family", "genus", "species"]:
+    # Iterate over each CAG
+    for cag_id in cag_id_list:
 
-        # Iterate over each CAG
-        for cag_id in corncob_df.index.values:
+        # Get the annotations for no more than 100 CAGs
+        if len(cags_checked) >= 100:
+            break
+
+        # Include all of the taxa annotated for these CAGs
+        for rank in ["family", "genus", "species"]:
             # Read in the taxonomic annotations for this CAG
             df = taxonomic_gene_annotations(
                 fp, cag_id, rank=rank
             )
             # Add the labels
             if df is not None:
+                cags_checked.add(cag_id)
                 for label in df["name"].values:
-                    all_annot[label] += 1
+                    # Record the label along with the category
+                    all_annot[
+                        "{}-{}".format(
+                            rank,
+                            label
+                        )
+                    ] += 1
+
+        # Include all of the functional annotations for these CAGs
+        df = functional_gene_annotations(fp, cag_id)
+        if df is not None:
+            cags_checked.add(cag_id)
+            for label in df["label"].values:
+                all_annot[
+                    "functional-{}".format(
+                        label
+                    )
+                ] += 1
     
     if len(all_annot) == 0:
-        return [{"label": "None", "value": "None"}]
+        return options, "Loading..."
 
     # Sort the annotations by the number of CAGs found
+    # Don't display the category in the 'label', but store it in the 'value'
     return [
-            {"label": label, "value": label}
+            {
+                "label": label.split("-", 1)[1], 
+                "value": label
+            }
         for label in pd.Series(
             all_annot
         ).sort_values(
             ascending=False
         ).index.values
-    ]
+    ], "Select..."
 
 
 @app.callback(
@@ -2529,7 +2543,7 @@ def update_single_cag_default_facet(
     [
         Input("plot-cag-selection-type", "value"),
         Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
-        Input({"type": "corncob-pvalue-slider", "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-ncags", "value"),
         Input("plot-cag-annotation-multiselector", "value"),
         Input('plot-cag-multiselector', 'value'),
         Input({'name': 'plot-cag-xaxis',
@@ -2549,8 +2563,8 @@ def update_single_cag_default_facet(
 def update_single_cag_graph(
     selection_type,
     parameter,
-    max_neglog_pvalue,
-    annotation,
+    annotation_ncags,
+    annotations,
     cag_id,
     xaxis,
     plot_type,
@@ -2582,37 +2596,18 @@ def update_single_cag_graph(
         plot_title = "CAG {}".format(cag_id)
 
     else:
-        # Read the association metrics for each CAG against this parameter
-        corncob_df = cag_associations(fp, parameter)
-        if corncob_df is None:
-            return empty_figure()
 
-        # Filter by p-value
-        all_cags = set(corncob_df.query(
-            "neg_log10_pvalue >= {}".format(max_neglog_pvalue)
-        ).index.values)
+        # Pick the CAGs to plot based on their association with
+        # the selected parameter, as well as their annotation with
+        # the selected taxa and/or functions 
+        cags_selected = select_cags_by_association_and_annotation(
+            fp,
+            parameter,
+            annotations,
+            annotation_ncags
+        )
 
-        if len(all_cags) == 0:
-            return empty_figure()
-
-        # Get the list of CAGs based on these criteria
-        selected_cags = set([])
-
-        # Include all of the taxa annotated for these CAGs
-        for rank in ["family", "genus", "species"]:
-            # Iterate over each CAG
-            for cag_id in list(all_cags):
-                # Read in the assignments at this level
-                rank_df = taxonomic_gene_annotations(
-                    fp, cag_id, rank=rank
-                )
-                # Add this CAG if it has the annotation of interest
-                if rank_df is not None and rank_df["name"].isin(annotations).any():
-                    selected_cags.add(cag_id)
-
-        selected_cags = list(selected_cags)
-
-        if len(selected_cags) == 0:
+        if len(cags_selected) == 0:
             return empty_figure()
 
         # Now that we have a list of CAGs, add the abundance and format the title
@@ -2623,16 +2618,22 @@ def update_single_cag_graph(
             }).sum(axis=1)
         )
 
-        if len(selected_cags) > 1:
+        if len(cags_selected) > 1:
             plot_title = "{:,} CAGs with annotations for {}".format(
-                len(selected_cags),
-                " / ".join(annotation)
+                len(cags_selected),
+                " / ".join([
+                    a.split("-", 1)[1]
+                    for a in annotations
+                ])
             )
             axis_label = "Relative Abundance"
         else:
             plot_title = "CAG {} - with annotations for {}".format(
-                int(selected_cags[0]),
-                " / ".join(annotation)
+                int(cags_selected[0]),
+                " / ".join([
+                    a.split("-", 1)[1]
+                    for a in annotations
+                ])
             )
 
     axis_label = "Relative Abundance"
@@ -2647,6 +2648,110 @@ def update_single_cag_graph(
         facet,
         log_scale
     )
+
+def select_cags_by_association_and_annotation(
+    fp,
+    parameter,
+    annotations,
+    annotation_ncags
+):
+    # Return none if no annotations are selected
+    if len(annotations) == 0:
+        return []
+    # Read the association metrics for each CAG against this parameter
+    corncob_df = cag_associations(fp, parameter)
+    if corncob_df is None:
+        return []
+
+    # Get the list of the top CAGs, most consistently associated with this paramter
+    cag_id_list = corncob_df.index.values
+
+    # The `annotations` is a list which looks something like:
+    # ["genus-Escherichia", "functional-MatE"]
+    # To parse this, we will select CAGs which match _any_ of the
+    # taxonomic labels (if any), and _all_ of the functional labels (if any)
+
+    taxon_labels = {
+        rank: set([
+            a.split("-", 1)[1]
+            for a in annotations
+            if a.startswith(rank + "-")
+        ])
+        for rank in ["species", "genus", "family"]
+    }
+    taxon_labels = {
+        k: v
+        for k, v in taxon_labels.items()
+        if len(v) > 0
+    }
+
+    functional_labels = set([
+        a.split("-", 1)[1]
+        for a in annotations
+        if a.startswith("functional-")
+    ])
+    # Make sure that all labels are present and accounted for
+    assert len(annotations) == sum([len(v) for v in taxon_labels.values()]) + len(functional_labels)
+
+    # Get the list of CAGs based on these criteria
+    selected_cags = set([])
+
+    # Iterate over each CAG
+    for cag_id in cag_id_list:
+
+        # Stop if we have reached the maximum number of CAGs
+        if len(selected_cags) >= annotation_ncags:
+            return list(selected_cags)
+
+        # Iterate over each taxonomic level
+        for rank, rank_annotations in taxon_labels.items():
+
+            # If we have already added this CAG, skip it
+            if cag_id in selected_cags:
+                continue
+
+            # Only read over the CAGs if there are annotations to look for
+            if len(rank_annotations) > 0:
+
+                # Read in the assignments at this level for this CAG
+                rank_df = taxonomic_gene_annotations(
+                    fp, cag_id, rank=rank
+                )
+
+                # If this CAG has no annotations, skip it
+                if rank_df is None:
+                    continue
+
+                # Check if this CAG has the annotation of interest
+                elif rank_df["name"].isin(rank_annotations).any():
+
+                    # If a functional label was provided, see if that is present
+                    if len(functional_labels) > 0:
+
+                        df = functional_gene_annotations(
+                            fp,
+                            cag_id
+                        )
+                        if df is not None:
+                            if df["label"].isin(functional_labels).any():
+                                selected_cags.add(cag_id)
+
+                    else:
+                        selected_cags.add(cag_id)
+
+        # If no taxonomic labels are provided, just check the functional labels
+        if len(taxon_labels) == 0:
+
+            # Get the functional labels
+            df = functional_gene_annotations(
+                fp,
+                cag_id
+            )
+            if df is not None:
+                if df["label"].isin(functional_labels).any():
+                    selected_cags.add(cag_id)
+
+    return list(selected_cags)
 #######################
 # / PLOT CAG CALLBACK #
 #######################
