@@ -745,21 +745,16 @@ def plot_cag_card():
                 ),
                 dbc.Col(
                     [
-                        html.Div(
-                            [
-                                html.Label("Display CAG(s) By"),
-                                dcc.Dropdown(
-                                    id="plot-cag-selection-type",
-                                    options=[
-                                        {"label": "CAG ID", "value": "cag_id"},
-                                        {"label": "Association & Taxonomy", "value": "association"},
-                                    ],
-                                    value="cag_id",
-                                ),
-                                html.Br(),
+                        html.Label("Display CAG(s) By"),
+                        dcc.Dropdown(
+                            id="plot-cag-selection-type",
+                            options=[
+                                {"label": "CAG ID", "value": "cag_id"},
+                                {"label": "Association & Annotation", "value": "association"},
                             ],
-                            style={"display": "none"}
+                            value="cag_id",
                         ),
+                        html.Br(),
                         html.Div(
                             [
                                 html.Label("CAG ID", style={"margin-right": "15px"}),
@@ -779,15 +774,29 @@ def plot_cag_card():
                         html.Div(
                             corncob_parameter_dropdown(
                                 group="plot-cag",
-                            ) + volcano_pvalue_slider(
-                                group="plot-cag",
                             ) + [
                                 html.Label("Filter by Annotation"),
                                 dcc.Dropdown(
                                     id="plot-cag-annotation-multiselector",
                                     options=[],
                                     value=[],
-                                    multi=True
+                                    multi=True,
+                                    placeholder="None"
+                                ),
+                                html.Br(),
+                                html.Label(
+                                    "Number of CAGs", 
+                                    style={"margin-right": "15px"}
+                                ),
+                                dcc.Input(
+                                    id="plot-cag-annotation-ncags",
+                                    type="number",
+                                    placeholder="<NUM CAGs>",
+                                    debounce=True,
+                                    min=1,
+                                    max=1000,
+                                    step=1,
+                                    value=5,
                                 ),
                                 html.Br(),
                             ],
