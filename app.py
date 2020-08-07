@@ -2284,7 +2284,7 @@ def plot_cag_annotation_options(
     if corncob_df is None:
         return options, "Loading..."
 
-    # Get the annotations for no more than 100 CAGs
+    # Get the annotations for no more than 500 CAGs
     cags_checked = set([])
     cag_id_list = corncob_df.index.values
 
@@ -2294,8 +2294,8 @@ def plot_cag_annotation_options(
     # Iterate over each CAG
     for cag_id in cag_id_list:
 
-        # Get the annotations for no more than 100 CAGs
-        if len(cags_checked) >= 100:
+        # Get the annotations for no more than 500 CAGs
+        if len(cags_checked) >= 500:
             break
 
         # Include all of the taxa annotated for these CAGs
