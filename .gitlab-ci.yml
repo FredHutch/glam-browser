@@ -21,7 +21,7 @@ build_test:
     - aws s3 cp s3://fh-poc-minot-s-mri-geneshot/manifests/2020-08-11-1-demo-manifest.csv .
     - for i in $(cat 2020-08-11-1-demo-manifest.csv | cut -d ',' -f 1); do aws s3 cp $i share/ ; done
     - docker build --build-arg GTM_CONTAINER=$GTM_CONTAINER -t 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam-public:latest .
-    - docker-compose up -d
+    - docker-compose -f fhpublic-docker-compose-yml up -d
     - sleep 25
     - curl -I http://localhost:8050 | grep -q "HTTP/1.1 200 OK"
     - docker-compose down
