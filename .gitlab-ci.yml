@@ -37,7 +37,7 @@ deploy:
   script:
     - AWS_ACCESS_KEY_ID=$ECR_ACCESS_KEY AWS_SECRET_ACCESS_KEY=$ECR_SECRET_KEY AWS_DEFAULT_REGION=$ECR_REGION aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 458818213009.dkr.ecr.us-west-2.amazonaws.com
     - docker push 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam:latest
-    - docker push 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam-publica:latest
+    - docker push 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam-public:latest
     - sleep 15
     # push private version
     - rancher-v0.6.2/rancher --url https://ponderosa.fhcrc.org --access-key $RANCHERAPI_KEY --secret-key $RANCHERAPI_SECRET up -d --pull --force-upgrade --confirm-upgrade --stack glam --file docker-compose.yml --rancher-file rancher-compose.yml
