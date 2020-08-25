@@ -331,6 +331,15 @@ def enrichments(fp, parameter, annotation):
         "/enrichments/{}/{}".format(parameter, annotation)
     )
     if df is not None:
+        if 'wald' not in df.columns.values:
+            df = df.assign(
+                wald = df["estimate"] / df["std_error"]
+            )
+        if 'abs_wald' not in df.columns.values:
+            df = df.assign(
+                abs_wald = df["wald"].abs()
+            )
+
         # Protect against duplicate labels by taking the most associated one
         df = df.sort_values(
             by="abs_wald",
