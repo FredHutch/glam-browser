@@ -76,7 +76,7 @@ def add_metadata_to_dataframe(plot_df, plot_manifest_df, metadata):
             METADATA_FLOAT=pd.to_datetime(
                 plot_df[metadata],
                 errors="raise"
-            ).apply(str)
+            ).apply(lambda t: t.timestamp())
         )
 
     # Treat as categorical
@@ -491,6 +491,9 @@ def update_ordination_graph(
     # Set up the figure, which will be populated below
     fig = go.Figure()
 
+    # Keep track of whether the color scale is 'none', 'categorical', or 'continuous'
+    color_scale = 'none'
+
     # The plot will depend on whether metadata has been selected
     if metadata == "none":
 
@@ -521,6 +524,9 @@ def update_ordination_graph(
         # Limited number of unique metadata values
         if plot_df[metadata].unique().shape[0] <= 5:
 
+            # Colors are categorical
+            color_scale = 'categorical'
+
             # Iterate over each of the metadata groups
             for metadata_label, metadata_plot_df in plot_df.groupby(metadata):
                 # Scatter plot
@@ -545,6 +551,15 @@ def update_ordination_graph(
 
         else:
 
+            # Colors are continuous
+            color_scale = 'continuous'
+
+            # Get the tick labels and values for the color bar
+            sorted_df = plot_df.sort_values(by="METADATA_FLOAT")
+            ix_list = [0, int(plot_df.shape[0] / 3), int(plot_df.shape[0] * 2 / 3), plot_df.shape[0]-1]
+            tickvals = sorted_df["METADATA_FLOAT"].values[ix_list]
+            ticktext = sorted_df[metadata].values[ix_list]
+
             # Scatter plot
             fig.add_trace(
                 go.Scatter(
@@ -556,7 +571,16 @@ def update_ordination_graph(
                     ),
                     hovertemplate="Sample: %{id}<br>%{text}<extra></extra>",
                     mode="markers",
-                    marker_color=plot_df["METADATA_COLOR"],
+                    marker=dict(
+                        color=plot_df["METADATA_FLOAT"],
+                        colorscale="rdbu",
+                        colorbar=dict(
+                            title=metadata,
+                            tickmode="array",
+                            tickvals=tickvals,
+                            ticktext=ticktext,
+                        )
+                    )
                 )
             )
 
@@ -573,7 +597,7 @@ def update_ordination_graph(
     )
 
     fig.update_layout(
-        showlegend=False,
+        showlegend=color_scale == 'categorical',
         template="simple_white",
         height=500,
     )
