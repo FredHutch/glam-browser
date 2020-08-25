@@ -337,17 +337,18 @@ def calc_clr(v):
     return v.clip(lower=min_val).apply(np.log10) - gmean_val
 
 def plot_samples_pairwise(
-    primary_sample_abund_df,
+    primary_sample_abund_vec,
     primary_sample_name,
-    secondary_sample_abund_df,
+    secondary_sample_abund_vec,
     secondary_sample_name,
     display_metric,
     cag_summary_df,
 ):
+
     # Make an abundance DataFrame to plot
     plot_df = pd.DataFrame({
-        "primary": primary_sample_abund_df[primary_sample_name],
-        "secondary": secondary_sample_abund_df[secondary_sample_name],
+        "primary": primary_sample_abund_vec,
+        "secondary": secondary_sample_abund_vec,
     })
     # Mask CAGs that are zero in both samples
     plot_df = plot_df.assign(
