@@ -1503,6 +1503,7 @@ def draw_cag_annotation_heatmap(
     cag_estimate_dict,
     n_annots,
     annotation_names,
+    cag_sizes,
     figure_width=1000,
     figure_height=800,
 ):
@@ -1534,7 +1535,8 @@ def draw_cag_annotation_heatmap(
             cag_annot_df, 
             annotation_type, 
             enrichment_df, 
-            n_annots
+            n_annots,
+            cag_sizes,
         )
 
         # Replace the annotation names, if provided
@@ -1563,7 +1565,8 @@ def draw_cag_annotation_heatmap(
             # Make a very simple plot
             fig = go.Figure(
                 data=draw_cag_annotation_panel(
-                    plot_df
+                    plot_df,
+                    cag_sizes,
                 )
             )
 
@@ -1584,6 +1587,7 @@ def draw_cag_annotation_heatmap(
             fig = draw_cag_annot_heatmap_with_cag_estimates(
                 plot_df,
                 cag_estimate_dict,
+                cag_sizes,
             )
 
     # We have information on parameter association for both CAGs and annotation labels
@@ -1608,6 +1612,7 @@ def draw_cag_annotation_heatmap(
                 plot_df,
                 cag_estimate_dict,
                 enrichment_df,
+                cag_sizes,
             )
 
 
@@ -2147,11 +2152,13 @@ def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
     plot_df,
     cag_estimate_dict,
     enrichment_df,
+    cag_sizes,
 ):
 
     data = [
         draw_cag_annotation_panel(
             plot_df,
+            cag_sizes,
             xaxis="x",
             yaxis="y"
         ),
@@ -2215,6 +2222,7 @@ def draw_cag_annot_heatmap_with_cag_estimates_and_enrichments(
 def draw_cag_annot_heatmap_with_cag_estimates(
     plot_df,
     cag_estimate_dict,
+    cag_sizes,
 ):
 
     fig = make_subplots(
@@ -2230,7 +2238,8 @@ def draw_cag_annot_heatmap_with_cag_estimates(
     # Plot the abundances on the left
     fig.add_trace(
         draw_cag_annotation_panel(
-            plot_df
+            plot_df,
+            cag_sizes,
         ),
         row=2, 
         col=1
@@ -2515,7 +2524,7 @@ def path_to_root(tax_id, tax_df, max_iter=1000):
         anc_tax_id = tax_df.loc[tax_id, "parent"]
         
 
-def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
+def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots, cag_sizes):
     """Format the table of CAG annotations."""
 
     # If the annotations are functional, we can just pivot across those functions
@@ -2529,6 +2538,43 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
         ).fillna(
             0
         )
+
+    # If the annotations are based on alignment to genomes, pick the top genome per CAG
+    # based on the proportion of the CAG which is aligned
+    elif annotation_type == "genomes":
+
+        # Use the cag_prop metric to pivot wide
+        wide_df = cag_annot_df.pivot_table(
+            index="CAG",
+            columns="name",
+            values="count",
+        ).fillna(
+            0
+        )
+
+        # Pick out the top genomes for each CAG
+        genomes_to_keep = set([])
+
+        # Walk over the table many times
+        for _ in range(wide_df.shape[1]):
+
+            # Walk over each CAG
+            for _, cag_genome_prop in wide_df.iterrows():
+
+                # Take the top genome which is not already selected
+                for genome_id in cag_genome_prop.sort_values(ascending=False).index.values:
+                    if genome_id not in genomes_to_keep:
+                        genomes_to_keep.add(genome_id)
+                        break
+
+                if len(genomes_to_keep) >= n_annots:
+                    break
+
+            if len(genomes_to_keep) >= n_annots:
+                break
+
+        # Subset to just those genomes
+        wide_df = wide_df.reindex(columns=list(genomes_to_keep))
 
     else:
         # Otherwise, the gene annotations are in tax ID space, while the annotation type is either 'species', 'genus', or 'family'
@@ -2559,7 +2605,7 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
         )
 
     # Otherwise keep the most abundant annotations (normalizing to the total number of genes per CAG)
-    else:
+    elif annotation_type != "genomes":
         wide_df = wide_df.reindex(
             columns = (
                 wide_df.T / wide_df.sum(axis=1)
@@ -2570,10 +2616,14 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots):
             ).index.values
         )
 
+    # Divide by the size of each CAG to get the proportion
+    wide_df = (wide_df.T / cag_sizes.reindex(index=wide_df.index.values)).T
+
     return wide_df
 
 def draw_cag_annotation_panel(
     plot_df,
+    cag_sizes,
     xaxis = "x",
     yaxis = "y",
 ):
@@ -2581,10 +2631,11 @@ def draw_cag_annotation_panel(
     # Format the mouseover text
     text = [
         [
-            "CAG {}<br>{}<br>Genes assigned: {:,}".format(
+            "CAG {}<br>{}<br>{:,} / {:,} genes assigned".format(
                 cag_id,
                 annot_label,
-                int(plot_df.loc[cag_id, annot_label]),
+                int(plot_df.loc[cag_id, annot_label] * cag_sizes[cag_id]),
+                cag_sizes[cag_id],
             )
             for cag_id in plot_df.index.values
         ]
@@ -2594,7 +2645,7 @@ def draw_cag_annotation_panel(
     # Format the Z values
     z = [
         [
-            int(plot_df.loc[cag_id, annot_label])
+            plot_df.loc[cag_id, annot_label]
             for cag_id in plot_df.index.values
         ]
         for annot_label in plot_df.columns.values
@@ -2609,7 +2660,7 @@ def draw_cag_annotation_panel(
             n[:30] + "..." if len(n) > 30 else n
             for n in plot_df.columns.values
         ],
-        colorbar={"title": "Number of gene assignments"},
+        colorbar={"title": "Proportion of genes assigned"},
         colorscale='blues',
         hovertemplate = "%{text}<extra></extra>",
         zmin=0.,

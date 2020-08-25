@@ -1581,6 +1581,9 @@ def annotation_heatmap_graph_callback(
         cag_size_range,
     )
 
+    # Get the sizes (number of genes) of these CAGs
+    cag_sizes = cag_annotations(fp)["size"].reindex(index=cags_selected)
+
     # Get the full table of CAG annotations
     if annotation_type == "eggNOG_desc":
 
@@ -1613,7 +1616,9 @@ def annotation_heatmap_graph_callback(
 
         for cag_id in cags_selected:
             df = genomic_alignment_annotations(fp, cag_id)
-            if df is not None:
+
+            # Only keep this CAG if it has >50% containment to at least one genome
+            if df is not None and df["cag_prop"].max() >= 0.5:
                 cag_annot_dict[cag_id] = df
                 if len(cag_annot_dict) >= n_cags:
                     break
@@ -1739,6 +1744,7 @@ def annotation_heatmap_graph_callback(
         cag_estimate_dict,
         n_annots,
         annotation_names,
+        cag_sizes,
     )
 
 @app.callback(
