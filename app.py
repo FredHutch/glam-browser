@@ -2484,7 +2484,12 @@ def update_single_cag_default_x(
         return "none"
 
     # See if there is a default value specified in the manifest
-    default_value = page_data.default(selected_dataset, "x")
+    default_value = page_data.default(
+        selected_dataset, 
+        "x",
+        page=page,
+        key=key,
+    )
     if default_value is not None and default_value in manifest(fp).columns.values:
         return default_value
     else:
@@ -2509,7 +2514,12 @@ def update_single_cag_default_plot_type(
         return "scatter"
 
     # See if there is a default value specified in the manifest
-    default_value = page_data.default(selected_dataset, "plot_type")
+    default_value = page_data.default(
+        selected_dataset, 
+        "plot_type",
+        page=page,
+        key=key,
+    )
 
     if default_value is not None and default_value in ["scatter", "line", "boxplot", "strip"]:
         return default_value
@@ -2536,7 +2546,12 @@ def update_single_cag_default_color(
         return "none"
 
     # See if there is a default value specified in the manifest
-    default_value = page_data.default(selected_dataset, "color")
+    default_value = page_data.default(
+        selected_dataset, 
+        "color",
+        page=page,
+        key=key,
+    )
     if default_value is not None and default_value in manifest(fp).columns.values:
         return default_value
     else:
@@ -2562,7 +2577,12 @@ def update_single_cag_default_facet(
         return "none"
 
     # See if there is a default value specified in the manifest
-    default_value = page_data.default(selected_dataset, "facet")
+    default_value = page_data.default(
+        selected_dataset, 
+        "facet",
+        page=page,
+        key=key,
+    )
     if default_value is not None and default_value in manifest(fp).columns.values:
         return default_value
     else:
