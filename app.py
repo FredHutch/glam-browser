@@ -936,7 +936,10 @@ def experiment_summary_card_callback(selected_dataset, page, key):
         # Get the description of this dataset
         dataset_description = {
             d["fp"]: d
-            for d in page_data.dataset_list()
+            for d in page_data.dataset_list(
+                page=page, 
+                key=key
+            )
         }[
             fp.split("/")[-1]
         ].get(
