@@ -363,6 +363,7 @@ def parse_genome_containment(store, max_n_cags=250000):
         # Yield the subset for each CAG
         for group_ix, group_df in df.reindex(
             columns=[
+                "CAG",
                 "genome",
                 "n_genes",
                 "cag_prop",
