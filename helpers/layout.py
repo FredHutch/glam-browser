@@ -75,11 +75,6 @@ def dataset_summary_card(ix, dataset):
                     ),
                 ])
             ]),
-            dbc.CardBody(
-                dcc.Markdown(
-                    dataset.get("description", "")
-                )
-            )
         ])
     ])
 
@@ -95,33 +90,39 @@ def experiment_summary_card():
             dbc.CardBody(html.Div(id="experiment-summary-card"))
         ])
     ])
-def update_experiment_summary_card(dataset_metrics):
+def update_experiment_summary_card(dataset_metrics, description_markdown):
     # Make a table with the basic summary of an experiment
-    return dbc.Table([
-        html.Tbody(
-            exp_table_row(  # Wrapper for each row
-                "Total Reads",
-                "{:,}".format(dataset_metrics.loc["total_reads"]),
-                "Aligned Reads",
-                "{}%".format(round(
-                    100 * \
-                    dataset_metrics.loc["aligned_reads"] / \
-                    dataset_metrics.loc["total_reads"],
-                    1
-                ))
-            ) + exp_table_row(
-                "Genes (#)",
-                "{:,}".format(dataset_metrics.loc["num_genes"]),
-                "CAGs (#)",
-                "{:,}".format(dataset_metrics.loc["num_cags"])
-            ) + exp_table_row(
-                "Specimens (#)",
-                "{:,}".format(dataset_metrics.loc["num_samples"]),
-                "Formula",
-                "{}".format(dataset_metrics.loc["formula"])
+    return html.Div([
+        dcc.Markdown(
+            description_markdown
+        ),
+        html.Br(),
+        dbc.Table([
+            html.Tbody(
+                exp_table_row(  # Wrapper for each row
+                    "Total Reads",
+                    "{:,}".format(dataset_metrics.loc["total_reads"]),
+                    "Aligned Reads",
+                    "{}%".format(round(
+                        100 * \
+                        dataset_metrics.loc["aligned_reads"] / \
+                        dataset_metrics.loc["total_reads"],
+                        1
+                    ))
+                ) + exp_table_row(
+                    "Genes (#)",
+                    "{:,}".format(dataset_metrics.loc["num_genes"]),
+                    "CAGs (#)",
+                    "{:,}".format(dataset_metrics.loc["num_cags"])
+                ) + exp_table_row(
+                    "Specimens (#)",
+                    "{:,}".format(dataset_metrics.loc["num_samples"]),
+                    "Formula",
+                    "{}".format(dataset_metrics.loc["formula"])
+                )
             )
-        )
-    ], bordered=True, hover=True, responsive=True)
+        ], bordered=True, hover=True, responsive=True),
+    ])
 #############################
 # / EXPERIMENT SUMMARY CARD #
 #############################

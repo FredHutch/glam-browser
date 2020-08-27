@@ -933,8 +933,19 @@ def experiment_summary_card_callback(selected_dataset, page, key):
     if fp is None:
         return
     else:
+        # Get the description of this dataset
+        dataset_description = {
+            d["fp"]: d
+            for d in page_data.dataset_list()
+        }[
+            fp.split("/")[-1]
+        ].get(
+            "description", ""
+        )
+
         return update_experiment_summary_card(
-            experiment_metrics(fp)
+            experiment_metrics(fp),
+            dataset_description
         )
 @app.callback(
     Output("experiment-summary-card-header", 'children'),
