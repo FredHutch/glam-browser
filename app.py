@@ -1586,9 +1586,9 @@ def update_heatmap_metadata_dropdown(
         Input({"type": "heatmap-select-cags-by", "parent": "annotation-heatmap"}, 'value'),
         Input('cag-annotation-heatmap-ncags', 'value'),
         Input({'name': 'cag-annotation-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
-        Input('cag-annotation-heatmap-annotation-type', 'value'),
     ],
     [
+        State('cag-annotation-heatmap-annotation-type', 'value'),
         State("selected-dataset", "children"),
         State("url", 'pathname'),
         State("url", 'hash'),
@@ -1713,6 +1713,7 @@ def annotation_heatmap_graph_callback(
         cag_annot_dict = {
             cag_id: functional_gene_annotations(fp, cag_id)
             for cag_id in selected_cags
+            if functional_gene_annotations(fp, cag_id) is not None
         }
 
     elif annotation_type == "taxonomic":
@@ -1721,6 +1722,7 @@ def annotation_heatmap_graph_callback(
         cag_annot_dict = {
             cag_id: taxonomic_gene_annotations(fp, cag_id)
             for cag_id in selected_cags
+            if taxonomic_gene_annotations(fp, cag_id) is not None
         }
 
     elif annotation_type == "genomes":
@@ -1734,6 +1736,7 @@ def annotation_heatmap_graph_callback(
                 }
             )
             for cag_id in selected_cags
+            if genomic_alignment_annotations(fp, cag_id) is not None
         }
 
     else:
@@ -1741,6 +1744,7 @@ def annotation_heatmap_graph_callback(
         cag_annot_dict = {
             cag_id: taxonomic_gene_annotations(fp, cag_id, rank=annotation_type)
             for cag_id in selected_cags
+            if taxonomic_gene_annotations(fp, cag_id, rank=annotation_type) is not None
         }
 
     # Check to see if the selected annotation information is available for these CAGs
@@ -1754,7 +1758,7 @@ def annotation_heatmap_graph_callback(
         ])
     
     else:
-        cag_annot_df = None
+        return empty_figure()
 
     # If the CAGs are selected by parameter, then fetch the annotations by parameter
     if select_cags_by.startswith("parameter-"):
