@@ -459,7 +459,7 @@ def cag_abundance_heatmap_card():
             dbc.Row([
                 dbc.Col(
                     [
-                        html.Label("Display Top CAGs By"),
+                        html.Label("Select CAGs By"),
                         dcc.Dropdown(
                             id={"type": "heatmap-select-cags-by", "parent": "abundance-heatmap"},
                             options=[
@@ -484,6 +484,22 @@ def cag_abundance_heatmap_card():
                 ),
                 dbc.Col(
                     [
+                        dcc.Dropdown(
+                            id="abundance-heatmap-selected-cags",
+                            options=[
+                                {"label": "CAG {}".format(cag_id), "value": cag_id}
+                                for cag_id in range(250000)
+                            ],
+                            value=[],
+                            multi=True,
+                            placeholder="None"
+                        )
+                    ],
+                    width=4,
+                    align="center",
+                ),
+                dbc.Col(
+                    [
                         html.Label("Display Metadata"),
                         dcc.Dropdown(
                             id="cag-abundance-heatmap-metadata-dropdown",
@@ -501,12 +517,6 @@ def cag_abundance_heatmap_card():
                             ],
                             value="cag",
                         ),
-                    ],
-                    width=4,
-                    align="center",
-                ),
-                dbc.Col(
-                    [
                         html.Label("Abundance Metric"),
                         dcc.Dropdown(
                             id='cag-abundance-heatmap-abundance-metric',

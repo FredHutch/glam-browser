@@ -1434,11 +1434,42 @@ def get_cags_selected_by_criterion(fp, select_cags_by, cag_size_range):
 
 
 @app.callback(
-    Output('cag-abundance-heatmap-graph', 'figure'),
+    Output('abundance-heatmap-selected-cags', 'value'),
     [
         Input({"type": "heatmap-select-cags-by", "parent": "abundance-heatmap"}, 'value'),
         Input('cag-abundance-heatmap-ncags', 'value'),
         Input({'name': 'cag-abundance-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
+        Input("selected-dataset", "children"),
+        Input("url", 'pathname'),
+        Input("url", 'hash'),
+    ])
+def abundance_heatmap_select_cags_callback(
+    select_cags_by,
+    n_cags,
+    cag_size_range,
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return []
+
+    # Return the top CAGs selected by this criterion
+    return get_cags_selected_by_criterion(
+        fp,
+        select_cags_by, 
+        cag_size_range,
+    )[
+        :n_cags
+    ]
+@app.callback(
+    Output('cag-abundance-heatmap-graph', 'figure'),
+    [
+        Input({"type": "heatmap-select-cags-by", "parent": "abundance-heatmap"}, 'value'),
+        Input('abundance-heatmap-selected-cags', 'value'),
         Input('cag-abundance-heatmap-metadata-dropdown', 'value'),
         Input('cag-abundance-heatmap-abundance-metric', 'value'),
         Input('cag-abundance-heatmap-cluster', 'value'),
@@ -1452,8 +1483,7 @@ def get_cags_selected_by_criterion(fp, select_cags_by, cag_size_range):
     ])
 def abundance_heatmap_graph_callback(
     select_cags_by,
-    n_cags,
-    cag_size_range,
+    cags_selected,
     metadata_selected,
     abundance_metric,
     cluster_by,
@@ -1468,15 +1498,6 @@ def abundance_heatmap_graph_callback(
 
     if fp is None:
         return empty_figure()
-
-    # Get the top CAGs selected by this criterion
-    cags_selected = get_cags_selected_by_criterion(
-        fp,
-        select_cags_by, 
-        cag_size_range,
-    )[
-        :n_cags
-    ]
     
     # Get the abundance of the selected CAGs
     cag_abund_df = pd.DataFrame({
