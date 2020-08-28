@@ -587,7 +587,7 @@ def cag_annotation_heatmap_card():
             dbc.Row([
                 dbc.Col(
                     [
-                        html.Label("Display Top CAGs By"),
+                        html.Label("Select CAGs By"),
                         dcc.Dropdown(
                             id={"type": "heatmap-select-cags-by", "parent": "annotation-heatmap"},
                             options=[
@@ -597,12 +597,7 @@ def cag_annotation_heatmap_card():
                             value="abundance"
                         ),
                         html.Br()
-                    ],
-                    width=4,
-                    align="center",
-                ),
-                dbc.Col(
-                    basic_slider(
+                    ] + basic_slider(
                         "cag-annotation-heatmap-ncags",
                         "Number of CAGs to Display",
                         min_value=5,
@@ -612,6 +607,21 @@ def cag_annotation_heatmap_card():
                     ) + cag_size_slider(
                         "cag-annotation-heatmap-size-range"
                     ),
+                    width=4,
+                    align="center",
+                ),
+                dbc.Col([
+                        dcc.Dropdown(
+                            id="annotation-heatmap-selected-cags",
+                            options=[
+                                {"label": "CAG {}".format(cag_id), "value": cag_id}
+                                for cag_id in range(250000)
+                            ],
+                            value=[],
+                            multi=True,
+                            placeholder="None"
+                        )
+                    ],
                     width=4,
                     align="center",
                 ),

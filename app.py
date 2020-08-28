@@ -1560,11 +1560,105 @@ def update_heatmap_metadata_dropdown(
 # CAG ANNOTATION HEATMAP CALLBACKS #
 ####################################
 @app.callback(
-    Output('cag-annotation-heatmap-graph', 'figure'),
+    Output('annotation-heatmap-selected-cags', 'value'),
     [
         Input({"type": "heatmap-select-cags-by", "parent": "annotation-heatmap"}, 'value'),
         Input('cag-annotation-heatmap-ncags', 'value'),
         Input({'name': 'cag-annotation-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
+        Input('cag-annotation-heatmap-annotation-type', 'value'),
+    ],
+    [
+        State("selected-dataset", "children"),
+        State("url", 'pathname'),
+        State("url", 'hash'),
+    ])
+def annotation_heatmap_select_cags(
+    select_cags_by,
+    n_cags,
+    cag_size_range,
+    annotation_type,
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    if fp is None:
+        return []
+
+    # Get the top CAGs selected by this criterion, ordered by priority
+    cags_selected = get_cags_selected_by_criterion(
+        fp,
+        select_cags_by,
+        cag_size_range,
+    )
+
+    # Record the final set of selected CAGs as a set
+    final_cags_selected = set([])
+
+    # Get the sizes (number of genes) of these CAGs
+    cag_sizes = cag_annotations(fp)["size"].reindex(index=cags_selected)
+
+    # Get the full table of CAG annotations
+    if annotation_type == "eggNOG_desc":
+
+        # Check CAGs in the order of priority
+        for cag_id in cags_selected:
+
+            # Check to see if it has any valid annotations
+            if functional_gene_annotations(fp, cag_id) is not None:
+                final_cags_selected.add(cag_id)
+
+                if len(final_cags_selected) >= n_cags:
+                    break
+
+    elif annotation_type == "taxonomic":
+
+        # Check CAGs in the order of priority
+        for cag_id in cags_selected:
+
+            # Check to see if it has any valid annotations
+            if taxonomic_gene_annotations(fp, cag_id) is not None:
+                final_cags_selected.add(cag_id)
+
+                if len(final_cags_selected) >= n_cags:
+                    break
+
+    elif annotation_type == "genomes":
+
+        # Check CAGs in the order of priority
+        for cag_id in cags_selected:
+
+            # Check to see if it has any valid annotations
+            df = genomic_alignment_annotations(fp, cag_id)
+            # Only keep this CAG if it has >50% containment to at least one genome
+            if df is not None and df["cag_prop"].max() >= 0.5:
+
+                final_cags_selected.add(cag_id)
+
+                if len(final_cags_selected) >= n_cags:
+                    break
+
+    else:
+        # Check CAGs in the order of priority
+        for cag_id in cags_selected:
+
+            # Check to see if it has any valid annotations
+            if taxonomic_gene_annotations(fp, cag_id, rank=annotation_type) is not None:
+
+                final_cags_selected.add(cag_id)
+
+                if len(final_cags_selected) >= n_cags:
+                    break
+
+    return list(final_cags_selected)
+
+@app.callback(
+    Output('cag-annotation-heatmap-graph', 'figure'),
+    [
+        Input({"type": "heatmap-select-cags-by", "parent": "annotation-heatmap"}, 'value'),
+        Input('annotation-heatmap-selected-cags', 'value'),
         Input('cag-annotation-heatmap-annotation-type', 'value'),
         Input('cag-annotation-heatmap-nannots', 'value'),
     ],
@@ -1575,8 +1669,7 @@ def update_heatmap_metadata_dropdown(
     ])
 def annotation_heatmap_graph_callback(
     select_cags_by,
-    n_cags,
-    cag_size_range,
+    selected_cags,
     annotation_type,
     n_annots,
     selected_dataset,
@@ -1589,79 +1682,45 @@ def annotation_heatmap_graph_callback(
     if fp is None:
         return empty_figure()
 
-    # Get the top CAGs selected by this criterion
-    cags_selected = get_cags_selected_by_criterion(
-        fp,
-        select_cags_by,
-        cag_size_range,
-    )
-
     # Get the sizes (number of genes) of these CAGs
-    cag_sizes = cag_annotations(fp)["size"].reindex(index=cags_selected)
+    cag_sizes = cag_annotations(fp)["size"].reindex(index=selected_cags)
 
     # Get the full table of CAG annotations
     if annotation_type == "eggNOG_desc":
 
-        # Read in the functional annotations for `n_cags` CAGs in the index
-        cag_annot_dict = {}
-
-        for cag_id in cags_selected:
-            df = functional_gene_annotations(fp, cag_id)
-            if df is not None:
-                cag_annot_dict[cag_id] = df
-                if len(cag_annot_dict) >= n_cags:
-                    break
+        # Read in the functional annotations for the set of selected CAGs
+        cag_annot_dict = {
+            cag_id: functional_gene_annotations(fp, cag_id)
+            for cag_id in selected_cags
+        }
 
     elif annotation_type == "taxonomic":
 
-        # Read in the taxonomic annotations for `n_cags` CAGs in the index
-        cag_annot_dict = {}
-
-        for cag_id in cags_selected:
-            df = taxonomic_gene_annotations(fp, cag_id)
-            if df is not None:
-                cag_annot_dict[cag_id] = df
-                if len(cag_annot_dict) >= n_cags:
-                    break
+        # Read in the taxonomic annotations for the set of selected CAGs
+        cag_annot_dict = {
+            cag_id: taxonomic_gene_annotations(fp, cag_id)
+            for cag_id in selected_cags
+        }
 
     elif annotation_type == "genomes":
 
-        # Read in the genome alignment annotations for `n_cags` CAGs in the index
-        cag_annot_dict = {}
-
-        for cag_id in cags_selected:
-            df = genomic_alignment_annotations(fp, cag_id)
-
-            # Only keep this CAG if it has >50% containment to at least one genome
-            if df is not None and df["cag_prop"].max() >= 0.5:
-                cag_annot_dict[cag_id] = df
-                if len(cag_annot_dict) >= n_cags:
-                    break
-
-        # Rename the columns so that it's compatible with downstream plotting
+        # Read in the genomic alignment annotations for the set of selected CAGs
         cag_annot_dict = {
-            cag_id: df.rename(
+            cag_id: genomic_alignment_annotations(fp, cag_id).rename(
                 columns = {
                     "genome": "name",
                     "n_genes": "count",
                 }
             )
-            for cag_id, df in cag_annot_dict.items()
-            if df is not None
+            for cag_id in selected_cags
         }
 
-
-
     else:
-        # Read in the taxonomic annotations at this rank for `n_cags` CAGs in the index
-        cag_annot_dict = {}
-
-        for cag_id in cags_selected:
-            df = taxonomic_gene_annotations(fp, cag_id, rank=annotation_type)
-            if df is not None:
-                cag_annot_dict[cag_id] = df
-                if len(cag_annot_dict) >= n_cags:
-                    break
+        # Read in the selected taxonomic annotations for the set of selected CAGs
+        cag_annot_dict = {
+            cag_id: taxonomic_gene_annotations(fp, cag_id, rank=annotation_type)
+            for cag_id in selected_cags
+        }
 
     # Check to see if the selected annotation information is available for these CAGs
     if len(cag_annot_dict) > 0:
@@ -1720,7 +1779,7 @@ def annotation_heatmap_graph_callback(
             fp,
             parameter
         ).reindex(
-            index=cags_selected
+            index=selected_cags
         ).to_dict(
             orient="index"  # Index by CAG ID, then column name
         )
