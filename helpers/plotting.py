@@ -2543,38 +2543,41 @@ def format_annot_df(cag_annot_df, annotation_type, enrichment_df, n_annots, cag_
     # based on the proportion of the CAG which is aligned
     elif annotation_type == "genomes":
 
-        # Use the cag_prop metric to pivot wide
-        wide_df = cag_annot_df.pivot_table(
+        # Make a score for each genome
+        genome_score = defaultdict(float)
+
+        # Iterate over each CAG
+        for cag_id, cag_genome_df in cag_annot_df.groupby("CAG"):
+            # Iterate over each genome, keeping track of its rank order
+            rank = 1
+            for _, r in cag_genome_df.sort_values(by="count", ascending=False).iterrows():
+
+                # For the top rank, the score is always 1
+                if rank == 1:
+                    genome_score[r["name"]] += 1    
+
+                else:
+                    # Otherwise, the score is the proportion of the CAG aligned, divided by the rank order
+                    genome_score[r["name"]] += r["cag_prop"] / float(rank)
+
+                # Increment the rank order
+                rank += 1
+
+        genome_score = pd.Series(genome_score).sort_values(ascending=False)
+
+        # Pick out the top genomes for each CAG
+        genomes_to_keep = set(genome_score.head(n_annots).index.values)
+
+        # Use the cag_prop metric to pivot wide, keeping only the selected genomes
+        wide_df = cag_annot_df.loc[
+            cag_annot_df["name"].isin(genomes_to_keep)
+        ].pivot_table(
             index="CAG",
             columns="name",
             values="count",
         ).fillna(
             0
         )
-
-        # Pick out the top genomes for each CAG
-        genomes_to_keep = set([])
-
-        # Walk over the table many times
-        for _ in range(wide_df.shape[1]):
-
-            # Walk over each CAG
-            for _, cag_genome_prop in wide_df.iterrows():
-
-                # Take the top genome which is not already selected
-                for genome_id in cag_genome_prop.sort_values(ascending=False).index.values:
-                    if genome_id not in genomes_to_keep:
-                        genomes_to_keep.add(genome_id)
-                        break
-
-                if len(genomes_to_keep) >= n_annots:
-                    break
-
-            if len(genomes_to_keep) >= n_annots:
-                break
-
-        # Subset to just those genomes
-        wide_df = wide_df.reindex(columns=list(genomes_to_keep))
 
     else:
         # Otherwise, the gene annotations are in tax ID space, while the annotation type is either 'species', 'genus', or 'family'
