@@ -1455,16 +1455,19 @@ def abundance_heatmap_select_cags_callback(
     fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
-        return []
+        return ""
 
     # Return the top CAGs selected by this criterion
-    return get_cags_selected_by_criterion(
-        fp,
-        select_cags_by, 
-        cag_size_range,
-    )[
-        :n_cags
-    ]
+    return ",".join([
+        str(cag_id)
+        for cag_id in get_cags_selected_by_criterion(
+            fp,
+            select_cags_by, 
+            cag_size_range,
+        )[
+            :n_cags
+        ]
+    ])
 @app.callback(
     Output('cag-abundance-heatmap-graph', 'figure'),
     [
@@ -1498,6 +1501,12 @@ def abundance_heatmap_graph_callback(
 
     if fp is None:
         return empty_figure()
+
+    # Format the list of CAGs selected
+    cags_selected = [
+        int(cag_id.strip(" "))
+        for cag_id in cags_selected.split(",")
+    ]
     
     # Get the abundance of the selected CAGs
     cag_abund_df = pd.DataFrame({
@@ -1606,7 +1615,7 @@ def annotation_heatmap_select_cags(
     fp = page_data.parse_fp(selected_dataset, page=page, key=key)
 
     if fp is None:
-        return []
+        return ""
 
     # Get the top CAGs selected by this criterion, ordered by priority
     cags_selected = get_cags_selected_by_criterion(
@@ -1673,7 +1682,10 @@ def annotation_heatmap_select_cags(
                 if len(final_cags_selected) >= n_cags:
                     break
 
-    return list(final_cags_selected)
+    return ",".join([
+        str(cag_id)
+        for cag_id in final_cags_selected
+    ])
 
 @app.callback(
     Output('cag-annotation-heatmap-graph', 'figure'),
@@ -1702,6 +1714,12 @@ def annotation_heatmap_graph_callback(
 
     if fp is None:
         return empty_figure()
+
+    # Format the list of CAGs selected
+    selected_cags = [
+        int(cag_id.strip(" "))
+        for cag_id in selected_cags.split(",")
+    ]
 
     # Get the sizes (number of genes) of these CAGs
     cag_sizes = cag_annotations(fp)["size"].reindex(index=selected_cags)

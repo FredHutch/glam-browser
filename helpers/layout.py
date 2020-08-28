@@ -484,15 +484,13 @@ def cag_abundance_heatmap_card():
                 ),
                 dbc.Col(
                     [
-                        dcc.Dropdown(
+                        html.Label("CAGs Displayed (comma-delimited)"),
+                        dcc.Input(
                             id="abundance-heatmap-selected-cags",
-                            options=[
-                                {"label": "CAG {}".format(cag_id), "value": cag_id}
-                                for cag_id in range(250000)
-                            ],
-                            value=[],
-                            multi=True,
-                            placeholder="None"
+                            type="text",
+                            placeholder="Comma-separated list of CAG IDs",
+                            debounce=True,
+                            pattern="[0-9, ]*",
                         )
                     ],
                     width=4,
@@ -621,15 +619,13 @@ def cag_annotation_heatmap_card():
                     align="center",
                 ),
                 dbc.Col([
-                        dcc.Dropdown(
+                        html.Label("CAGs Displayed (comma-delimited)"),
+                        dcc.Input(
                             id="annotation-heatmap-selected-cags",
-                            options=[
-                                {"label": "CAG {}".format(cag_id), "value": cag_id}
-                                for cag_id in range(250000)
-                            ],
-                            value=[],
-                            multi=True,
-                            placeholder="None"
+                            type="text",
+                            placeholder="Comma-separated list of CAG IDs",
+                            debounce=True,
+                            pattern="[0-9, ]*",
                         )
                     ],
                     width=4,
