@@ -14,12 +14,67 @@ def navbar_simple():
         color="#112345",
         children=[
             dbc.Button(
+                'Login',
+                id="login-button",
+                n_clicks=0,
+                style={"margin": "10px"}
+            ),
+            dbc.Button(
+                'Logout',
+                id="logout-button",
+                n_clicks=0,
+                style={"margin": "10px", "display": "none"}
+            ),
+            dbc.Modal(
+                [
+                    dbc.ModalHeader(
+                        "Log In"
+                    ),
+                    dbc.ModalBody(
+                        [
+                            dcc.Markdown(
+                                """Please provide the username and password provided to your group."""
+                            ),
+                            dcc.Input(
+                                id="login-username",
+                                type="text",
+                                debounce=True,
+                                placeholder="<username>",
+                                size='25',
+                            ),
+                            html.Br(),
+                            dcc.Input(
+                                id="login-key",
+                                type="password",
+                                debounce=True,
+                                placeholder="<password>",
+                                size='25',
+                            ),
+                        ]
+                    ),
+                    dbc.ModalFooter(
+                        [
+                            dbc.Button(
+                                "Apply",
+                                id="login-modal-apply-button",
+                                n_clicks=0,
+                            )
+                        ]
+                    ),
+                ],
+                id="login-modal",
+                centered=True,
+                keyboard=False,
+                backdrop="static"
+            ),
+            dbc.Button(
                 'Main Menu',
                 id={
                     "type": "open-dataset-button",
                     "index": -1,
                 },
                 n_clicks=1,
+                style={"margin": "10px"}
             ),
             html.Div(  # Store the button-press time
                 id={
@@ -33,7 +88,7 @@ def navbar_simple():
                 id="selected-dataset",
                 children=["-1"],
                 style={"display": "none"}
-            )
+            ),
         ],
         id="page-title"
     )
