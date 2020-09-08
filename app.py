@@ -537,6 +537,87 @@ app.layout = html.Div(
 # / SET UP THE PAGE LAYOUT #
 ############################
 
+
+############################
+# LOGIN / LOGOUT CALLBACKS #
+############################
+# Open and close the login modal based on button clicks
+@app.callback(
+    Output("login-modal", "is_open"),
+    [
+        Input("login-button", "n_clicks"),
+        Input("login-modal-apply-button", "n_clicks"),
+    ]
+)
+def open_close_login_modal(open_nclicks, close_nclicks):
+    if open_nclicks > close_nclicks:
+        return True
+    else:
+        return False
+# Logging out will clear the username and password
+@app.callback(
+    [
+        Output("login-username", "value"),
+        Output("login-key", "value"),
+        Output({"type": "open-dataset-button", "index": -1}, "n_clicks")
+    ],
+    [
+        Input("logout-button", "n_clicks"),
+    ],
+    [
+        State({"type": "open-dataset-button", "index": -1}, "n_clicks")
+    ]
+)
+def clear_username_password(logout_nclicks, main_menu_nclicks):
+    return None, None, main_menu_nclicks + 1
+# Logging in will change the login / logout button appearance
+@app.callback(
+    [
+        Output("login-button", "style"),
+        Output("logout-button", "style"),
+        Output("logout-button", "children"),
+    ],
+    [
+        Input("login-modal", "is_open"),
+        Input("logout-button", "n_clicks"),
+    ],
+    [
+        State("login-username", "value"),
+    ]
+)
+def login_logout_callback(login_is_open, logout_nclicks, username):
+    # Style for buttons being shown or hidden
+    show_style = {"margin": "10px"}
+    hide_style = {"margin": "10px", "display": "none"}
+
+    # Set up the context for the callback
+    ctx = dash.callback_context
+
+    # Figure out which element changed
+    if not ctx.triggered:
+
+        # Nothing has changed yet
+        return show_style, hide_style, "Logout"
+
+    elif ctx.triggered[0]["prop_id"] == "logout-button.n_clicks":
+
+        # The logout button was clicked
+        return show_style, hide_style, "Logout"
+
+    elif username is None:
+        # If there is no username, show the user the login button
+        return show_style, hide_style, "Logout"
+
+    # implicit else
+    # The login model must have just opened or closed
+    # If there is a username, use that to update the logout button text
+    logout_text = "Logout ({})".format(username)
+    return hide_style, show_style, logout_text
+##############################
+# / LOGIN / LOGOUT CALLBACKS #
+##############################
+
+
 #############################
 # SUMMARY DISPLAY CALLBACKS #
 #############################
@@ -544,8 +625,8 @@ app.layout = html.Div(
     Output("page-title", "brand"),
     [
         Input("selected-dataset", 'children'),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
 )
 def page_title_callback(selected_dataset, page, key):
@@ -563,20 +644,20 @@ def page_title_callback(selected_dataset, page, key):
         Input({
             "type": "open-dataset-pressed",
             "index": -1
-        }, "children")
+        }, "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
     [
         State("selected-dataset", 'children'),
-        State("url", 'pathname'),
-        State("url", 'hash'),
     ],
 )
-def summary_display_callback(_, selected_dataset, page, key):
+def summary_display_callback(_, page, key, selected_dataset):
     """Fill out the summary display div."""
     page_description = page_data.page_description(page=page, key=key)
     if page_description is None:
         page_description = """
-This page may have been reached in error, please check your URL and try again.
+This page may have been reached in error, please check your username/password and try again.
 
 For assistance, please consult the GLAM Browser documentation or contact its maintainers.
 """
@@ -624,6 +705,17 @@ def open_dataset_button_click(n_clicks):
         return time()
     else:
         return -1
+@app.callback(
+    Output({"type": "open-dataset-button", "index": -1}, "style"),
+    [Input("selected-dataset", "children")]
+)
+def show_hide_main_menu_button(selected_dataset):
+    # Only show the Main Menu button if a dataset has been selected
+    print(selected_dataset)
+    if selected_dataset[0] == -1:
+        return {"margin": "10px", "display": "none"}
+    else:
+        return {"margin": "10px"}
 ##################################
 # / OPEN DATASET BUTTON CALLBACK #
 ##################################
@@ -668,6 +760,7 @@ def toggle_modal(n1, n2, is_open):
     if n1 or n2:
         return not is_open
     return is_open
+######################################
 # / OPEN / CLOSE HELP MODAL CALLBACK #
 ######################################
 
@@ -740,8 +833,8 @@ def open_dataset_switch(button_timestamps):
     }, 'options'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input({
             "type": "metadata-field-dropdown",
             "name": MATCH
@@ -783,8 +876,8 @@ def metadata_field_dropdown_callback(selected_dataset, page, key, dummy_value):
     ],
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input({
             "type": "cag-metric-slider",
             "name": MATCH,
@@ -834,8 +927,8 @@ def cag_metric_slider_callback_max(selected_dataset, page, key, slider_id):
     ],
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input({
             "type": "cag-size-slider",
             "name": MATCH
@@ -875,8 +968,8 @@ def cag_size_slider_callback(selected_dataset, page, key, dummy_value):
     Output("summary-display", 'style'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
 )
 def show_hide_summary_display(selected_dataset, page, key):
@@ -899,8 +992,8 @@ def show_hide_summary_display(selected_dataset, page, key):
     Output("detail-display", 'style'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
 )
 def show_hide_detail_display(selected_dataset, page, key):
@@ -923,8 +1016,8 @@ def show_hide_detail_display(selected_dataset, page, key):
     Output("experiment-summary-card", 'children'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
 )
 def experiment_summary_card_callback(selected_dataset, page, key):
@@ -955,8 +1048,8 @@ def experiment_summary_card_callback(selected_dataset, page, key):
     Output("experiment-summary-card-header", 'children'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
 )
 def experiment_summary_card_header_callback(selected_dataset, page, key):
@@ -1001,8 +1094,8 @@ def experiment_summary_card_header_callback(selected_dataset, page, key):
     ],
     [
         State("selected-dataset", "children"),
-        State("url", 'pathname'),
-        State("url", 'hash'),
+        State("login-username", "value"),
+        State("login-key", "value"),
     ],
 )
 def richness_graph_callback(
@@ -1047,8 +1140,8 @@ def richness_graph_callback(
     ],
     [
         State("selected-dataset", "children"),
-        State("url", 'pathname'),
-        State("url", 'hash'),
+        State("login-username", "value"),
+        State("login-key", "value"),
     ],
 )
 def single_sample_graph_callback(
@@ -1092,8 +1185,8 @@ def single_sample_graph_callback(
     ],
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
 )
 def update_single_sample_primary_dropdown(
@@ -1126,8 +1219,8 @@ def update_single_sample_primary_dropdown(
     ],
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
 )
 def update_single_sample_secondary_dropdown(
@@ -1208,8 +1301,8 @@ def show_hide_ordination_perplexity(algorithm):
     ],
     [
         State("selected-dataset", "children"),
-        State("url", 'pathname'),
-        State("url", 'hash'),
+        State("login-username", "value"),
+        State("login-key", "value"),
     ])
 def ordination_graph_callback(
     algorithm,
@@ -1244,8 +1337,8 @@ def ordination_graph_callback(
     Output({'type': 'metadata-field-dropdown', 'name': 'ordination-metadata'}, 'value'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ]
 )
 def ordination_graph_metadata(
@@ -1268,8 +1361,8 @@ def ordination_graph_metadata(
         Input({'type': 'metadata-field-dropdown', 'name': 'ordination-metadata'}, 'value'),
         Input('manifest-filtered', 'children'),
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ])
 def ordination_anosim_callback(
     metric,
@@ -1307,8 +1400,8 @@ def ordination_anosim_callback(
     Output('cag-summary-graph-hist', 'figure'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input('cag-summary-metric-primary', 'value'),
         Input('cag-summary-nbinsx-slider', 'value'),
         Input('cag-summary-histogram-log', 'value'),
@@ -1352,8 +1445,8 @@ def cag_summary_graph_hist_callback(
     ],
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
     [State({"type": "heatmap-select-cags-by", "parent": MATCH}, 'value')])
 def abundance_heatmap_graph_select_cags_callback(selected_dataset, page, key, _):
@@ -1440,8 +1533,8 @@ def get_cags_selected_by_criterion(fp, select_cags_by, cag_size_range):
         Input('cag-abundance-heatmap-ncags', 'value'),
         Input({'name': 'cag-abundance-heatmap-size-range', 'type': 'cag-size-slider'}, 'value'),
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ])
 def abundance_heatmap_select_cags_callback(
     select_cags_by,
@@ -1481,8 +1574,8 @@ def abundance_heatmap_select_cags_callback(
     ],
     [
         State("selected-dataset", "children"),
-        State("url", 'pathname'),
-        State("url", 'hash'),
+        State("login-username", "value"),
+        State("login-key", "value"),
     ])
 def abundance_heatmap_graph_callback(
     select_cags_by,
@@ -1558,8 +1651,8 @@ def abundance_heatmap_graph_callback(
     ],
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ])
 def update_heatmap_metadata_dropdown(
     selected_dataset, page, key
@@ -1599,8 +1692,8 @@ def update_heatmap_metadata_dropdown(
     [
         State('cag-annotation-heatmap-annotation-type', 'value'),
         State("selected-dataset", "children"),
-        State("url", 'pathname'),
-        State("url", 'hash'),
+        State("login-username", "value"),
+        State("login-key", "value"),
     ])
 def annotation_heatmap_select_cags(
     select_cags_by,
@@ -1697,8 +1790,8 @@ def annotation_heatmap_select_cags(
     ],
     [
         State("selected-dataset", "children"),
-        State("url", 'pathname'),
-        State("url", 'hash'),
+        State("login-username", "value"),
+        State("login-key", "value"),
     ])
 def annotation_heatmap_graph_callback(
     select_cags_by,
@@ -1868,8 +1961,8 @@ def annotation_heatmap_graph_callback(
     Output('cag-annotation-heatmap-annotation-type', 'options'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ])
 def annotation_heatmap_type_options(
     selected_dataset,
@@ -1924,8 +2017,8 @@ def annotation_heatmap_type_options(
     ],
     [
         State("selected-dataset", "children"),
-        State("url", 'pathname'),
-        State("url", 'hash'),
+        State("login-username", "value"),
+        State("login-key", "value"),
     ]
 )
 def annotation_enrichment_graph_callback(
@@ -2027,8 +2120,8 @@ def annotation_enrichment_click(btn1, btn2, btn3, page_num):
     Output('volcano-graph', 'figure'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input({
             "type": "corncob-parameter-dropdown", 
             "group": "volcano-parameter",
@@ -2088,8 +2181,8 @@ def volcano_graph_callback(
     Output({"type": "corncob-parameter-dropdown", "group": MATCH}, "options"),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
     [State({"type": "corncob-parameter-dropdown", "group": MATCH}, "value")])
 def update_volcano_parameter_dropdown_options(selected_dataset, page, key, dummy):
@@ -2118,8 +2211,8 @@ def update_volcano_parameter_dropdown_options(selected_dataset, page, key, dummy
     [Output("corncob-comparison-parameter-dropdown", value) for value in ["options", "value"]],
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ]
 )
 def update_volcano_comparison_dropdown(selected_dataset, page, key):
@@ -2150,8 +2243,8 @@ def update_volcano_comparison_dropdown(selected_dataset, page, key):
     Output({"type": "corncob-parameter-dropdown", "group": MATCH}, "value"),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ],
     [State({"type": "corncob-parameter-dropdown", "group": MATCH}, "options")])
 def update_volcano_parameter_dropdown_value(selected_dataset, page, key, dummy):
@@ -2189,8 +2282,8 @@ def update_volcano_parameter_dropdown_value(selected_dataset, page, key, dummy):
     }, "max"),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input({
             "type": "corncob-parameter-dropdown", 
             "group": MATCH}, 'value'),
@@ -2221,8 +2314,8 @@ def update_volcano_pvalue_slider_max(selected_dataset, page, key, parameter):
     }, "marks"),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input({
             "type": "corncob-parameter-dropdown", 
             "group": MATCH}, 'value'),
@@ -2276,8 +2369,8 @@ def update_volcano_pvalue_slider_marks(selected_dataset, page, key, parameter):
         Input("plot-cag-annotation-ncags", "value"),
         Input("plot-cag-annotation-multiselector", "value"),
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input('cag-tax-ngenes', 'value'),
         Input('plot-cag-multiselector', 'value'),
     ])
@@ -2388,8 +2481,8 @@ def plot_cag_show_hide_selection_controls(
         Input("plot-cag-selection-type", "value"),
         Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ]
 )
 def plot_cag_annotation_options(
@@ -2481,8 +2574,8 @@ def plot_cag_annotation_options(
     Output("plot-cag-multiselector", 'max'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ])
 def update_single_cag_multiselector_options(
     selected_dataset, page, key
@@ -2506,8 +2599,8 @@ def update_single_cag_multiselector_options(
     Output('plot-cag-multiselector', 'value'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ]
 )
 def update_single_cag_dropdown_value(
@@ -2571,8 +2664,8 @@ def update_single_cag_dropdown_value(
             "type": "metadata-field-dropdown"}, 'value'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ])
 def update_single_cag_default_x(
     selected_dataset,
@@ -2601,8 +2694,8 @@ def update_single_cag_default_x(
     Output('plot-cag-plot-type', 'value'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ])
 def update_single_cag_default_plot_type(
     selected_dataset,
@@ -2633,8 +2726,8 @@ def update_single_cag_default_plot_type(
             "type": "metadata-field-dropdown"}, 'value'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ])
 def update_single_cag_default_color(
     selected_dataset,
@@ -2664,8 +2757,8 @@ def update_single_cag_default_color(
             "type": "metadata-field-dropdown"}, 'value'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
     ])
 def update_single_cag_default_facet(
     selected_dataset,
@@ -2709,8 +2802,8 @@ def update_single_cag_default_facet(
         Input('manifest-filtered', 'children'),
     ],[
         State("selected-dataset", "children"),
-        State("url", 'pathname'),
-        State("url", 'hash'),
+        State("login-username", "value"),
+        State("login-key", "value"),
     ])
 def update_single_cag_graph(
     selection_type,
@@ -2922,8 +3015,8 @@ def select_cags_by_association_and_annotation(
     ],
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input("manifest-table-bulk-select-apply", "n_clicks")
     ],
     [State("manifest-table-bulk-select-formula", "value")]
@@ -3008,8 +3101,8 @@ def manifest_save_rows_selected(selected_rows):
     Output('manifest-filtered', 'children'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input('manifest-rows-selected', 'children'),
     ])
 def manifest_save_filtered(selected_dataset, page, key, selected_rows_json):
@@ -3038,8 +3131,8 @@ def manifest_save_filtered(selected_dataset, page, key, selected_rows_json):
     Output('manifest-table', 'hidden_columns'),
     [
         Input("selected-dataset", "children"),
-        Input("url", 'pathname'),
-        Input("url", 'hash'),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
         Input('manifest-table-select-columns', 'value'),
     ])
 def manifest_update_columns_selected(selected_dataset, page, key, selected_columns):
@@ -3120,4 +3213,5 @@ if __name__ == '__main__':
     app.run_server(
         host='0.0.0.0',
         port=8050,
+        debug=True,
     )
