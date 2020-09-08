@@ -711,7 +711,6 @@ def open_dataset_button_click(n_clicks):
 )
 def show_hide_main_menu_button(selected_dataset):
     # Only show the Main Menu button if a dataset has been selected
-    print(selected_dataset)
     if selected_dataset[0] == -1:
         return {"margin": "10px", "display": "none"}
     else:
