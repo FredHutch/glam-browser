@@ -39,6 +39,7 @@ import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State, MATCH, ALL
 import json
+from math import log10, floor
 import numpy as np
 import os
 import pandas as pd
@@ -3037,6 +3038,195 @@ def show_hide_cag_functional_annotations_div(
                 return {}
 
     # Implicitly, no CAGs were present with any annotations
+    return {"display": "none"}
+
+
+@app.callback(
+    Output("cag-genome-table", "data"),
+    [
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown",
+               "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-ncags", "value"),
+        Input("plot-cag-annotation-multiselector", "value"),
+        Input('plot-cag-multiselector', 'value'),
+    ],
+    [
+        State("selected-dataset", "children"),
+        State("login-username", "value"),
+        State("login-key", "value"),
+    ]
+)
+def show_cag_genome_table(
+    selection_type,
+    parameter,
+    annotation_ncags,
+    annotations,
+    cag_id,
+    selected_dataset,
+    page,
+    key,
+):
+    # Set up some empty data to return if nothing is found
+    empty_data = pd.DataFrame([{
+        "name": "none",
+        "n_genes": "none",
+        "cag_prop": "none",
+        "CAG": "none"
+    }]).to_dict("records")
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No valid dataset is available: hide the table entirely
+    if fp is None:
+        return empty_data
+
+    # See if there is a genome manifest
+    genome_manifest_df = genome_manifest(fp)
+
+    # If there is no genome manifest, hide the table
+    if genome_manifest_df is None:
+        return empty_data
+
+    # If a single CAG has been selected
+    if selection_type == "cag_id":
+
+        # Get the genome alignments for this CAG
+        df = genomic_alignment_annotations(fp, cag_id)
+
+        # If there are no annotations, hide the table
+        if df is None:
+            return empty_data
+        else:
+
+            return format_genome_alignment_table(df, genome_manifest_df)
+
+    else:
+
+        # Pick the CAGs to plot based on their association with
+        # the selected parameter, as well as their annotation with
+        # the selected taxa and/or functions
+
+        # Get the genome alignments for all of these CAGs
+        df = []
+        for cag_id in select_cags_by_association_and_annotation(
+            fp,
+            parameter,
+            annotations,
+            annotation_ncags
+        ):
+            # Query the file
+            cag_alignments = genomic_alignment_annotations(fp, cag_id)
+
+            # Skip CAGs with no annotations
+            if cag_alignments is not None:
+
+                # Add to the aggregate DataFrame
+                df.append(cag_alignments)
+
+        # If nothing was found, hide the table
+        if len(df) == 0:
+            return empty_data
+
+        else:
+
+            # Join the tables
+            df = pd.concat(df)
+            
+            return format_genome_alignment_table(df, genome_manifest_df)
+
+
+def format_genome_alignment_table(df, genome_manifest_df):
+    """Format the genome alignment table for display."""
+    
+    # Add the name from the manifest
+    df = df.assign(
+        name=df["genome"].apply(
+            genome_manifest_df.set_index("id")["name"].get)
+    )
+
+    # Format the "cag_prop" column
+    df = df.assign(
+        cag_prop = df["cag_prop"].apply(
+            lambda x: round(x, -(int(floor(log10(abs(x)))) - 1))
+        )
+    )
+
+    return df.sort_values(by="n_genes", ascending=False).to_dict("records")
+
+# Show/hide the CAG function table div
+@app.callback(
+    Output("cag-genome-table-div", "style"),
+    [
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown",
+               "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-ncags", "value"),
+        Input("plot-cag-annotation-multiselector", "value"),
+        Input('plot-cag-multiselector', 'value'),
+    ],
+    [
+        State("selected-dataset", "children"),
+        State("login-username", "value"),
+        State("login-key", "value"),
+    ]
+)
+def show_hide_cag_genome_table_div(
+    selection_type,
+    parameter,
+    annotation_ncags,
+    annotations,
+    cag_id,
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No valid dataset is available: hide the table entirely
+    if fp is None:
+        return {"display": "none"}
+
+    # See if there is a genome manifest
+    genome_manifest_df = genome_manifest(fp)
+
+    # If there is no genome manifest, hide the table
+    if genome_manifest_df is None:
+        return {"display": "none"}
+
+    # If a single CAG has been selected
+    if selection_type == "cag_id":
+
+        # Get the genome alignments for this CAG
+        df = genomic_alignment_annotations(fp, cag_id)
+
+        # If there are no annotations, hide the table
+        if df is None:
+            return {"display": "none"}
+        else:
+            return {}
+
+    else:
+
+        # Pick the CAGs to plot based on their association with
+        # the selected parameter, as well as their annotation with
+        # the selected taxa and/or functions
+        for cag_id in select_cags_by_association_and_annotation(
+            fp,
+            parameter,
+            annotations,
+            annotation_ncags
+        ):
+            # Query the file
+            cag_annot = genomic_alignment_annotations(fp, cag_id)
+
+            # If there is any alignment, show the table
+            if cag_annot is not None:
+                return {}
+
+    # Implicitly, no CAGs were present with any alignment
     return {"display": "none"}
 
 

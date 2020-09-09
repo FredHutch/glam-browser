@@ -939,6 +939,47 @@ def plot_cag_card():
                     )
                 ]),
                 id="cag-function-table-div"
+            ),
+            html.Div(
+                dbc.Row([
+                    dbc.Col(
+                        dash_table.DataTable(
+                            id='cag-genome-table',
+                            columns=[
+                                {"name": "Name", "id": "name"},
+                                {"name": "Number of genes aligned", "id": "n_genes"},
+                                {"name": "Proportion of CAG", "id": "cag_prop"},
+                                {"name": "CAG ID", "id": "CAG"},
+                            ],
+                            data=pd.DataFrame([
+                                {
+                                    "name": "none",
+                                    "n_genes": "none",
+                                    "cag_prop": "none",
+                                    "CAG": "none",
+                                }
+                            ]).to_dict("records"),
+                            style_table={
+                                'minWidth': '75%',
+                            },
+                            style_header={
+                                "backgroundColor": "rgb(2,21,70)",
+                                "color": "white",
+                                "textAlign": "center",
+                            },
+                            page_action='native',
+                            page_size=20,
+                            filter_action='native',
+                            sort_action='native',
+                            hidden_columns=[],
+                            css=[{"selector": ".show-hide",
+                                "rule": "display: none"}],
+                        ),
+                        width=12,
+                        align="center",
+                    )
+                ]),
+                id="cag-genome-table-div"
             )
         ],
         help_text="""
