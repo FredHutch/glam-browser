@@ -2891,6 +2891,86 @@ def update_single_cag_graph(
         log_scale
     )
 
+@app.callback(
+    Output("cag-function-table", "data"),
+    [
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-ncags", "value"),
+        Input("plot-cag-annotation-multiselector", "value"),
+        Input('plot-cag-multiselector', 'value'),
+    ],
+    [
+        State("selected-dataset", "children"),
+        State("login-username", "value"),
+        State("login-key", "value"),
+    ]
+)
+def show_cag_functional_annotations(
+    selection_type,
+    parameter,
+    annotation_ncags,
+    annotations,
+    cag_id,
+    selected_dataset,
+    page,
+    key,
+):
+    # Set up some empty data to return if nothing is found
+    empty_data = pd.DataFrame([{"label": "none"}]).to_dict("records")
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No valid dataset is available: hide the table entirely
+    if fp is None:
+        return empty_data
+
+    # If a single CAG has been selected
+    if selection_type == "cag_id":
+        
+        # Get the functional annotations for this CAG
+        df = functional_gene_annotations(fp, cag_id)
+
+        # If there are no annotations, hide the table
+        if df is None:
+            return empty_data
+        else:
+            return df.reindex(columns=["label"]).drop_duplicates().sort_values(by="label").to_dict("records")
+            
+    else:
+
+        # Pick the CAGs to plot based on their association with
+        # the selected parameter, as well as their annotation with
+        # the selected taxa and/or functions
+
+        # Get the functional annotations for all of these CAGs
+        df = []
+        for cag_id in select_cags_by_association_and_annotation(
+            fp,
+            parameter,
+            annotations,
+            annotation_ncags
+        ):
+            # Query the file
+            cag_annot = functional_gene_annotations(fp, cag_id)
+
+            # Skip CAGs with no annotations
+            if cag_annot is not None:
+
+                # Add to the aggregate DataFrame
+                df.append(cag_annot)
+
+        # If nothing was found, hide the table
+        if len(df) == 0:
+            return empty_data
+
+        else:
+
+            # Return all of the unique labels
+            return pd.concat(df).reindex(columns=["label"]).drop_duplicates().sort_values(by="label").to_dict("records")
+
+
 def select_cags_by_association_and_annotation(
     fp,
     parameter,
