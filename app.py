@@ -428,7 +428,10 @@ def genomic_alignment_annotations(fp, cag_id):
 
     if df is None:
         return
-    
+
+    elif "CAG" not in df.columns.values:
+        return
+
     else:
 
         # Filter down to the annotations for this CAG
