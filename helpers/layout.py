@@ -74,7 +74,7 @@ def navbar_simple():
                     "index": -1,
                 },
                 n_clicks=1,
-                style={"margin": "10px"}
+                style={"margin": "10px", "display": "none"}
             ),
             html.Div(  # Store the button-press time
                 id={
@@ -899,23 +899,85 @@ def plot_cag_card():
                 )
             ]),
             dbc.Row([
+                dbc.Col(width=1),
                 dbc.Col(
-                    dbc.Spinner(dcc.Graph(
+                    [
+                        dbc.Spinner(
+                            dcc.Graph(
                                 id="cag-tax-graph"
-                                )),
-                    width=8,
+                            )
+                        ),
+                        html.Br(),
+                        html.Br(),
+                        html.Div(
+                            dash_table.DataTable(
+                                id='cag-function-table',
+                                columns=[
+                                    {"name": "Functional Label (from eggNOG)", "id": "label"}
+                                ],
+                                data=pd.DataFrame([
+                                    {"label": "none"}
+                                ]).to_dict("records"),
+                                style_table={
+                                    'minWidth': '75%',
+                                },
+                                style_header={
+                                    "backgroundColor": "rgb(2,21,70)",
+                                    "color": "white",
+                                    "textAlign": "center",
+                                },
+                                page_action='native',
+                                page_size=10,
+                                filter_action='native',
+                                sort_action='native',
+                                hidden_columns=[],
+                                css=[{"selector": ".show-hide",
+                                    "rule": "display: none"}],
+                            ),
+                            id="cag-function-table-div"
+                        ),
+                        html.Br(),
+                        html.Br(),
+                        html.Div(
+                            dash_table.DataTable(
+                                id='cag-genome-table',
+                                columns=[
+                                    {"name": "Name", "id": "name"},
+                                    {"name": "Number of genes aligned", "id": "n_genes"},
+                                    {"name": "Proportion of CAG", "id": "cag_prop"},
+                                    {"name": "CAG ID", "id": "CAG"},
+                                ],
+                                data=pd.DataFrame([
+                                    {
+                                        "name": "none",
+                                        "n_genes": "none",
+                                        "cag_prop": "none",
+                                        "CAG": "none",
+                                    }
+                                ]).to_dict("records"),
+                                style_table={
+                                    'minWidth': '75%',
+                                },
+                                style_header={
+                                    "backgroundColor": "rgb(2,21,70)",
+                                    "color": "white",
+                                    "textAlign": "center",
+                                },
+                                page_action='native',
+                                page_size=10,
+                                filter_action='native',
+                                sort_action='native',
+                                hidden_columns=[],
+                                css=[{"selector": ".show-hide",
+                                    "rule": "display: none"}],
+                            ),
+                            id="cag-genome-table-div"
+                        )
+                    ],
+                    width=10,
                     align="center",
                 ),
-                dbc.Col(
-                    basic_slider(
-                        "cag-tax-ngenes",
-                        "Minimum Number of Genes",
-                        included=False,
-                        marks=[1, 5, 10],
-                    ),
-                    width=4,
-                    align="center",
-                )
+                dbc.Col(width=1),
             ]),
         ],
         help_text="""

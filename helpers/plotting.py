@@ -2907,7 +2907,6 @@ def draw_enrichment_graph(
 def draw_taxonomy_sunburst(
     cag_tax_df, 
     plot_title,
-    min_ngenes,
     ranks_to_plot = [
         "phylum",
         "class",
@@ -2948,7 +2947,7 @@ def draw_taxonomy_sunburst(
     taxa_to_remove = [
         tax_id
         for tax_id, r in cag_tax_df.iterrows()
-        if r["count"] < min_ngenes or r["rank"] not in ranks_to_plot
+        if r["rank"] not in ranks_to_plot
     ]
 
     # Make sure that we have some data left to plot
@@ -3090,7 +3089,7 @@ def draw_single_cag_graph(
         yaxis_title=axis_label,
         title={
             'text': plot_title,
-            'y': 1.0,
+            'y': 0.98,
             'x': 0.5,
             'xanchor': 'center',
             'yanchor': 'top',
