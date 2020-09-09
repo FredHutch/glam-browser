@@ -2891,11 +2891,13 @@ def update_single_cag_graph(
         log_scale
     )
 
+
 @app.callback(
     Output("cag-function-table", "data"),
     [
         Input("plot-cag-selection-type", "value"),
-        Input({"type": "corncob-parameter-dropdown", "group": "plot-cag"}, "value"),
+        Input({"type": "corncob-parameter-dropdown",
+               "group": "plot-cag"}, "value"),
         Input("plot-cag-annotation-ncags", "value"),
         Input("plot-cag-annotation-multiselector", "value"),
         Input('plot-cag-multiselector', 'value'),
@@ -2928,7 +2930,7 @@ def show_cag_functional_annotations(
 
     # If a single CAG has been selected
     if selection_type == "cag_id":
-        
+
         # Get the functional annotations for this CAG
         df = functional_gene_annotations(fp, cag_id)
 
@@ -2937,7 +2939,7 @@ def show_cag_functional_annotations(
             return empty_data
         else:
             return df.reindex(columns=["label"]).drop_duplicates().sort_values(by="label").to_dict("records")
-            
+
     else:
 
         # Pick the CAGs to plot based on their association with
@@ -2969,6 +2971,73 @@ def show_cag_functional_annotations(
 
             # Return all of the unique labels
             return pd.concat(df).reindex(columns=["label"]).drop_duplicates().sort_values(by="label").to_dict("records")
+
+# Show/hide the CAG function table div
+@app.callback(
+    Output("cag-function-table-div", "style"),
+    [
+        Input("plot-cag-selection-type", "value"),
+        Input({"type": "corncob-parameter-dropdown",
+               "group": "plot-cag"}, "value"),
+        Input("plot-cag-annotation-ncags", "value"),
+        Input("plot-cag-annotation-multiselector", "value"),
+        Input('plot-cag-multiselector', 'value'),
+    ],
+    [
+        State("selected-dataset", "children"),
+        State("login-username", "value"),
+        State("login-key", "value"),
+    ]
+)
+def show_hide_cag_functional_annotations_div(
+    selection_type,
+    parameter,
+    annotation_ncags,
+    annotations,
+    cag_id,
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No valid dataset is available: hide the table entirely
+    if fp is None:
+        return {"display": "none"}
+
+    # If a single CAG has been selected
+    if selection_type == "cag_id":
+
+        # Get the functional annotations for this CAG
+        df = functional_gene_annotations(fp, cag_id)
+
+        # If there are no annotations, hide the table
+        if df is None:
+            return {"display": "none"}
+        else:
+            return {}
+
+    else:
+
+        # Pick the CAGs to plot based on their association with
+        # the selected parameter, as well as their annotation with
+        # the selected taxa and/or functions
+        for cag_id in select_cags_by_association_and_annotation(
+            fp,
+            parameter,
+            annotations,
+            annotation_ncags
+        ):
+            # Query the file
+            cag_annot = functional_gene_annotations(fp, cag_id)
+
+            # If there is any annotation, show the table
+            if cag_annot is not None:
+                return {}
+
+    # Implicitly, no CAGs were present with any annotations
+    return {"display": "none"}
 
 
 def select_cags_by_association_and_annotation(
