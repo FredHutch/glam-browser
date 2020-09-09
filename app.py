@@ -2370,7 +2370,6 @@ def update_volcano_pvalue_slider_marks(selected_dataset, page, key, parameter):
         Input("selected-dataset", "children"),
         Input("login-username", "value"),
         Input("login-key", "value"),
-        Input('cag-tax-ngenes', 'value'),
         Input('plot-cag-multiselector', 'value'),
     ])
 def update_taxonomy_graph(
@@ -2381,7 +2380,6 @@ def update_taxonomy_graph(
     selected_dataset, 
     page,
     key,
-    min_ngenes, 
     cag_id
 ):
     # Get the path to the selected dataset
@@ -2447,7 +2445,7 @@ def update_taxonomy_graph(
     if cag_tax_df is None:
         return empty_figure()
     else:
-        return draw_taxonomy_sunburst(cag_tax_df, plot_title, min_ngenes)
+        return draw_taxonomy_sunburst(cag_tax_df, plot_title)
 ###########################
 # / CAG TAXONOMY CALLBACK #
 ###########################

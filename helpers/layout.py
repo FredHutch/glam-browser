@@ -74,7 +74,7 @@ def navbar_simple():
                     "index": -1,
                 },
                 n_clicks=1,
-                style={"margin": "10px"}
+                style={"margin": "10px", "display": "none"}
             ),
             html.Div(  # Store the button-press time
                 id={
@@ -903,17 +903,7 @@ def plot_cag_card():
                     dbc.Spinner(dcc.Graph(
                                 id="cag-tax-graph"
                                 )),
-                    width=8,
-                    align="center",
-                ),
-                dbc.Col(
-                    basic_slider(
-                        "cag-tax-ngenes",
-                        "Minimum Number of Genes",
-                        included=False,
-                        marks=[1, 5, 10],
-                    ),
-                    width=4,
+                    width=12,
                     align="center",
                 )
             ]),
