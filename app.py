@@ -455,6 +455,13 @@ def genomes_with_details(fp):
         "genome_details"
     )
 
+@cache.memoize()
+def parameters_with_genome_associations(fp):
+    return hdf5_get_keys(
+        fp,
+        "genome_summary"
+    )
+
 def genomic_alignment_annotations(fp, cag_id):
     df = genomic_alignment_annotations_shard(fp, cag_id % 1000)
 
@@ -3373,6 +3380,47 @@ def select_cags_by_association_and_annotation(
 #######################
 # / PLOT CAG CALLBACK #
 #######################
+
+
+################################
+# GENOME ASSOCIATION CALLBACKS #
+################################
+
+# Hide the genome association card if there is no data available
+@app.callback(
+    Output("genome-association-card", "style"),
+    [
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+    ]
+)
+def show_hide_genome_association_card(
+    selected_dataset, 
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # If no data is selected, hide the card
+    if fp is None:
+        return {"display": "none"}
+
+    # implicit else
+
+    # Get the parameters with genome association available
+    parameter_list = parameters_with_genome_associations(fp)
+
+    # If there is nothing, hide the card
+    if parameter_list is None or len(parameter_list) == 0:
+        return {"display": "none"}
+    else:
+        return {}
+
+##################################
+# / GENOME ASSOCIATION CALLBACKS #
+##################################
 
 
 ######################

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from collections import defaultdict
-import json
-import os
-import numpy as np
-import pandas as pd
 from filelock import Timeout, FileLock
+import h5py
+import json
+import numpy as np
+import os
+import pandas as pd
 from time import sleep
 
 # All of the data in the indicated folder is loaded as a

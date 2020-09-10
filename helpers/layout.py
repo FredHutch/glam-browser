@@ -1140,6 +1140,7 @@ def genome_association_card():
                 )
             ])
         ],
+        custom_id="genome-association-card",
         help_text="""
 After aligning genes against a set of genomes, we are able to
 annotate genomes on the basis of how many genes align which
@@ -1202,14 +1203,19 @@ def genome_alignments_card():
             ]),
             dbc.Row([
                 dbc.Col(
+                    dbc.Spinner(
+                        dcc.Graph(
+                            id="genome-alignment-plot"
+                        )
+                    ),
+                    width=12,
+                    align="center"
+                )
+            ]),
+            dbc.Row([
+                dbc.Col([], width=8),
+                dbc.Col(
                     [
-                        dbc.Spinner(
-                            dcc.Graph(
-                                id="genome-alignment-plot"
-                            )
-                        ),
-                        html.Br(),
-                        html.Br(),
                         html.Label("Window Size"),
                         html.Br(),
                         dcc.Dropdown(
@@ -1224,11 +1230,12 @@ def genome_alignments_card():
                             value=25000,
                         )
                     ],
-                    width=12,
+                    width=4,
                     align="center"
                 ),
             ])
         ],
+        custom_id="genome-alignments-card",
         help_text="""
 Detailed gene-level alignments are shown here for individual genomes,
 including details on the estimated association of genes with any parameter
