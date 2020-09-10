@@ -294,6 +294,38 @@ def hdf5_get_item(
     return df
 
 
+def hdf5_get_keys(
+    fp, 
+    group_path, 
+    timeout=5, 
+    retry=5,
+):
+    """Read keys from a group in the HDF5 store."""
+
+    # Set up a file lock to prevent multiple concurrent access attempts
+    lock = FileLock("{}.lock".format(fp), timeout=timeout)
+
+    # Read in the keys
+    try:
+        with lock:
+            with h5py.File(fp, "r") as f:
+                try:
+                    key_list = list(f[group_path].keys())
+                except KeyError:
+                    return None
+    except Timeout:
+
+        sleep(retry)
+        return hdf5_get_keys(
+            fp, 
+            group_path, 
+            timeout=timeout,
+            retry=retry,
+        )
+
+    return key_list
+
+
 def hdf5_taxonomy(fp):
     return hdf5_get_item(
         fp, 

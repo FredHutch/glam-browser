@@ -3,6 +3,7 @@
 from collections import defaultdict
 from helpers.io import Manifest
 from helpers.io import hdf5_get_item
+from helpers.io import hdf5_get_keys
 from helpers.layout import navbar_simple
 from helpers.layout import dataset_summary_card
 from helpers.layout import experiment_summary_card
@@ -443,6 +444,13 @@ def genome_details(fp, genome_id):
     return hdf5_get_item(
         fp,
         "/genome_details/{}".format(genome_id)
+    )
+
+@cache.memoize()
+def genomes_with_details(fp):
+    return hdf5_get_keys(
+        fp,
+        "genome_details"
     )
 
 def genomic_alignment_annotations(fp, cag_id):
