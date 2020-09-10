@@ -423,6 +423,28 @@ def genome_manifest(fp):
         fp,
         "/genome_manifest"
     )
+
+@cache.memoize()
+def genome_summary(fp, parameter):
+    return hdf5_get_item(
+        fp,
+        "/genome_summary/{}".format(parameter)
+    )
+
+@cache.memoize()
+def genome_annotations(fp, genome_id):
+    return hdf5_get_item(
+        fp,
+        "/genome_annotations/{}".format(genome_id)
+    )
+
+@cache.memoize()
+def genome_details(fp, genome_id):
+    return hdf5_get_item(
+        fp,
+        "/genome_details/{}".format(genome_id)
+    )
+
 def genomic_alignment_annotations(fp, cag_id):
     df = genomic_alignment_annotations_shard(fp, cag_id % 1000)
 
