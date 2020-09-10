@@ -488,6 +488,9 @@ def index_geneshot_results(input_fp, output_fp):
     for source_key, dest_key in [
         ("summary/experiment", "experiment_metrics"),
         ("genomes/manifest", "genome_manifest"),
+        ("genomes/summary", "genome_summary"),
+        ("genomes/annotations", "genome_annotations"),
+        ("genomes/detail", "genome_details"),
     ]:
         if source_key in input_store:
             logging.info("Copying %s to %s" % (source_key, dest_key))
