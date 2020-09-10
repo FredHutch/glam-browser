@@ -17,6 +17,8 @@ from helpers.layout import cag_annotation_heatmap_card
 from helpers.layout import volcano_card
 from helpers.layout import annotation_enrichment_card
 from helpers.layout import plot_cag_card
+from helpers.layout import genome_association_card
+from helpers.layout import genome_alignments_card
 from helpers.layout import manifest_card
 from helpers.plotting import update_richness_graph
 from helpers.plotting import run_pca
@@ -559,6 +561,8 @@ app.layout = html.Div(
                 cag_annotation_heatmap_card(),
                 annotation_enrichment_card(),
                 plot_cag_card(),
+                genome_association_card(),
+                genome_alignments_card(),
                 manifest_card(),
             ],
             id="detail-display",
