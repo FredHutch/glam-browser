@@ -496,7 +496,8 @@ def index_geneshot_results(input_fp, output_fp):
             logging.info("Copying %s to %s" % (source_key, dest_key))
             input_store.copy(
                 source_key,
-                output_store[dest_key]
+                output_store,
+                name=dest_key
             )
         else:
             logging.info("Table(s) in %s not found" % source_key)
