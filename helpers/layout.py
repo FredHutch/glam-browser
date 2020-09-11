@@ -1127,7 +1127,7 @@ def genome_association_card():
                         ),
                         html.Br(),
                         dcc.Dropdown(
-                            id='genome-association-prop-abs-radio',
+                            id='genome-association-prop-abs',
                             options=[
                                 {'label': 'Proportion of genes   ', 'value': 'prop'},
                                 {'label': 'Number of genes', 'value': 'num'},
@@ -1191,10 +1191,45 @@ def genome_alignments_card():
             dbc.Row([
                 dbc.Col([], width=2),
                 dbc.Col(
-                    dcc.Dropdown(
-                        id="genome-details-table",
-                        options=[],
-                        value=None,
+                    html.Div(
+                        dash_table.DataTable(
+                            id='genome-details-table',
+                            columns=[
+                                {"name": "Gene Name", "id": "gene"},
+                                {"name": "CAG", "id": "CAG"},
+                                {"name": "Contig", "id": "contig"},
+                                {"name": "Percent Identity", "id": "pident"},
+                                {"name": "Start Position", "id": "contig_start"},
+                                {"name": "End Position", "id": "contig_end"},
+                            ],
+                            data=[
+                                {
+                                    "gene": None, 
+                                    "CAG": None,
+                                    "contig": None,
+                                    "pident": None,
+                                    "contig_start": None,
+                                    "contig_end": None,
+                                }
+                            ],
+                            row_selectable='single',
+                            style_table={
+                                'minWidth': '100%',
+                            },
+                            style_header={
+                                "backgroundColor": "rgb(2,21,70)",
+                                "color": "white",
+                                "textAlign": "center",
+                            },
+                            page_action='native',
+                            page_size=20,
+                            filter_action='native',
+                            sort_action='native',
+                            hidden_columns=[],
+                            css=[{"selector": ".show-hide",
+                                    "rule": "display: none"}],
+                        ),
+                        style={"margin-top": "20px"}
                     ),
                     width=8,
                     align="center"
@@ -1225,7 +1260,7 @@ def genome_alignments_card():
                                 {'label': '25kb', 'value': 25000},
                                 {'label': '50kb', 'value': 50000},
                                 {'label': '150kb', 'value': 150000},
-                                {'label': 'All', 'value': -1},
+                                # {'label': 'All', 'value': -1},
                             ],
                             value=25000,
                         )
