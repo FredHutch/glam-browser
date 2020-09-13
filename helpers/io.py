@@ -312,7 +312,7 @@ def hdf5_get_keys(
             with h5py.File(fp, "r") as f:
                 try:
                     key_list = list(f[group_path].keys())
-                except KeyError:
+                except:
                     return None
     except Timeout:
 
