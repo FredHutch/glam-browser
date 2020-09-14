@@ -4,6 +4,7 @@
 import argparse
 from collections import defaultdict
 from functools import lru_cache
+import h5py
 import logging
 import os
 import pandas as pd
@@ -167,15 +168,6 @@ def parse_manifest(store):
     return manifest
 
 
-def parse_experiment_metrics(store):
-    """Read in the experiment metrics"""
-    key_name = "/summary/experiment"
-
-    logging.info("Reading in {}".format(key_name))
-
-    return pd.read_hdf(store, key_name)
-
-
 def parse_specimen_metrics(store):
     """Read in the specimen metrics"""
     key_name = "/summary/all"
@@ -320,23 +312,6 @@ def parse_cag_abundances(store, max_n_cags=250000):
         )
 
     return df
-
-
-def parse_genome_manifest(store):
-    """Read in the manifest describing genomes used for alignment."""
-    key_name = "/genomes/manifest"
-
-    if key_name in store:
-
-        logging.info("Reading in {}".format(key_name))
-
-        return pd.read_hdf(store, key_name)
-
-    else:
-
-        logging.info("No genome manifest found")
-
-        return
 
 
 def parse_genome_containment(store, max_n_cags=250000):
@@ -501,15 +476,42 @@ def index_geneshot_results(input_fp, output_fp):
     # Keep a summary of the analysis results which are present
     analysis_features = []
 
-    # Open a connection to the input HDF5
+    # Some data will be copied directly from input to output
+    # Those tables which need to be transformed in any way will be copied
+    # into memory and written out at the end
+
+    # First go through and copy some data elements directly
+    input_store = h5py.File(input_fp, "r")
+    output_store = h5py.File(output_fp, "w")
+
+    # Copy a set of input tables to their destination
+    for source_key, dest_key in [
+        ("summary/experiment", "experiment_metrics"),
+        ("genomes/manifest", "genome_manifest"),
+        ("genomes/summary", "genome_summary"),
+        ("genomes/annotations", "genome_annotations"),
+        ("genomes/detail", "genome_details"),
+    ]:
+        if source_key in input_store:
+            logging.info("Copying %s to %s" % (source_key, dest_key))
+            input_store.copy(
+                source_key,
+                output_store,
+                name=dest_key
+            )
+        else:
+            logging.info("Table(s) in %s not found" % source_key)
+
+    # Close the connections
+    input_store.close()
+    output_store.close()
+
+    # Open a connection to the input HDF5 for writing processed tables
     with pd.HDFStore(input_fp, "r") as store:
         all_keys = store.keys()
 
         # Read in the manifest
         dat["/manifest"] = parse_manifest(store)
-
-        # Read in the experiment metrics
-        dat["/experiment_metrics"] = parse_experiment_metrics(store)
 
         # Read in the specimen metrics
         dat["/specimen_metrics"] = parse_specimen_metrics(store)
@@ -519,9 +521,6 @@ def index_geneshot_results(input_fp, output_fp):
 
         # Read in the CAG abundances
         dat["/cag_abundances"] = parse_cag_abundances(store)
-
-        # Read in the genome manifest
-        dat["/genome_manifest"] = parse_genome_manifest(store)
 
         # Read in the genome containments
         for group_ix, group_df in parse_genome_containment(store):
@@ -614,7 +613,7 @@ def index_geneshot_results(input_fp, output_fp):
                 dat[key_name] = group_df.drop(columns="group")
 
     # Write out all of the tables to HDF5
-    with pd.HDFStore(output_fp, "w") as store:
+    with pd.HDFStore(output_fp, "a") as store:
         logging.info("Writing to {}".format(output_fp))
         for key_name, df in dat.items():
 

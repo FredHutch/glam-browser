@@ -3097,6 +3097,468 @@ def draw_single_cag_graph(
     )
     return fig
 
+##################################
+# GENOME ASSOCIATION SCATTERPLOT #
+##################################
+def draw_genome_association_scatterplot(
+    genome_summary_df,
+    genome_manifest_df,
+    parameter,
+    prop_abs,
+):
+    # Add the name to the genome_summary_df
+    genome_summary_df = genome_summary_df.assign(
+        genome_name = genome_summary_df["genome_id"].apply(
+            genome_manifest_df.set_index(
+                "id"
+            )[
+                "name"
+            ].get
+        )
+    )
+
+    # Set the column to use for the Y axis
+    if prop_abs == "prop":
+        y_col = "prop_pass_fdr"
+        axis_label = "Highly associated genes (%)"
+        hovertemplate = "Genome %{text}<br>Accession: %{id}<br>Proportion of Genes Passing FDR: %{y}<br>Mean Wald: %{x}<extra></extra>"
+    else:
+        assert prop_abs == "num"
+        y_col = "n_pass_fdr"
+        axis_label = "Highly associated genes (#)"
+        hovertemplate = "Genome %{text}<br>Accession: %{id}<br>Number of Genes Passing FDR: %{y}<br>Mean Wald: %{x}<extra></extra>"
+
+    # Format the text
+
+    # Make the figure
+    fig = go.Figure(
+        go.Scattergl(
+            x=genome_summary_df["mean_wald"].apply(lambda v: round(v, 2)),
+            y=genome_summary_df[y_col].apply(lambda v: round(v, 2)),
+            ids=genome_summary_df["genome_id"],
+            text=genome_summary_df["genome_name"],
+            marker_color="blue",
+            hovertemplate=hovertemplate,
+            mode="markers",
+            opacity=0.75,
+        ),
+    )
+
+    # Customize the figure layout
+    fig.update_layout(
+        template="simple_white",
+        yaxis_title=axis_label,
+        title={
+            'text': "Association with {}".format(parameter),
+            'y': 0.98,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
+    )
+
+    return fig
+
+############################
+# GENOME ALIGNMENT DETAILS #
+############################
+def draw_genome_alignment_plot(
+    details_df,
+    center_ix,
+    annotation_df,
+    manifest_df,
+    genome_id,
+    plot_size,
+    cag_association_dict,
+    arrow_dy=0.05,
+    arrow_dx=0.25,
+):
+    # Get the center position from this set of genes
+    center_position = details_df.iloc[center_ix]
+
+    # Get the middle of the gene of interest
+    gene_middle = np.mean([center_position["contig_start"], center_position["contig_end"]])
+
+    # If the plot_size is the entire contig, use that range
+    if plot_size == -1:
+        plot_start = 0
+        plot_end = center_position["contig_len"]
+    
+    # If the gene middle is close to the beginning, start the window at 0
+    elif gene_middle <= int(plot_size / 2.):
+        plot_start = 0
+        plot_end = plot_size
+
+    # If the gene is close to the end of the contig, end the window there
+    elif gene_middle >= int(center_position["contig_len"] - (plot_size / 2.)):
+        plot_start = int(center_position["contig_len"] - plot_size)
+        plot_end = center_position["contig_len"]
+        if plot_start < 0:
+            plot_start = 0
+
+    # Otherwise, just set the window around the center gene
+    else:
+        plot_start = int(gene_middle - (plot_size / 2))
+        plot_end = int(gene_middle + (plot_size / 2))
+
+    # PREPARE THE DATA FOR PLOTTING    
+
+    # Let's get all of the gene alignments in this region
+    details_df = details_df.loc[details_df.apply(
+        lambda r: in_region(r, center_position["contig"], plot_start, plot_end),
+        axis=1
+    )]
+
+    # If there are annotations, filter to the region of interest
+    if annotation_df is not None:
+
+        # We also need to change the column headings slightly to make helper functions easily compatible
+        annotation_df = annotation_df.rename(
+            columns={
+                "start": "contig_start",
+                "end": "contig_end",
+            }
+        )
+        
+        # Format the contig name without the genome ID
+        contig_name = center_position["contig"].replace(
+            "{}_".format(genome_id), ""
+        )
+
+        # Filter to the contig of interest
+        annotation_df = annotation_df.query(
+            "contig == '{}'".format(contig_name)
+        )
+
+        # Filter to the region of interest
+        annotation_df = annotation_df.loc[
+            annotation_df.apply(
+                lambda r: in_region(r, contig_name, plot_start, plot_end),
+                axis=1
+            )
+        ]
+
+    # SET UP THE PLOT
+
+    # The first panel will be the alignments.
+    # After that, we have the annotations (if available)
+    # Then finally we will have all of the parameter associations
+
+    # Calculate the number of panels
+    # Start with 1 for the alignments
+    num_panels = 1
+    subplot_titles = ["Gene Alignments"]
+
+    # Add 1 for annotations
+    if annotation_df is not None and annotation_df.shape[0] > 0:
+        subplot_titles = subplot_titles + ["Genome Annotations"]
+        num_panels += 1
+
+    # Add 1 for each parameter
+    for parameter_name, _ in cag_association_dict.items():
+        subplot_titles = subplot_titles + ["Association: {}".format(parameter_name)]
+        num_panels += 1
+
+    # Make the figure
+    fig = make_subplots(
+        rows=num_panels, cols=1, shared_xaxes=True,
+        vertical_spacing=0.15,
+        subplot_titles=subplot_titles,
+    )
+
+    # Set a counter for which row we are plotting at any point
+    row_ix = 1
+
+    # Plot the alignments
+    draw_gene_alignments(
+        details_df,
+        plot_size,
+        arrow_dx,
+        arrow_dy,
+        fig,
+        row=row_ix,
+    )
+    # Label the axis
+    fig.update_layout(
+        **{
+            "yaxis_title":"",
+            "yaxis_range": [-0.5, 0.5],
+            "yaxis_showticklabels": False,
+        }
+    )
+
+    # Plot the annotations
+    if annotation_df is not None and annotation_df.shape[0] > 0:
+
+        # Increment the counter
+        row_ix += 1
+
+        # Add to the subplot
+        draw_genome_annotations(
+            annotation_df,
+            plot_size,
+            arrow_dx,
+            arrow_dy,
+            fig,
+            row=row_ix,
+        )
+
+        # Label the axis
+        fig.update_layout(
+            **{
+                "yaxis{}_title".format(row_ix): "",
+                "yaxis{}_range".format(row_ix): [-0.5, 0.5],
+                "yaxis{}_showticklabels".format(row_ix): False,
+            }
+        )
+
+    # Plot each of the associations
+    for parameter_name, association_df in cag_association_dict.items():
+
+        # Increment the counterr
+        row_ix += 1
+
+        # Draw the association of each CAG
+        draw_genome_alignment_associations(
+            association_df,
+            parameter_name,
+            details_df,
+            fig,
+            row=row_ix
+        )
+
+        # Get the estimates and std. errors for the CAGs in this particular plot
+        ests = association_df.reindex(index=details_df["CAG"].unique())["estimate"]
+        errs = association_df.reindex(index=details_df["CAG"].unique())["std_error"]
+
+        # Set the range of the y-axis for this association plot
+        min_val = (ests.fillna(0) - errs.fillna(0)).min()
+        min_val = min_val if min_val < 0 else 0
+        max_val = (ests.fillna(0) + errs.fillna(0)).max()
+        max_val = max_val if max_val > 0 else 0
+        padding = (max_val - min_val) * 0.2
+
+        # Label the axis
+        fig.update_layout(
+            **{
+                "yaxis{}_title".format(row_ix): "Est. Coef.",
+                "yaxis{}_zeroline".format(row_ix): True,
+                "yaxis{}_range".format(row_ix): [min_val - padding, max_val + padding],
+            }
+        )
+
+    # Format the name of the genome
+    genome_name = manifest_df.set_index("id")["name"].get(genome_id)
+
+    fig.update_layout(
+        template="simple_white",
+        showlegend=True,
+        title={
+            'text': genome_name,
+            'y': 0.9,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+        },
+    )
+    fig.update_xaxes(
+        title_text="{}: {:,}bp - {:,}bp".format(
+            center_position["contig"], plot_start, plot_end
+        ), 
+        row=num_panels,
+        col=1
+    )
+
+    return fig
+
+# Draw the association of each CAG
+def draw_genome_alignment_associations(
+    association_df,
+    parameter_name,
+    details_df,
+    fig,
+    row=1,
+    col=1,
+):
+    # Calculate the middle of each gene alignment
+    contig_middle = details_df.reindex(
+        columns=["contig_start", "contig_end"]
+    ).mean(
+        axis=1
+    )
+
+    # Plot data for each CAG, placed in the center of each alignment
+    plot_df = details_df.reindex(
+        columns = [
+            "gene",
+            "CAG",
+            "contig_start",
+            "contig_end",
+        ]
+    ).assign(
+        contig_middle = contig_middle
+    )
+
+    # Add the estimated coefficient and std. deviation for each CAG
+    plot_df = plot_df.assign(
+        **{
+            k: plot_df["CAG"].apply(
+                association_df[k].get
+            )
+            for k in ["estimate", "p_value", "q_value", "wald", "std_error"]
+        }
+    )
+
+    # Add the trace to the plot
+    fig.add_trace(
+        go.Scatter(
+            x = plot_df["contig_middle"],
+            y = plot_df["estimate"],
+            error_y = dict(
+                type='data',
+                array=plot_df["std_error"],
+                visible=True
+            ),
+            ids = plot_df["gene"],
+            text = plot_df.apply(format_genome_alignment_association_label, axis=1),
+            hovertemplate = "%{text}<extra></extra>",
+            mode = "markers",
+            marker_color = "LightSkyBlue",
+            showlegend = False,
+        ),
+        row=row,
+        col=col,
+    )
+
+
+def format_float_string(v):
+    return round(v, 2) if v > 0.01 else "%.2E" % v
+        
+
+def format_genome_alignment_association_label(r):
+    """Format the mouseover text for genome alignment association plot."""
+    return "<br>".join([
+        "Gene: {}".format(r["gene"]),
+        "CAG: {}".format(r["CAG"]),
+        "Estimated Coefficient: {}".format(format_float_string(r["estimate"])),
+        "Std. Error: {}".format(format_float_string(r["std_error"])),
+        "p-value: {}".format(format_float_string(r["p_value"])),
+        "FDR-BH adjusted p-value: {}".format(format_float_string(r["q_value"])),
+        "Wald: {}".format(format_float_string(r["wald"])),
+    ])
+
+def draw_gene_alignments(
+    details_df,
+    plot_size,
+    arrow_dx,
+    arrow_dy,
+    fig,
+    row=1,
+    col=1,
+    palette=px.colors.colorbrewer.BuGn
+):
+    # Draw each CAG as a trace
+    for cag_id, cag_details_df in details_df.groupby("CAG"):
+
+        # Format the x/y coordinates for each gene
+        all_x = []
+        all_y = []
+
+        # Iterate over each alignment
+        for _, r in cag_details_df.iterrows():
+        
+            # Manually draw the arrow with a given head size
+            if r["contig_end"] < r["contig_start"]:
+                gene_width = r["contig_start"] - r["contig_end"]
+                arrow_pos = r["contig_end"] + (gene_width * arrow_dx)
+            else:
+                gene_width = r["contig_end"] - r["contig_start"]
+                arrow_pos = r["contig_end"] - (gene_width * arrow_dx)
+
+            # Add the coordinates for this CAG
+            # (the `None` adds a break from the previous alignment)
+
+            all_x = all_x + [r["contig_start"], arrow_pos, r["contig_end"], arrow_pos, r["contig_start"], r["contig_start"], None]
+            all_y = all_y + [0 + arrow_dy, 0 + arrow_dy, 0, 0 - arrow_dy, 0 - arrow_dy, 0 + arrow_dy, None]
+
+        # Add a line for all of the arrows for this CAG
+        fig.add_trace(
+            go.Scatter(
+                x=all_x,
+                y=all_y,
+                mode='lines',
+                text=cag_details_df.apply(
+                    lambda r: "{}<br>CAG: {}<br>Percent Identity: {}<br>Start: {}<br>End: {}".format(
+                        r["gene"],
+                        cag_id,
+                        r["pident"],
+                        r["contig_start"],
+                        r["contig_end"],
+                    ),
+                    axis=1
+                ),
+                name="CAG {}".format(r["CAG"]),
+                hoverinfo="text",
+                fill="toself",
+            ),
+            row=row,
+            col=col
+        )
+
+def draw_genome_annotations(
+    annotation_df,
+    plot_size,
+    arrow_dx,
+    arrow_dy,
+    fig,
+    row=1,
+    col=1,
+):
+
+    for _, r in annotation_df.iterrows():
+        
+        # Manually draw the arrow with a given head size
+        if r["orientation"] == "-":
+            end_pos = r["contig_start"]
+            start_pos = r["contig_end"]
+            width = r["contig_end"] - r["contig_start"]
+            arrow_pos = end_pos + (width * arrow_dx)
+        else:
+            start_pos = r["contig_start"]
+            end_pos = r["contig_end"]
+            width = r["contig_end"] - r["contig_start"]
+            arrow_pos = end_pos - (width * arrow_dx)
+
+        # Add a line for this particular arrow
+        fig.add_trace(
+            go.Scatter(
+                x=[start_pos, arrow_pos, end_pos, arrow_pos, start_pos, start_pos],
+                y=[0 + arrow_dy, 0 + arrow_dy, 0, 0 - arrow_dy, 0 - arrow_dy, 0 + arrow_dy],
+                mode='lines',
+                text="{}<br>Start: {}<br>End: {}".format(
+                    "<br>".join(r["annotation"].split(";")),
+                    start_pos,
+                    end_pos,
+                ),
+                hoverinfo="text",
+                line_color='grey',
+                showlegend=False,
+            ),
+            row=row,
+            col=col
+        )
+
+
+# Function to check if an alignment intersects a given region
+def in_region(r, contig_id, plot_start, plot_end):
+    if r["contig"] != contig_id:
+        return False
+    if r["contig_start"] < plot_start and r["contig_end"] < plot_start:
+        return False
+    if r["contig_start"] > plot_end and r["contig_end"] > plot_end:
+        return False
+    return True
+
 ##################
 # GENOME HEATMAP #
 ##################

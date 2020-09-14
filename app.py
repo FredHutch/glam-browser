@@ -3,6 +3,7 @@
 from collections import defaultdict
 from helpers.io import Manifest
 from helpers.io import hdf5_get_item
+from helpers.io import hdf5_get_keys
 from helpers.layout import navbar_simple
 from helpers.layout import dataset_summary_card
 from helpers.layout import experiment_summary_card
@@ -16,6 +17,8 @@ from helpers.layout import cag_annotation_heatmap_card
 from helpers.layout import volcano_card
 from helpers.layout import annotation_enrichment_card
 from helpers.layout import plot_cag_card
+from helpers.layout import genome_association_card
+from helpers.layout import genome_alignments_card
 from helpers.layout import manifest_card
 from helpers.plotting import update_richness_graph
 from helpers.plotting import run_pca
@@ -31,6 +34,8 @@ from helpers.plotting import draw_volcano_graph
 from helpers.plotting import draw_enrichment_graph
 from helpers.plotting import draw_taxonomy_sunburst
 from helpers.plotting import draw_single_cag_graph
+from helpers.plotting import draw_genome_association_scatterplot
+from helpers.plotting import draw_genome_alignment_plot
 from helpers.plotting import parse_manifest_json
 from flask_caching import Cache
 import dash
@@ -423,6 +428,42 @@ def genome_manifest(fp):
         fp,
         "/genome_manifest"
     )
+
+@cache.memoize()
+def genome_summary(fp, parameter):
+    return hdf5_get_item(
+        fp,
+        "/genome_summary/{}".format(parameter)
+    )
+
+@cache.memoize()
+def genome_annotations(fp, genome_id):
+    return hdf5_get_item(
+        fp,
+        "/genome_annotations/{}".format(genome_id)
+    )
+
+@cache.memoize()
+def genome_details(fp, genome_id):
+    return hdf5_get_item(
+        fp,
+        "/genome_details/{}".format(genome_id)
+    )
+
+@cache.memoize()
+def genomes_with_details(fp):
+    return hdf5_get_keys(
+        fp,
+        "genome_details"
+    )
+
+@cache.memoize()
+def parameters_with_genome_associations(fp):
+    return hdf5_get_keys(
+        fp,
+        "genome_summary"
+    )
+
 def genomic_alignment_annotations(fp, cag_id):
     df = genomic_alignment_annotations_shard(fp, cag_id % 1000)
 
@@ -529,6 +570,8 @@ app.layout = html.Div(
                 cag_annotation_heatmap_card(),
                 annotation_enrichment_card(),
                 plot_cag_card(),
+                genome_association_card(),
+                genome_alignments_card(),
                 manifest_card(),
             ],
             id="detail-display",
@@ -3339,6 +3382,386 @@ def select_cags_by_association_and_annotation(
 #######################
 # / PLOT CAG CALLBACK #
 #######################
+
+
+################################
+# GENOME ASSOCIATION CALLBACKS #
+################################
+
+# Hide the genome association card if there is no data available
+@app.callback(
+    Output("genome-association-card", "style"),
+    [
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+    ]
+)
+def show_hide_genome_association_card(
+    selected_dataset, 
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # If no data is selected, hide the card
+    if fp is None:
+        return {"display": "none"}
+
+    # implicit else
+
+    # Get the parameters with genome association available
+    parameter_list = parameters_with_genome_associations(fp)
+
+    # If there is nothing, hide the card
+    if parameter_list is None or len(parameter_list) == 0:
+        return {"display": "none"}
+    else:
+        return {}
+
+# Fill in the parameters in the dropdown menu
+@app.callback(
+    [
+        Output("genome-association-parameter", element)
+        for element in ["options", "value"]
+    ],
+    [
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+    ]
+)
+def genome_association_parameter_dropdown(
+    selected_dataset, 
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # If no data is selected, hide the card
+    if fp is None:
+        return [], None
+
+    # implicit else
+
+    # Get the parameters with genome association available
+    parameter_list = parameters_with_genome_associations(fp)
+
+    # If there is nothing, hide the card
+    if parameter_list is None or len(parameter_list) == 0:
+        return [], None
+
+    # implicit else
+    options = [
+        {"label": parameter, "value": parameter}
+        for parameter in parameter_list
+    ]
+
+    return options, parameter_list[0]
+
+# Draw the plot of genome associations
+@app.callback(
+    Output("genome-association-scatterplot", "figure"),
+    [
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+        Input("genome-association-parameter", "value"),
+        Input("genome-association-prop-abs", "value"),
+    ]
+)
+def plot_genome_association_scatterplot(
+    selected_dataset, 
+    page,
+    key,
+    parameter,
+    prop_abs,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # If no data is selected, don't make any plot
+    if fp is None or parameter is None or prop_abs is None:
+        fig = go.Figure(data=[])
+        fig.update_layout(
+            template="simple_white",
+        )
+        return fig
+
+    else:
+
+        # Plot the association data for this parameter
+        return draw_genome_association_scatterplot(
+            genome_summary(fp, parameter),
+            genome_manifest(fp),
+            parameter,
+            prop_abs,
+        )
+
+##################################
+# / GENOME ASSOCIATION CALLBACKS #
+##################################
+
+
+###############################
+# GENOME ALIGNMENTS CALLBACKS #
+###############################
+
+# Hide the genome alignments card if there is no data available
+@app.callback(
+    Output("genome-alignments-card", "style"),
+    [
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+    ]
+)
+def show_hide_genome_alignments_card(
+    selected_dataset, 
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # If no data is selected, hide the card
+    if fp is None:
+        return {"display": "none"}
+
+    # implicit else
+
+    # Get the genomes with alignments available
+    genome_list = genomes_with_details(fp)
+
+    # If there is nothing, hide the card
+    if genome_list is None or len(genome_list) == 0:
+        return {"display": "none"}
+    else:
+        return {}
+
+# Fill in the list of genomes with alignments available
+@app.callback(
+    [
+        Output("genome-details-dropdown", "options"),
+        Output("genome-details-dropdown", "value"),
+    ],
+    [
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+    ]
+)
+def genome_details_dropdown_callback(
+    selected_dataset, 
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # If no data is selected, return an empty list
+    if fp is None:
+        return [], None
+
+    # Get the genomes with alignments available
+    genome_list = genomes_with_details(fp)
+
+    # Get the genome manifest
+    manifest = genome_manifest(fp)
+
+    # If there is nothing, return an empty list
+    if genome_list is None or len(genome_list) == 0 or manifest is None:
+        return [], None
+    else:
+        # Map genome IDs to names
+        genome_names = manifest.set_index("id")["name"]
+
+        # Make the list of options
+        options = [
+            {"label": genome_names.get(genome_id, genome_id), "value": genome_id}
+            for genome_id in genome_list
+        ]
+
+        return options, options[0]["value"]
+    
+# Fill in the table of alignments to a particular genome
+@app.callback(
+    [
+        Output("genome-details-table", "data"),
+        Output("genome-details-table", "selected_rows"),
+        Output("genome-details-table", "page_current"),
+    ],
+    [
+        Input("genome-details-dropdown", "value"),
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+    ]
+)
+def genome_details_table_callback(
+    genome_id,
+    selected_dataset,
+    page,
+    key,
+):
+
+    # If we have nothing to display, return this empty data
+    empty_data = [[
+        {
+            "gene": None, 
+            "CAG": None,
+            "contig": None,
+            "pident": None,
+            "contig_start": None,
+            "contig_end": None,
+        }
+    ], [], 0]
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # If no data is selected, return an empty list
+    if fp is None or genome_id is None:
+        return empty_data
+
+    # Get the genome alignment detailed table
+    aln_df = genome_details(fp, genome_id)
+    if aln_df is None:
+        return empty_data
+
+    return [aln_df.reindex(
+        columns = [
+            "gene", "CAG", "contig", "pident", "contig_start", "contig_end"
+        ]
+    ).sort_values(
+        by=["contig", "contig_start"]
+    ).to_dict("records"), [], 0]
+
+# Fill in the options of parameters to include in the alignment plot
+@app.callback(
+    [
+        Output("genome-alignment-parameters", "options"),
+        Output("genome-alignment-parameters", "value"),
+    ],
+    [
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+    ]
+)
+def genome_alignment_parameters_callback(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No data is available
+    if fp is None:
+        return [], []
+
+    # Return the set of parameters available with CAG estimates
+    parameters = valid_parameters(fp)
+
+    # If there are no parameters, return an empty list
+    if len(parameters) == 0:
+        return [], []
+
+    # Return the list of parameters
+    parameter_list = [
+        {"label": parameter, "value": parameter}
+        for parameter in parameters
+    ]
+    return parameter_list, []
+    
+# Plot the actual gene alignments against the genome
+@app.callback(
+    Output("genome-alignment-plot", "figure"),
+    [
+        Input("genome-details-dropdown", "value"),
+        Input("genome-details-table", "selected_rows"),
+        Input("genome-alignment-plot-width", "value"),
+        Input("genome-alignment-parameters", "value"),
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+    ]
+)
+def genome_alignment_figure_callback(
+    genome_id,
+    selected_rows,
+    plot_size,
+    parameters,
+    selected_dataset,
+    page,
+    key,
+):
+
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # Empty figure
+    empty_fig = go.Figure(data=[])
+    empty_fig.update_layout(
+        template="simple_white",
+    )
+
+    # If no data is selected, return an empty list
+    if fp is None or genome_id is None:
+        return empty_fig
+
+    # Show text instructing the user to select a gene
+    if selected_rows is None or len(selected_rows) == 0:
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(
+            x=[0],
+            y=[0],
+            mode="text",
+            text=["Please select a gene of interest from the table above"],
+            textposition="top right",
+            textfont=dict(
+                family="sans serif",
+                size=18
+            )
+        ))
+        fig.update_layout(
+            template="simple_white",
+            xaxis_visible=False,
+            yaxis_visible=False,
+        )
+        return fig
+
+    # Get the details of alignments
+    details_df = genome_details(fp, genome_id)
+
+    if details_df is None:
+        return empty_fig
+
+    # Plot the gene alignments
+    return draw_genome_alignment_plot(
+        details_df.sort_values(
+            by=["contig", "contig_start"]
+        ).reset_index(
+            drop=True
+        ),
+        selected_rows[0],
+        genome_annotations(fp, genome_id),
+        genome_manifest(fp),
+        genome_id,
+        plot_size,
+        {
+            parameter: cag_associations(fp, parameter)
+            for parameter in parameters
+        },
+    )
+
+#################################
+# / GENOME ALIGNMENTS CALLBACKS #
+#################################
 
 
 ######################

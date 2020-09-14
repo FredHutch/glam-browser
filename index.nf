@@ -23,7 +23,7 @@ params.output_prefix = false
 params.help = false
 
 // Set the containers to user
-container__pandas = "quay.io/fhcrc-microbiome/python-pandas:v1.0.3"
+container__pandas = "quay.io/fhcrc-microbiome/python-pandas:v1.0.3_py38_h5py"
 
 // Function which prints help message text
 def helpMessage() {

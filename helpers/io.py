@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from collections import defaultdict
-import json
-import os
-import numpy as np
-import pandas as pd
 from filelock import Timeout, FileLock
+import h5py
+import json
+import numpy as np
+import os
+import pandas as pd
 from time import sleep
 
 # All of the data in the indicated folder is loaded as a
@@ -292,6 +293,38 @@ def hdf5_get_item(
         )
 
     return df
+
+
+def hdf5_get_keys(
+    fp, 
+    group_path, 
+    timeout=5, 
+    retry=5,
+):
+    """Read keys from a group in the HDF5 store."""
+
+    # Set up a file lock to prevent multiple concurrent access attempts
+    lock = FileLock("{}.lock".format(fp), timeout=timeout)
+
+    # Read in the keys
+    try:
+        with lock:
+            with h5py.File(fp, "r") as f:
+                try:
+                    key_list = list(f[group_path].keys())
+                except:
+                    return None
+    except Timeout:
+
+        sleep(retry)
+        return hdf5_get_keys(
+            fp, 
+            group_path, 
+            timeout=timeout,
+            retry=retry,
+        )
+
+    return key_list
 
 
 def hdf5_taxonomy(fp):

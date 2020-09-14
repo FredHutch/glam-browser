@@ -1100,6 +1100,213 @@ Note: Click on the camera icon at the top of this plot (or any on this page) to 
 ################################
 
 
+###########################
+# GENOME ASSOCIATION CARD #
+###########################
+def genome_association_card():
+    return card_wrapper(
+        "Genome Association Summary",
+        [
+            dbc.Row([
+                dbc.Col(
+                    dbc.Spinner(
+                        dcc.Graph(
+                            id="genome-association-scatterplot"
+                        )
+                    ),
+                    width=8,
+                    align="center"
+                ),
+                dbc.Col(
+                    [
+                        html.Label("Parameter"),
+                        dcc.Dropdown(
+                            id="genome-association-parameter",
+                            options=[],
+                            value=None,
+                        ),
+                        html.Br(),
+                        dcc.Dropdown(
+                            id='genome-association-prop-abs',
+                            options=[
+                                {'label': 'Proportion of genes   ', 'value': 'prop'},
+                                {'label': 'Number of genes', 'value': 'num'},
+                            ],
+                            value="prop",
+                        )
+                    ],
+                    width=4,
+                    align="center"
+                )
+            ])
+        ],
+        custom_id="genome-association-card",
+        help_text="""
+After aligning genes against a set of genomes, we are able to
+annotate genomes on the basis of how many genes align which
+belong to CAGs which are associated with any of the parameters
+in the associated experiment. 
+
+Operationally, the user sets a cuttoff _alpha_ value when they
+execute the genome alignment module which generated this dataset.
+That _alpha_ value is used as a cutoff for this genome summary display
+in which any CAG with an FDR-BH adjusted p-value below that threshold
+are annotated as "highly associated" with that parameter. In order
+to summarize the genomes, we can then display the number (or proportion)
+of genes in the genome which are "highly associated."
+
+While this approach is somewhat arbitrary, it can be used to quickly
+identify those genomes which may contain the genetic elements that
+are most strongly associated with a phenotype of interest.
+
+Having identified a genome of interest, the individual gene alignments
+can be inspected in the Genome Alignment Details panel of this browser.
+        """
+    )
+#############################
+# \ GENOME ASSOCIATION CARD #
+#############################
+
+
+###########################
+# GENOME ALIGNMENTS CARD #
+###########################
+def genome_alignments_card():
+    return card_wrapper(
+        "Genome Alignment Details",
+        [
+            dbc.Row([
+                dbc.Col([], width=3),
+                dbc.Col(
+                    dcc.Dropdown(
+                        id="genome-details-dropdown",
+                        options=[],
+                        value=None,
+                    ),
+                    width=6,
+                    align="center"
+                ),
+                dbc.Col([], width=3)
+            ]),
+            dbc.Row([
+                dbc.Col([], width=1),
+                dbc.Col(
+                    html.Div(
+                        dash_table.DataTable(
+                            id='genome-details-table',
+                            columns=[
+                                {"name": "Gene Name", "id": "gene"},
+                                {"name": "CAG", "id": "CAG"},
+                                {"name": "Contig", "id": "contig"},
+                                {"name": "Percent Identity", "id": "pident"},
+                                {"name": "Start Position", "id": "contig_start"},
+                                {"name": "End Position", "id": "contig_end"},
+                            ],
+                            data=[
+                                {
+                                    "gene": None, 
+                                    "CAG": None,
+                                    "contig": None,
+                                    "pident": None,
+                                    "contig_start": None,
+                                    "contig_end": None,
+                                }
+                            ],
+                            row_selectable='single',
+                            style_table={
+                                'minWidth': '100%',
+                            },
+                            style_header={
+                                "backgroundColor": "rgb(2,21,70)",
+                                "color": "white",
+                                "textAlign": "center",
+                            },
+                            page_action='native',
+                            page_size=20,
+                            filter_action='native',
+                            sort_action='native',
+                            hidden_columns=[],
+                            css=[{"selector": ".show-hide",
+                                    "rule": "display: none"}],
+                        ),
+                        style={"margin-top": "20px"}
+                    ),
+                    width=10,
+                    align="center"
+                ),
+                dbc.Col([], width=1)
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    dbc.Spinner(
+                        dcc.Graph(
+                            id="genome-alignment-plot"
+                        )
+                    ),
+                    width=12,
+                    align="center"
+                )
+            ]),
+            dbc.Row([
+                dbc.Col([], width=4),
+                dbc.Col(
+                    [
+                        html.Label("Show CAG Association By:"),
+                        html.Br(),
+                        dcc.Dropdown(
+                            id='genome-alignment-parameters',
+                            options=[],
+                            value=[],
+                            multi=True,
+                        )
+                    ],
+                    width=4,
+                    align="center"
+                ),
+                dbc.Col(
+                    [
+                        html.Label("Window Size"),
+                        html.Br(),
+                        dcc.Dropdown(
+                            id='genome-alignment-plot-width',
+                            options=[
+                                {'label': '10kb', 'value': 10000},
+                                {'label': '25kb', 'value': 25000},
+                                {'label': '50kb', 'value': 50000},
+                                {'label': '150kb', 'value': 150000},
+                                # {'label': 'All', 'value': -1},
+                            ],
+                            value=25000,
+                        )
+                    ],
+                    width=4,
+                    align="center"
+                ),
+            ])
+        ],
+        custom_id="genome-alignments-card",
+        help_text="""
+Detailed gene-level alignments are shown here for individual genomes,
+including details on the estimated association of genes with any parameter
+of interest. 
+
+After selecting a genome from the drop-down menu, the detailed list of
+alignments for that genome will be shown in the table. Clicking on any
+row in that table will then center the display on that gene. The amount
+of the genome shown in the display can be adjusted with the radio button
+below the plot, but individual gene alignments will not be shown above
+a certain window size (due to overplotting).
+
+When a parameter is selected the estimated coefficients of association
+for each CAG are shown in the table and a rolling window median Wald
+statistic is added in the plot.
+"""
+    )
+#############################
+# \ GENOME ALIGNMENTS CARD #
+#############################
+
+
 #################
 # MANIFEST CARD #
 #################
