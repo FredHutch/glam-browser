@@ -3171,11 +3171,8 @@ def draw_genome_alignment_plot(
     plot_size,
     cag_association_dict,
     arrow_dy=0.05,
-    arrow_dx=0.01,
+    arrow_dx=0.25,
 ):
-    # Placeholder -- need to get the Wald data into this function XXX
-    wald_dict = {}
-
     # Get the center position from this set of genes
     center_position = details_df.iloc[center_ix]
 
@@ -3204,12 +3201,7 @@ def draw_genome_alignment_plot(
         plot_start = int(gene_middle - (plot_size / 2))
         plot_end = int(gene_middle + (plot_size / 2))
 
-    
-    # The options are:
-        # 1. Alignments only
-        # 2. Alignments and annotations
-        # 3. Alignments and Wald
-        # 4. Alignments, annotations, and Wald
+    # PREPARE THE DATA FOR PLOTTING    
 
     # Let's get all of the gene alignments in this region
     details_df = details_df.loc[details_df.apply(
@@ -3246,57 +3238,36 @@ def draw_genome_alignment_plot(
             )
         ]
 
-    # Are there annotations?
+    # SET UP THE PLOT
+
+    # The first panel will be the alignments.
+    # After that, we have the annotations (if available)
+    # Then finally we will have all of the parameter associations
+
+    # Calculate the number of panels
+    # Start with 1 for the alignments
+    num_panels = 1
+    subplot_titles = ["Gene Alignments"]
+
+    # Add 1 for annotations
     if annotation_df is not None and annotation_df.shape[0] > 0:
+        subplot_titles = subplot_titles + ["Genome Annotations"]
+        num_panels += 1
 
-        # Are there wald measurements?
-        if len(wald_dict) > 0:
+    # Add 1 for each parameter
+    for parameter_name, _ in cag_association_dict.items():
+        subplot_titles = subplot_titles + ["Association: {}".format(parameter_name)]
+        num_panels += 1
 
-            # Alignments, annotations, and Wald
-            fig = make_subplots(
-                rows=3, cols=1, shared_xaxes=True,
-                vertical_spacing=0.005
-            )
-            alignment_row_ix = 1
-            annotation_row_ix = 2
-            wald_row_ix = 3
+    # Make the figure
+    fig = make_subplots(
+        rows=num_panels, cols=1, shared_xaxes=True,
+        vertical_spacing=0.15,
+        subplot_titles=subplot_titles,
+    )
 
-        else:
-
-            # Alignments and annotations
-            fig = make_subplots(
-                rows=2, cols=1, shared_xaxes=True,
-                vertical_spacing=0.005
-            )
-            alignment_row_ix = 1
-            annotation_row_ix = 2
-            wald_row_ix = None
-
-    else:
-
-        # Are there wald measurements?
-        if len(wald_dict) > 0:
-
-            # Alignments and Wald
-            fig = make_subplots(
-                rows=2, cols=1, shared_xaxes=True,
-                vertical_spacing=0.005
-            )
-            alignment_row_ix = 1
-            annotation_row_ix = None
-            wald_row_ix = 2
-
-        else:
-
-            # Alignments only
-            # Alignments and Wald
-            fig = make_subplots(
-                rows=1, cols=1, shared_xaxes=True,
-                vertical_spacing=0.005
-            )
-            alignment_row_ix = 1
-            annotation_row_ix = None
-            wald_row_ix = None
+    # Set a counter for which row we are plotting at any point
+    row_ix = 1
 
     # Plot the alignments
     draw_gene_alignments(
@@ -3305,62 +3276,176 @@ def draw_genome_alignment_plot(
         arrow_dx,
         arrow_dy,
         fig,
-        row=alignment_row_ix,
+        row=row_ix,
+    )
+    # Label the axis
+    fig.update_layout(
+        **{
+            "yaxis_title":"",
+            "yaxis_range": [-0.5, 0.5],
+            "yaxis_showticklabels": False,
+        }
     )
 
     # Plot the annotations
-    if annotation_row_ix is not None:
+    if annotation_df is not None and annotation_df.shape[0] > 0:
+
+        # Increment the counter
+        row_ix += 1
+
+        # Add to the subplot
         draw_genome_annotations(
             annotation_df,
             plot_size,
             arrow_dx,
             arrow_dy,
             fig,
-            row=annotation_row_ix,
+            row=row_ix,
         )
 
-    # # Plot the Wald lines
-    # if wald_row_ix is not None:
-    #     draw_wald_lines(
-    #         wald_dict,
-    #         plot_start,
-    #         plot_end,
-    #         fig,
-    #         row=wald_row_ix,
-    #     )
+        # Label the axis
+        fig.update_layout(
+            **{
+                "yaxis{}_title".format(row_ix): "",
+                "yaxis{}_range".format(row_ix): [-0.5, 0.5],
+                "yaxis{}_showticklabels".format(row_ix): False,
+            }
+        )
 
-    # Style each of the subplots
-    fig.update_yaxes(
-        range=[-1, 1],
-        showticklabels=False,
-    )
+    # Plot each of the associations
+    for parameter_name, association_df in cag_association_dict.items():
+
+        # Increment the counterr
+        row_ix += 1
+
+        # Draw the association of each CAG
+        draw_genome_alignment_associations(
+            association_df,
+            parameter_name,
+            details_df,
+            fig,
+            row=row_ix
+        )
+
+        # Get the estimates and std. errors for the CAGs in this particular plot
+        ests = association_df.reindex(index=details_df["CAG"].unique())["estimate"]
+        errs = association_df.reindex(index=details_df["CAG"].unique())["std_error"]
+
+        # Set the range of the y-axis for this association plot
+        min_val = (ests.fillna(0) - errs.fillna(0)).min()
+        min_val = min_val if min_val < 0 else 0
+        max_val = (ests.fillna(0) + errs.fillna(0)).max()
+        max_val = max_val if max_val > 0 else 0
+        padding = (max_val - min_val) * 0.2
+
+        # Label the axis
+        fig.update_layout(
+            **{
+                "yaxis{}_title".format(row_ix): "Est. Coef.",
+                "yaxis{}_zeroline".format(row_ix): True,
+                "yaxis{}_range".format(row_ix): [min_val - padding, max_val + padding],
+            }
+        )
 
     # Format the name of the genome
     genome_name = manifest_df.set_index("id")["name"].get(genome_id)
 
-    # Label the annotation subplot if it was drawn
-    if annotation_row_ix == 2:
-        fig.update_layout(
-            yaxis2_title="Annotations"
-        )
-
     fig.update_layout(
         template="simple_white",
-        yaxis_title="Gene Alignments",
-        showlegend=False,
+        showlegend=True,
         title={
-            'text': "{}<br>{}<br>{:,}bp - {:,}bp".format(
-                genome_name,
-                center_position["contig"], plot_start, plot_end
-            ),
+            'text': genome_name,
             'y': 0.9,
             'x': 0.5,
             'xanchor': 'center',
             'yanchor': 'top',
         },
     )
+    fig.update_xaxes(
+        title_text="{}: {:,}bp - {:,}bp".format(
+            center_position["contig"], plot_start, plot_end
+        ), 
+        row=num_panels,
+        col=1
+    )
 
     return fig
+
+# Draw the association of each CAG
+def draw_genome_alignment_associations(
+    association_df,
+    parameter_name,
+    details_df,
+    fig,
+    row=1,
+    col=1,
+):
+    # Calculate the middle of each gene alignment
+    contig_middle = details_df.reindex(
+        columns=["contig_start", "contig_end"]
+    ).mean(
+        axis=1
+    )
+
+    # Plot data for each CAG, placed in the center of each alignment
+    plot_df = details_df.reindex(
+        columns = [
+            "gene",
+            "CAG",
+            "contig_start",
+            "contig_end",
+        ]
+    ).assign(
+        contig_middle = contig_middle
+    )
+
+    # Add the estimated coefficient and std. deviation for each CAG
+    plot_df = plot_df.assign(
+        **{
+            k: plot_df["CAG"].apply(
+                association_df[k].get
+            )
+            for k in ["estimate", "p_value", "q_value", "wald", "std_error"]
+        }
+    )
+
+    # Add the trace to the plot
+    fig.add_trace(
+        go.Scatter(
+            x = plot_df["contig_middle"],
+            y = plot_df["estimate"],
+            error_y = dict(
+                type='data',
+                array=plot_df["std_error"],
+                visible=True
+            ),
+            ids = plot_df["gene"],
+            text = plot_df.apply(format_genome_alignment_association_label, axis=1),
+            hovertemplate = "%{text}<extra></extra>",
+            mode = "markers",
+            marker_color = "LightSkyBlue",
+            showlegend = False,
+        ),
+        row=row,
+        col=col,
+    )
+
+
+def format_float_string(v):
+    return round(v, 2) if v > 0.01 else "%.2E" % v
+        
+
+def format_genome_alignment_association_label(r):
+    """Format the mouseover text for genome alignment association plot."""
+    return "<br>".join([
+        "Gene: {}".format(r["gene"]),
+        "CAG: {}".format(r["CAG"]),
+        "Estimated Coefficient: {}".format(format_float_string(r["estimate"])),
+        "Std. Error: {}".format(format_float_string(r["std_error"])),
+        "p-value: {}".format(format_float_string(r["p_value"])),
+        "FDR-BH adjusted p-value: {}".format(format_float_string(r["q_value"])),
+        "Wald: {}".format(format_float_string(r["wald"])),
+    ])
 
 def draw_gene_alignments(
     details_df,
@@ -3370,31 +3455,51 @@ def draw_gene_alignments(
     fig,
     row=1,
     col=1,
+    palette=px.colors.colorbrewer.BuGn
 ):
+    # Draw each CAG as a trace
+    for cag_id, cag_details_df in details_df.groupby("CAG"):
 
-    # Draw each alignment as a line
-    for _, r in details_df.iterrows():
-        # Manually draw the arrow with a given head size
-        if r["contig_end"] < r["contig_start"]:
-            arrow_pos = r["contig_end"] + (plot_size * arrow_dx)
-        else:
-            arrow_pos = r["contig_end"] - (plot_size * arrow_dx)
+        # Format the x/y coordinates for each gene
+        all_x = []
+        all_y = []
 
-        # Add a line for this particular arrow
+        # Iterate over each alignment
+        for _, r in cag_details_df.iterrows():
+        
+            # Manually draw the arrow with a given head size
+            if r["contig_end"] < r["contig_start"]:
+                gene_width = r["contig_start"] - r["contig_end"]
+                arrow_pos = r["contig_end"] + (gene_width * arrow_dx)
+            else:
+                gene_width = r["contig_end"] - r["contig_start"]
+                arrow_pos = r["contig_end"] - (gene_width * arrow_dx)
+
+            # Add the coordinates for this CAG
+            # (the `None` adds a break from the previous alignment)
+
+            all_x = all_x + [r["contig_start"], arrow_pos, r["contig_end"], arrow_pos, r["contig_start"], r["contig_start"], None]
+            all_y = all_y + [0 + arrow_dy, 0 + arrow_dy, 0, 0 - arrow_dy, 0 - arrow_dy, 0 + arrow_dy, None]
+
+        # Add a line for all of the arrows for this CAG
         fig.add_trace(
             go.Scatter(
-                x=[arrow_pos, r["contig_end"], r["contig_start"], r["contig_end"], arrow_pos], 
-                y=[0 + arrow_dy, 0, 0, 0, 0 - arrow_dy],
+                x=all_x,
+                y=all_y,
                 mode='lines',
-                text="{}<br>CAG: {}<br>Percent Identity: {}<br>Start: {}<br>End: {}".format(
-                    r["gene"],
-                    r["CAG"],
-                    r["pident"],
-                    r["contig_start"],
-                    r["contig_end"],
+                text=cag_details_df.apply(
+                    lambda r: "{}<br>CAG: {}<br>Percent Identity: {}<br>Start: {}<br>End: {}".format(
+                        r["gene"],
+                        cag_id,
+                        r["pident"],
+                        r["contig_start"],
+                        r["contig_end"],
+                    ),
+                    axis=1
                 ),
+                name="CAG {}".format(r["CAG"]),
                 hoverinfo="text",
-                line=dict(color='black')
+                fill="toself",
             ),
             row=row,
             col=col
@@ -3416,17 +3521,19 @@ def draw_genome_annotations(
         if r["orientation"] == "-":
             end_pos = r["contig_start"]
             start_pos = r["contig_end"]
-            arrow_pos = end_pos + (plot_size * arrow_dx)
+            width = r["contig_end"] - r["contig_start"]
+            arrow_pos = end_pos + (width * arrow_dx)
         else:
             start_pos = r["contig_start"]
             end_pos = r["contig_end"]
-            arrow_pos = end_pos - (plot_size * arrow_dx)
+            width = r["contig_end"] - r["contig_start"]
+            arrow_pos = end_pos - (width * arrow_dx)
 
         # Add a line for this particular arrow
         fig.add_trace(
             go.Scatter(
-                x=[arrow_pos, end_pos, start_pos, end_pos, arrow_pos], 
-                y=[0 + arrow_dy, 0, 0, 0, 0 - arrow_dy],
+                x=[start_pos, arrow_pos, end_pos, arrow_pos, start_pos, start_pos],
+                y=[0 + arrow_dy, 0 + arrow_dy, 0, 0 - arrow_dy, 0 - arrow_dy, 0 + arrow_dy],
                 mode='lines',
                 text="{}<br>Start: {}<br>End: {}".format(
                     "<br>".join(r["annotation"].split(";")),
@@ -3434,7 +3541,8 @@ def draw_genome_annotations(
                     end_pos,
                 ),
                 hoverinfo="text",
-                line=dict(color='black')
+                line_color='grey',
+                showlegend=False,
             ),
             row=row,
             col=col
