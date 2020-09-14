@@ -12,7 +12,7 @@ build_test:
     - for i in $(cat 2020-09-14-1-mri-manifest.csv | cut -d ',' -f 1); do aws s3 cp $i share/ ; done
     - docker build --build-arg GTM_CONTAINER=$GTM_CONTAINER -t 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam:latest .
     - docker-compose up -d
-    - sleep 25
+    - sleep 60
     - curl -I http://localhost:8050 | grep -q "HTTP/1.1 200 OK"
     - docker-compose down
     - rm -rf share/
@@ -24,7 +24,7 @@ build_test:
     - for i in $(cat 2020-09-14-1-demo-manifest.csv | cut -d ',' -f 1); do aws s3 cp $i share/ ; done
     - docker build --build-arg GTM_CONTAINER=$GTM_CONTAINER -t 458818213009.dkr.ecr.us-west-2.amazonaws.com/glam-public:latest .
     - docker-compose -f fhpublic-docker-compose.yml up -d
-    - sleep 25
+    - sleep 60
     - curl -I http://localhost:8050 | grep -q "HTTP/1.1 200 OK"
     - docker-compose down
     - rm -rf share/
