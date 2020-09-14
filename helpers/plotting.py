@@ -3169,6 +3169,7 @@ def draw_genome_alignment_plot(
     manifest_df,
     genome_id,
     plot_size,
+    cag_association_dict,
     arrow_dy=0.05,
     arrow_dx=0.01,
 ):

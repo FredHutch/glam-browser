@@ -1248,7 +1248,21 @@ def genome_alignments_card():
                 )
             ]),
             dbc.Row([
-                dbc.Col([], width=8),
+                dbc.Col([], width=4),
+                dbc.Col(
+                    [
+                        html.Label("Show CAG Association By:"),
+                        html.Br(),
+                        dcc.Dropdown(
+                            id='genome-alignment-parameters',
+                            options=[],
+                            value=[],
+                            multi=True,
+                        )
+                    ],
+                    width=4,
+                    align="center"
+                ),
                 dbc.Col(
                     [
                         html.Label("Window Size"),

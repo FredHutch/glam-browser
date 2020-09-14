@@ -3634,6 +3634,44 @@ def genome_details_table_callback(
     ).sort_values(
         by=["contig", "contig_start"]
     ).to_dict("records")
+
+# Fill in the options of parameters to include in the alignment plot
+@app.callback(
+    [
+        Output("genome-alignment-parameters", "options"),
+        Output("genome-alignment-parameters", "value"),
+    ],
+    [
+        Input("selected-dataset", "children"),
+        Input("login-username", "value"),
+        Input("login-key", "value"),
+    ]
+)
+def genome_alignment_parameters_callback(
+    selected_dataset,
+    page,
+    key,
+):
+    # Get the path to the selected dataset
+    fp = page_data.parse_fp(selected_dataset, page=page, key=key)
+
+    # No data is available
+    if fp is None:
+        return [], []
+
+    # Return the set of parameters available with CAG estimates
+    parameters = valid_parameters(fp)
+
+    # If there are no parameters, return an empty list
+    if len(parameters) == 0:
+        return [], []
+
+    # Return the list of parameters
+    parameter_list = [
+        {"label": parameter, "value": parameter}
+        for parameter in parameters
+    ]
+    return parameter_list, []
     
 # Plot the actual gene alignments against the genome
 @app.callback(
@@ -3642,6 +3680,7 @@ def genome_details_table_callback(
         Input("genome-details-dropdown", "value"),
         Input("genome-details-table", "selected_rows"),
         Input("genome-alignment-plot-width", "value"),
+        Input("genome-alignment-parameters", "value"),
         Input("selected-dataset", "children"),
         Input("login-username", "value"),
         Input("login-key", "value"),
@@ -3651,6 +3690,7 @@ def genome_alignment_figure_callback(
     genome_id,
     selected_rows,
     plot_size,
+    parameters,
     selected_dataset,
     page,
     key,
@@ -3709,6 +3749,10 @@ def genome_alignment_figure_callback(
         genome_manifest(fp),
         genome_id,
         plot_size,
+        {
+            parameter: cag_associations(fp, parameter)
+            for parameter in parameters
+        },
     )
 
 #################################
