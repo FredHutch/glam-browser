@@ -1189,7 +1189,7 @@ def genome_alignments_card():
                 dbc.Col([], width=3)
             ]),
             dbc.Row([
-                dbc.Col([], width=2),
+                dbc.Col([], width=1),
                 dbc.Col(
                     html.Div(
                         dash_table.DataTable(
@@ -1231,10 +1231,10 @@ def genome_alignments_card():
                         ),
                         style={"margin-top": "20px"}
                     ),
-                    width=8,
+                    width=10,
                     align="center"
                 ),
-                dbc.Col([], width=2)
+                dbc.Col([], width=1)
             ]),
             dbc.Row([
                 dbc.Col(
