@@ -3588,7 +3588,11 @@ def genome_details_dropdown_callback(
     
 # Fill in the table of alignments to a particular genome
 @app.callback(
-    Output("genome-details-table", "data"),
+    [
+        Output("genome-details-table", "data"),
+        Output("genome-details-table", "selected_rows"),
+        Output("genome-details-table", "page_current"),
+    ],
     [
         Input("genome-details-dropdown", "value"),
         Input("selected-dataset", "children"),
@@ -3604,7 +3608,7 @@ def genome_details_table_callback(
 ):
 
     # If we have nothing to display, return this empty data
-    empty_data = [
+    empty_data = [[
         {
             "gene": None, 
             "CAG": None,
@@ -3613,7 +3617,7 @@ def genome_details_table_callback(
             "contig_start": None,
             "contig_end": None,
         }
-    ]
+    ], [], 0]
 
     # Get the path to the selected dataset
     fp = page_data.parse_fp(selected_dataset, page=page, key=key)
@@ -3627,13 +3631,13 @@ def genome_details_table_callback(
     if aln_df is None:
         return empty_data
 
-    return aln_df.reindex(
+    return [aln_df.reindex(
         columns = [
             "gene", "CAG", "contig", "pident", "contig_start", "contig_end"
         ]
     ).sort_values(
         by=["contig", "contig_start"]
-    ).to_dict("records")
+    ).to_dict("records"), [], 0]
 
 # Fill in the options of parameters to include in the alignment plot
 @app.callback(
@@ -3710,7 +3714,7 @@ def genome_alignment_figure_callback(
         return empty_fig
 
     # Show text instructing the user to select a gene
-    if selected_rows is None:
+    if selected_rows is None or len(selected_rows) == 0:
         fig = go.Figure()
 
         fig.add_trace(go.Scatter(
