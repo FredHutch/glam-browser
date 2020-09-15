@@ -477,7 +477,7 @@ def add_neg_log10_values(df):
     return df
 
 
-def index_geneshot_results(input_fp, output_fp):
+def index_geneshot_results(input_fp, output_fp, skip_enrichments=["eggNOG_desc"]):
 
     # Keep all of the data in a dict linking the key to the table
     dat = {}
@@ -565,6 +565,14 @@ def index_geneshot_results(input_fp, output_fp):
         # Read in the betta results (for enrichment of corncob associations by annotation)
         for parameter, annotation, df in parse_enrichment_results(store, all_keys):
 
+            # Skip a user-defined set of annotations
+            # By default this is intended to include eggNOG_desc
+            if annotation in skip_enrichments:
+                continue
+
+            # NOTE: The eggNOG_desc entrichments will be skipped by default. However,
+            # if the user provides skip_enrichments=[], then this code block will help
+            # to format that long text string.
             # Trim the eggNOG_desc labels to 100 character
             if annotation == "eggNOG_desc":
                 # Trim the `eggNOG_desc` to 100 characters, if present
