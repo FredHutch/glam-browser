@@ -314,7 +314,7 @@ def parse_cag_abundances(store, max_n_cags=250000):
     return df
 
 
-def parse_genome_containment(store, max_n_cags=250000):
+def parse_genome_containment(store, max_n_cags=250000, min_cag_prop=0.25):
     """Read in a summary of CAGs aligned against genomes."""
     key_name = "/genomes/cags/containment"
 
@@ -330,6 +330,15 @@ def parse_genome_containment(store, max_n_cags=250000):
             df = df.query(
                 "CAG < {}".format(max_n_cags)
             )
+            logging.info("Retained {:,} alignments for {:,} CAGs".format(
+                df.shape[0],
+                df["CAG"].unique().shape[0]
+            ))
+
+        # Filter alignments by `min_cag_prop`
+        if min_cag_prop is not None:
+            logging.info("Filtering to cag_prop >= {}".format(min_cag_prop))
+            df = df.query("cag_prop >= {}".format(min_cag_prop))
             logging.info("Retained {:,} alignments for {:,} CAGs".format(
                 df.shape[0],
                 df["CAG"].unique().shape[0]
