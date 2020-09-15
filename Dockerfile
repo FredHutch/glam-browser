@@ -6,9 +6,13 @@ ADD requirements.txt /home/dash/
 RUN pip3 install -r /home/dash/requirements.txt && \
 	pip3 install scikit-bio && \
 	HDF5_DIR=/usr/lib/x86_64-linux-gnu/hdf5/serial/ pip3 install tables
-# Note that the release version of numcodecs (0.7.1 as of 9/14/20)
+# Note that the binary release version of numcodecs (0.7.1 as of 9/14/20)
 # has a bug which causes "illegal instruction set" on the gitlab build machine
-RUN pip3 install numcodecs==0.6.4
+# filed issue: https://github.com/zarr-developers/numcodecs/issues/252
+# To work around this, we'll install from source.
+RUN pip3 uninstall -y numcodecs
+RUN pip3 uninstall -y numcodecs # make sure
+RUN pip3 install -v --no-cache-dir --no-binary numcodecs numcodecs==0.7.1
 RUN useradd -u 5555 -m -d /home/dash -c "dash user" dash
 ADD app.py /home/dash/
 ADD redis.conf /home/dash/
