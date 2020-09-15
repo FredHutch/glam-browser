@@ -477,7 +477,53 @@ def add_neg_log10_values(df):
     return df
 
 
+def find_genomes_to_index(input_fp):
+    """Find those genomes which have >0 genes passing FDR."""
+
+    genomes_to_index = set([])
+    with pd.HDFStore(input_fp, "r") as store:
+
+        # No genome information are present
+        if "genomes" not in store:
+            return genomes_to_index
+
+        # No genome summaries are present
+        if "summary" in store["summary"]:
+            return genomes_to_index
+
+        # Iterate over each parameter
+        for parameter_name in store["genomes/summary"]:
+
+            # Skip the intercept
+            if parameter_name == "Intercept":
+                continue
+            
+            # Add all of the genomes in this table
+            # This is explicitly going to have `n_pass_fdr` > 0
+            genomes_to_index.update(
+                set(
+                    pd.read_hdf(
+                        store, 
+                        "/genomes/summary/{}".format(parameter_name)
+                    )[
+                        "genome_id"
+                    ].tolist()
+                )
+            )
+
+    return list(genomes_to_index)
+
+
+
 def index_geneshot_results(input_fp, output_fp, skip_enrichments=["eggNOG_desc"]):
+
+    # GENOME ALIGNMENT DETAILS
+    # To start with, we will find whether there are any genomes
+    # which contain CAGs that are associated with the experimental design
+
+    # We will only keep a subset of genomes, due to the large storage requirements
+    # The genomes that we index will be any which have >0 genes passing FDR
+    genomes_to_index = find_genomes_to_index(input_fp)
 
     # Keep all of the data in a dict linking the key to the table
     dat = {}
@@ -498,9 +544,26 @@ def index_geneshot_results(input_fp, output_fp, skip_enrichments=["eggNOG_desc"]
         ("summary/experiment", "experiment_metrics"),
         ("genomes/manifest", "genome_manifest"),
         ("genomes/summary", "genome_summary"),
-        ("genomes/annotations", "genome_annotations"),
-        ("genomes/detail", "genome_details"),
     ]:
+        if source_key in input_store:
+            logging.info("Copying %s to %s" % (source_key, dest_key))
+            input_store.copy(
+                source_key,
+                output_store,
+                name=dest_key
+            )
+        else:
+            logging.info("Table(s) in %s not found" % source_key)
+
+    # Copy over data for each individual genome
+    for genome_id in genomes_to_index:
+        for source_prefix, dest_prefix in [
+            ("genomes/annotations", "genome_annotations"),
+            ("genomes/detail", "genome_details"),
+        ]:
+            source_key = "{}/{}".format(source_prefix, genome_id)
+            dest_key = "{}/{}".format(dest_prefix, genome_id)
+
         if source_key in input_store:
             logging.info("Copying %s to %s" % (source_key, dest_key))
             input_store.copy(
