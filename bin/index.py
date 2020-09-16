@@ -567,15 +567,15 @@ def index_geneshot_results(input_fp, output_fp, skip_enrichments=["eggNOG_desc"]
             source_key = "{}/{}".format(source_prefix, genome_id)
             dest_key = "{}/{}".format(dest_prefix, genome_id)
 
-        if source_key in input_store:
-            logging.info("Copying %s to %s" % (source_key, dest_key))
-            input_store.copy(
-                source_key,
-                output_store,
-                name=dest_key
-            )
-        else:
-            logging.info("Table(s) in %s not found" % source_key)
+            if source_key in input_store:
+                logging.info("Copying %s to %s" % (source_key, dest_key))
+                input_store.copy(
+                    source_key,
+                    output_store,
+                    name=dest_key
+                )
+            else:
+                logging.info("Table(s) in %s not found" % source_key)
 
     # Close the connections
     input_store.close()
