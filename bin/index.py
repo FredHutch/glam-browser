@@ -314,7 +314,7 @@ def parse_cag_abundances(store, max_n_cags=250000):
     return df
 
 
-def parse_genome_containment(store, max_n_cags=250000):
+def parse_genome_containment(store, max_n_cags=250000, min_cag_prop=0.25):
     """Read in a summary of CAGs aligned against genomes."""
     key_name = "/genomes/cags/containment"
 
@@ -330,6 +330,15 @@ def parse_genome_containment(store, max_n_cags=250000):
             df = df.query(
                 "CAG < {}".format(max_n_cags)
             )
+            logging.info("Retained {:,} alignments for {:,} CAGs".format(
+                df.shape[0],
+                df["CAG"].unique().shape[0]
+            ))
+
+        # Filter alignments by `min_cag_prop`
+        if min_cag_prop is not None:
+            logging.info("Filtering to cag_prop >= {}".format(min_cag_prop))
+            df = df.query("cag_prop >= {}".format(min_cag_prop))
             logging.info("Retained {:,} alignments for {:,} CAGs".format(
                 df.shape[0],
                 df["CAG"].unique().shape[0]
@@ -468,7 +477,56 @@ def add_neg_log10_values(df):
     return df
 
 
-def index_geneshot_results(input_fp, output_fp):
+def find_genomes_to_index(input_fp):
+    """Find those genomes which have >0 genes passing FDR."""
+
+    # Get the list of parameters which have summaries
+    parameters = []
+    with h5py.File(input_fp, "r") as f:
+        if 'genomes' in f.keys():
+            if 'summary' in f['genomes'].keys():
+                for parameter in f['genomes/summary'].keys():
+                    if parameter != 'Intercept':
+                        parameters.append(parameter)
+
+    # If there are no genome summaries by parameter, return nothing
+    if len(parameters) == 0:
+        return set([])
+
+    # Get the set of genomes which should be indexed
+    genomes_to_index = set([])
+    with pd.HDFStore(input_fp, "r") as store:
+
+        # Iterate over each parameter
+        for parameter_name in parameters:
+
+            # Add all of the genomes in this table
+            # This is explicitly going to have `n_pass_fdr` > 0
+            genomes_to_index.update(
+                set(
+                    pd.read_hdf(
+                        store, 
+                        "/genomes/summary/{}".format(parameter_name)
+                    )[
+                        "genome_id"
+                    ].tolist()
+                )
+            )
+
+    return list(genomes_to_index)
+
+
+
+def index_geneshot_results(input_fp, output_fp, skip_enrichments=["eggNOG_desc"]):
+
+    # GENOME ALIGNMENT DETAILS
+    # To start with, we will find whether there are any genomes
+    # which contain CAGs that are associated with the experimental design
+
+    # We will only keep a subset of genomes, due to the large storage requirements
+    # The genomes that we index will be any which have >0 genes passing FDR
+    genomes_to_index = find_genomes_to_index(input_fp)
+    logging.info("Found {:,} genomes to index".format(len(genomes_to_index)))
 
     # Keep all of the data in a dict linking the key to the table
     dat = {}
@@ -489,8 +547,6 @@ def index_geneshot_results(input_fp, output_fp):
         ("summary/experiment", "experiment_metrics"),
         ("genomes/manifest", "genome_manifest"),
         ("genomes/summary", "genome_summary"),
-        ("genomes/annotations", "genome_annotations"),
-        ("genomes/detail", "genome_details"),
     ]:
         if source_key in input_store:
             logging.info("Copying %s to %s" % (source_key, dest_key))
@@ -501,6 +557,25 @@ def index_geneshot_results(input_fp, output_fp):
             )
         else:
             logging.info("Table(s) in %s not found" % source_key)
+
+    # Copy over data for each individual genome
+    for genome_id in genomes_to_index:
+        for source_prefix, dest_prefix in [
+            ("genomes/annotations", "genome_annotations"),
+            ("genomes/detail", "genome_details"),
+        ]:
+            source_key = "{}/{}".format(source_prefix, genome_id)
+            dest_key = "{}/{}".format(dest_prefix, genome_id)
+
+            if source_key in input_store:
+                logging.info("Copying %s to %s" % (source_key, dest_key))
+                input_store.copy(
+                    source_key,
+                    output_store,
+                    name=dest_key
+                )
+            else:
+                logging.info("Table(s) in %s not found" % source_key)
 
     # Close the connections
     input_store.close()
@@ -556,6 +631,14 @@ def index_geneshot_results(input_fp, output_fp):
         # Read in the betta results (for enrichment of corncob associations by annotation)
         for parameter, annotation, df in parse_enrichment_results(store, all_keys):
 
+            # Skip a user-defined set of annotations
+            # By default this is intended to include eggNOG_desc
+            if annotation in skip_enrichments:
+                continue
+
+            # NOTE: The eggNOG_desc entrichments will be skipped by default. However,
+            # if the user provides skip_enrichments=[], then this code block will help
+            # to format that long text string.
             # Trim the eggNOG_desc labels to 100 character
             if annotation == "eggNOG_desc":
                 # Trim the `eggNOG_desc` to 100 characters, if present
