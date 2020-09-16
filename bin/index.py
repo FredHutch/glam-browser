@@ -480,24 +480,26 @@ def add_neg_log10_values(df):
 def find_genomes_to_index(input_fp):
     """Find those genomes which have >0 genes passing FDR."""
 
+    # Get the list of parameters which have summaries
+    parameters = []
+    with h5py.File(input_fp, "r") as f:
+        if 'genomes' in f.keys():
+            if 'summary' in f['genomes'].keys():
+                for parameter in f['genomes/summary'].keys():
+                    if parameter != 'Intercept':
+                        parameters.append(parameter)
+
+    # If there are no genome summaries by parameter, return nothing
+    if len(parameters) == 0:
+        return set([])
+
+    # Get the set of genomes which should be indexed
     genomes_to_index = set([])
     with pd.HDFStore(input_fp, "r") as store:
 
-        # No genome information are present
-        if "genomes" not in store:
-            return genomes_to_index
-
-        # No genome summaries are present
-        if "summary" not in store["genomes"]:
-            return genomes_to_index
-
         # Iterate over each parameter
-        for parameter_name in store["genomes/summary"]:
+        for parameter_name in parameters:
 
-            # Skip the intercept
-            if parameter_name == "Intercept":
-                continue
-            
             # Add all of the genomes in this table
             # This is explicitly going to have `n_pass_fdr` > 0
             genomes_to_index.update(
@@ -524,6 +526,7 @@ def index_geneshot_results(input_fp, output_fp, skip_enrichments=["eggNOG_desc"]
     # We will only keep a subset of genomes, due to the large storage requirements
     # The genomes that we index will be any which have >0 genes passing FDR
     genomes_to_index = find_genomes_to_index(input_fp)
+    logging.info("Found {:,} genomes to index".format(len(genomes_to_index)))
 
     # Keep all of the data in a dict linking the key to the table
     dat = {}
