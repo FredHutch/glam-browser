@@ -488,7 +488,7 @@ def find_genomes_to_index(input_fp):
             return genomes_to_index
 
         # No genome summaries are present
-        if "summary" in store["summary"]:
+        if "summary" not in store["genomes"]:
             return genomes_to_index
 
         # Iterate over each parameter
