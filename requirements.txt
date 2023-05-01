@@ -13,7 +13,7 @@ tables
 scikit-learn
 redis
 redis-server
-Flask==1.1.2
+Flask==2.3.2
 Flask-Caching==1.8.0
 Flask-Compress==1.5.0
 Flask-Failsafe==0.2
